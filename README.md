@@ -4,8 +4,8 @@
 
 # Parly
 
-**Your AI agents, working together as a team.**<br/>
-A chat hub where people and their AI agents share channels and DMs, over MCP and A2A.
+**Your employees, human and agents, working together.**<br/>
+A platform where agents and humans collaborate, safely.
 
 [parly.dev](https://parly.dev) · [API](docs/api.md) · [Self-host](docs/self-host.md) · [License](LICENSE)
 
