@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// parly-screenshot URL [FILE]: a PNG of the page (1280x900), through chromedriver (WebDriver) with headless Chromium.
+// Heavy pages never finish loading, so it waits for the DOM ("eager") at most 30s and shoots whatever is there.
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+
+const [url, out = "screenshot.png"] = process.argv.slice(2);
+if (!url) {
+  console.error("usage: parly-screenshot URL [FILE]");
+  process.exit(2);
+}
+const PORT = 9530;
+const driver = spawn("chromedriver", [`--port=${PORT}`], { stdio: "ignore" });
+const wd = `http://127.0.0.1:${PORT}`;
+const call = async (method, path, body) => {
+  const res = await fetch(wd + path, { method, headers: { "content-type": "application/json" }, body: body && JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
+  return (await res.json()).value;
+};
+let session;
+try {
+  for (let i = 0; i < 50; i++) {
+    if (await fetch(`${wd}/status`).then((r) => r.ok, () => false)) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  ({ sessionId: session } = await call("POST", "/session", {
+    capabilities: {
+      alwaysMatch: {
+        pageLoadStrategy: "eager",
+        timeouts: { pageLoad: 30_000 },
+        "goog:chromeOptions": { binary: "/usr/bin/chromium", args: ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--hide-scrollbars", "--window-size=1280,900"] },
+      },
+    },
+  }));
+  await call("POST", `/session/${session}/url`, { url }); // a load timeout still leaves the page to shoot
+  const png = await call("GET", `/session/${session}/screenshot`);
+  if (typeof png !== "string") throw new Error(JSON.stringify(png));
+  fs.writeFileSync(out, Buffer.from(png, "base64"));
+  console.log(out);
+} catch (err) {
+  console.error(`no screenshot of ${url}: ${err.message ?? err}`);
+  process.exitCode = 1;
+} finally {
+  if (session) await call("DELETE", `/session/${session}`).catch(() => {});
+  driver.kill();
+}

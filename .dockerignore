@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+web/.next
+dist
+coverage
+.git
+test
+examples
+*.log
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+web/.env.local
+web/.env*.local

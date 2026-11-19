@@ -1,0 +1,53 @@
+# Self-hosted Parly: hub + web + MongoDB on a volume. `web/public/install.sh` writes .env and starts it.
+services:
+  # Single-node replica set (the hub needs transactions). The hub shares this container's network so it reaches Mongo
+  # on 127.0.0.1 (the adapter skips TLS only for localhost); the hub port is published here and `hub` is an alias.
+  mongo:
+    image: mongo:7@sha256:8bb4442761a63a8dda452744082cdac9644b429807eb977b42324a63cef59ca4
+    command: ["--replSet", "rs0", "--bind_ip", "127.0.0.1"]
+    volumes: [mongo-data:/data/db]
+    ports: ["${PARLY_HUB_PORT:-8080}:8080"]
+    networks: { default: { aliases: [hub] } }
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: '127.0.0.1:27017' }] }) } db.hello().isWritablePrimary || quit(1)"]
+      interval: 5s
+      start_period: 30s
+    restart: unless-stopped
+
+  hub:
+    build: .
+    network_mode: service:mongo
+    environment:
+      MONGODB_URI: mongodb://127.0.0.1:27017/?replicaSet=rs0
+      HUB_PUBLIC_URL: ${PARLY_HUB_URL:-http://localhost:8080}
+      WEB_URL: ${PARLY_WEB_URL:-http://localhost:3000}
+      PASSWORD_LOGIN: "1"
+      SETUP_SECRET: ${SETUP_SECRET:?run install.sh, or set SETUP_SECRET in .env}
+      HUB_PROXY_SECRET: ${HUB_PROXY_SECRET:?run install.sh, or set HUB_PROXY_SECRET in .env}
+      CREDENTIALS_KEY: ${CREDENTIALS_KEY:?run install.sh, or set CREDENTIALS_KEY in .env}
+    depends_on:
+      mongo: { condition: service_healthy, restart: true }
+    restart: unless-stopped
+
+  web:
+    build: { context: ., dockerfile: web/Dockerfile }
+    environment:
+      HUB_URL: http://hub:8080
+      # Browser/docs-facing hub address (not the docker hostname).
+      HUB_PUBLIC_URL: ${PARLY_HUB_URL:-http://localhost:8080}
+      PASSWORD_LOGIN: "1"
+      HUB_PROXY_SECRET: ${HUB_PROXY_SECRET:?run install.sh, or set HUB_PROXY_SECRET in .env}
+      # Optional fixed public origin. Leave unset so links follow Host (NEXT_PUBLIC_* is build-inlined when set at image build).
+      NEXT_PUBLIC_SITE_URL: ${PARLY_WEB_URL:-}
+      # Plain http on localhost or a LAN address; set 1 behind an https proxy.
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      # Set 1 only behind a single trusted reverse proxy that appends the client IP to X-Forwarded-For (the web trusts its last entry); never on a bare host.
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+    ports: ["${PARLY_WEB_PORT:-3000}:3000"]
+    depends_on:
+      hub:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

@@ -1,0 +1,10 @@
+#!/bin/sh
+# gh with Parly's GitHub App token when none is set.
+if [ -z "${GH_TOKEN:-}" ]; then
+  if token=$(/usr/local/bin/parly-git-credential token) && [ -n "$token" ]; then
+    export GH_TOKEN="$token"
+  else
+    unset GH_TOKEN
+  fi
+fi
+exec /usr/bin/gh "$@"
