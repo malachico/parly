@@ -1,4 +1,4 @@
-import { FieldValue, type Database } from '../db/types.js';
+import { FieldValue, type Database, type DocumentReference, type Transaction } from '../db/types.js';
 import { BILLING, CREDIT_MICROS, limitsOf, type BillingRecord, type Plan } from '../lib/plans.js';
 import type { AgentUsage } from '../llm/llm.js';
 import type { CreditVoucher } from './billing.js';
@@ -412,6 +412,25 @@ export class BillingStore {
 
   // ---- spend & charges --------------------------------------------------------------------------
 
+  /** Adds `micros` to the period's usage; the part past the monthly allowance comes out of top-up credits. Returns that part. */
+  private writeSpend(
+    tx: Transaction,
+    usageRef: DocumentReference,
+    billingRef: DocumentReference,
+    ownerId: string,
+    period: string,
+    micros: number,
+    before: number,
+    limits: { monthlyMicros: number; extraMicros: number },
+    updatedAt: string,
+  ): number {
+    const over = Math.max(0, before + micros - limits.monthlyMicros) - Math.max(0, before - limits.monthlyMicros);
+    const fromExtra = Math.min(over, limits.extraMicros);
+    tx.set(usageRef, { ownerId, period, micros: FieldValue.increment(micros), ...(fromExtra ? { extraSpentMicros: FieldValue.increment(fromExtra) } : {}), updatedAt }, { merge: true });
+    if (fromExtra) tx.set(billingRef, { extraMicros: FieldValue.increment(-fromExtra) }, { merge: true });
+    return fromExtra;
+  }
+
   async spend(ownerId: string, micros: number, period: string, updatedAt: string, allowanceMicros: number, freeOnly = false): Promise<void> {
     const usageRef = this.db.collection(USAGE).doc(`${ownerId}_${period}`);
     if (freeOnly) {
@@ -423,10 +442,7 @@ export class BillingStore {
       const [usage, billing] = await Promise.all([tx.get(usageRef), tx.get(billingRef)]);
       const limits = limitsOf(billing.data() as BillingRecord | undefined, allowanceMicros);
       const before = (usage.data()?.micros as number | undefined) ?? 0;
-      const over = Math.max(0, before + micros - limits.monthlyMicros) - Math.max(0, before - limits.monthlyMicros);
-      const fromExtra = Math.min(over, limits.extraMicros);
-      tx.set(usageRef, { ownerId, period, micros: FieldValue.increment(micros), ...(fromExtra ? { extraSpentMicros: FieldValue.increment(fromExtra) } : {}), updatedAt }, { merge: true });
-      if (fromExtra) tx.set(billingRef, { extraMicros: FieldValue.increment(-fromExtra) }, { merge: true });
+      this.writeSpend(tx, usageRef, billingRef, ownerId, period, micros, before, limits, updatedAt);
     });
   }
 
@@ -442,10 +458,7 @@ export class BillingStore {
         const [usage, billing] = await Promise.all([tx.get(usageRef), tx.get(billingRef)]);
         const limits = limitsOf(billing.data() as BillingRecord | undefined, allowanceMicros);
         const before = (usage.data()?.micros as number | undefined) ?? 0;
-        const over = Math.max(0, before + micros - limits.monthlyMicros) - Math.max(0, before - limits.monthlyMicros);
-        const fromExtra = Math.min(over, limits.extraMicros);
-        tx.set(usageRef, { ownerId, period, micros: FieldValue.increment(micros), ...(fromExtra ? { extraSpentMicros: FieldValue.increment(fromExtra) } : {}), updatedAt: at }, { merge: true });
-        if (fromExtra) tx.set(billingRef, { extraMicros: FieldValue.increment(-fromExtra) }, { merge: true });
+        this.writeSpend(tx, usageRef, billingRef, ownerId, period, micros, before, limits, at);
       }
       tx.create(markRef, { ownerId, credits, at });
     });
@@ -463,11 +476,8 @@ export class BillingStore {
       const before = (usage.data()?.micros as number | undefined) ?? 0;
       const cap = limits.monthlyMicros + ((usage.data()?.extraSpentMicros as number | undefined) ?? 0) + limits.extraMicros;
       if (cap - before < micros) return false;
-      const over = Math.max(0, before + micros - limits.monthlyMicros) - Math.max(0, before - limits.monthlyMicros);
-      const fromExtra = Math.min(over, limits.extraMicros);
       const updatedAt = new Date().toISOString();
-      tx.set(usageRef, { ownerId, period, micros: FieldValue.increment(micros), ...(fromExtra ? { extraSpentMicros: FieldValue.increment(fromExtra) } : {}), updatedAt }, { merge: true });
-      if (fromExtra) tx.set(billingRef, { extraMicros: FieldValue.increment(-fromExtra) }, { merge: true });
+      const fromExtra = this.writeSpend(tx, usageRef, billingRef, ownerId, period, micros, before, limits, updatedAt);
       tx.create(markRef, { ownerId, credits, micros, fromExtra, period, at: updatedAt });
       return true;
     });
