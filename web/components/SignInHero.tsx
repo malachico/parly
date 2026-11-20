@@ -8,6 +8,8 @@ import { googleDevLogin, passwordLogin } from '@/lib/actions';
 import { CLIENTS } from '@/lib/connect';
 import { safeNext } from '@/lib/hub';
 import { SlackLogo } from '@/components/SlackLogo';
+import { CopyButton } from '@/components/CopyButton';
+import { SITE_URL } from '@/lib/site';
 import { PendingButton } from '@/components/PendingButton';
 
 // GOOGLE_CLIENT_ID is read at runtime, so a prebuilt self-host image takes the owner's own client.
@@ -15,6 +17,8 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC
 const GOOGLE_DEV = process.env.NEXT_PUBLIC_GOOGLE_AUTH_DEV === '1';
 /** Self-hosted: email + password instead of Google (PASSWORD_LOGIN=1, read at runtime). */
 const PASSWORD_LOGIN = process.env.PASSWORD_LOGIN === '1';
+const INSTALL = `curl -fsSL ${SITE_URL}/install.sh | sh`;
+const REPO = 'https://github.com/malachico/parly';
 
 /**
  * The way in (SignInOptions: Google sign-in, or email + password when self-hosted) in the middle, a crew of avatars
@@ -64,7 +68,7 @@ export function SignInHero({
 
 /**
  * The way in, on the login page and the landing page: anyone signs in (or up) with Google (or the dev sign-in)
- * and can add Parly to Slack.
+ * or copy the self-host install line.
  */
 export function SignInOptions({ next: back }: { next?: string }) {
   if (PASSWORD_LOGIN) return <PasswordSignIn next={back} />;
@@ -89,13 +93,18 @@ export function SignInOptions({ next: back }: { next?: string }) {
           Sign in first, then Slack asks you to add Parly.
         </p>
       ) : (
-        <a
-          href="/slack/add"
-          className="relative z-10 flex h-10 w-full items-center justify-center gap-2.5 rounded-full border border-[#dadce0] bg-white text-sm font-medium text-[#1f1f1f] hover:bg-[#f8f9fa]"
-        >
-          <SlackLogo />
-          Add Parly to Slack
-        </a>
+        <div className="flex flex-col gap-2">
+          <p className="mt-2 flex items-center gap-3 text-xs text-[var(--muted)] before:h-px before:flex-1 before:bg-[var(--border)] after:h-px after:flex-1 after:bg-[var(--border)]">
+            Or run your own
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--subtle)] px-3 py-2 font-mono text-xs">{INSTALL}</code>
+            <CopyButton value={INSTALL} label="Copy install command" />
+          </div>
+          <a href={REPO} target="_blank" rel="noreferrer" className="text-center text-sm underline">
+            Open the git repo
+          </a>
+        </div>
       )}
     </div>
   );
