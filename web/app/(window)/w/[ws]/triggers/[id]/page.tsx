@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { CreditsPaused } from '@/components/CreditsPaused';
 import { Icon } from '@/components/Icon';
-import { triggersHref, wsHref } from '@/lib/routes';
+import { triggersHref } from '@/lib/routes';
 import { AppSearch } from '@/components/AppSearch';
 import { notFound } from 'next/navigation';
 import { Avatar } from '@/components/Avatar';
 import { PendingButton } from '@/components/PendingButton';
 import { ErrorNote, PageHeader } from '@/components/ui';
 import { ListenerFormFields } from '@/components/WherePicker';
+import { PanelPage } from '@/components/PanelPage';
 import { addTriggerListener, setListenerOn, setTriggerOn } from '@/lib/actions';
 import { hub, meOrLogin, type Agent, type TriggerSourceView } from '@/lib/hub';
 import { ago, triggerWhat } from '@/lib/labels';
@@ -48,11 +49,7 @@ export default async function TriggerPage({ params, searchParams }: Props) {
   );
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-        <Link href={wsHref(ws)} scroll={false} aria-label="Close, back to the canvas" className="-mt-2 -ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden">
-          <Icon name="close" size={22} />
-        </Link>
+    <PanelPage ws={ws}>
         <div className="mx-auto max-w-2xl space-y-6">
       <Link href={triggersHref(ws)} title="All triggers" aria-label="All triggers" className="-ml-2 inline-flex size-9 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)]">
             <Icon name="back" size={18} />
@@ -142,7 +139,6 @@ export default async function TriggerPage({ params, searchParams }: Props) {
         </section>
       )}
         </div>
-      </div>
-    </main>
+    </PanelPage>
   );
 }

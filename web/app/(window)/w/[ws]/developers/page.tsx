@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { readFlash } from '@/lib/actions/helpers';
 import { notFound } from 'next/navigation';
 import { CopyButton } from '@/components/CopyButton';
-import { Icon } from '@/components/Icon';
 import { PendingButton } from '@/components/PendingButton';
 import { ErrorNote, PageHeader } from '@/components/ui';
+import { PanelPage } from '@/components/PanelPage';
 import { addDevAppKey, createDevApp, deleteDevApp, revokeDevAppKey } from '@/lib/actions';
 import { hub, meOrLogin, type Me } from '@/lib/hub';
 import { ago } from '@/lib/labels';
@@ -56,11 +56,7 @@ export default async function DeveloperApps({ params, searchParams }: Props) {
   if (made) shown = await readFlash('flash_dev_app');
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-        <Link href={wsHref(ws)} scroll={false} aria-label="Close, back to the canvas" className="-mt-2 -ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden">
-          <Icon name="close" size={22} />
-        </Link>
+    <PanelPage ws={ws}>
         <div className="mx-auto max-w-2xl space-y-8">
           <PageHeader title="Developer apps" sub={<>Let your own servers use Parly: open rooms, follow them and get webhooks, with an API key. See <Link href="/docs/apps-api" className="underline">Apps API</Link>.</>} />
           <ErrorNote error={error} />
@@ -129,7 +125,6 @@ export default async function DeveloperApps({ params, searchParams }: Props) {
             </ul>
           )}
         </div>
-      </div>
-    </main>
+    </PanelPage>
   );
 }

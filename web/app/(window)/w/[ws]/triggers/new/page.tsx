@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
-import { appsHref, triggersHref, wsHref } from '@/lib/routes';
+import { appsHref, triggersHref } from '@/lib/routes';
 import { AppSearch } from '@/components/AppSearch';
 import { Avatar } from '@/components/Avatar';
 import { cleanTriggerLabel, TriggerFields } from '@/components/ToolsSection';
@@ -10,6 +10,7 @@ import { addScheduleTrigger, addTrigger } from '@/lib/actions';
 import { ScheduleForm } from '@/components/ScheduleForm';
 import { hub, meOrLogin, type Agent, type TriggerTypeGroup } from '@/lib/hub';
 import { PendingButton } from '@/components/PendingButton';
+import { PanelPage } from '@/components/PanelPage';
 
 type Props = { params: Promise<{ ws: string }>; searchParams: Promise<{ error?: string; tq?: string; type?: string; q?: string }> };
 
@@ -40,11 +41,7 @@ export default async function NewTrigger({ params, searchParams }: Props) {
   const chip = 'rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs font-medium hover:border-[var(--accent)]';
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-        <Link href={wsHref(ws)} scroll={false} aria-label="Close, back to the canvas" className="-mt-2 -ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden">
-          <Icon name="close" size={22} />
-        </Link>
+    <PanelPage ws={ws}>
         <div className="mx-auto max-w-2xl space-y-6">
           <Link href={triggersHref(ws)} title="All triggers" aria-label="All triggers" className="-ml-2 inline-flex size-9 items-center justify-center rounded-lg text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)]">
             <Icon name="back" size={18} />
@@ -181,7 +178,6 @@ export default async function NewTrigger({ params, searchParams }: Props) {
             </section>
           )}
         </div>
-      </div>
-    </main>
+    </PanelPage>
   );
 }

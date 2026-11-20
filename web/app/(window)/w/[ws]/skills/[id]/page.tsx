@@ -5,9 +5,10 @@ import { PendingButton } from '@/components/PendingButton';
 import { ProcessStepsEditor } from '@/components/ProcessStepsEditor';
 import { Markdown } from '@/components/Thread';
 import { ErrorNote, PageHeader } from '@/components/ui';
+import { PanelPage } from '@/components/PanelPage';
 import { attachSkillFromLibrary, deleteSkillAction, setScopeSkillOn, updateSkillAction } from '@/lib/actions';
 import { hub, HubError, meOrLogin, type Agent, type ScopedSkillView, type SkillDetailView, type SkillSummaryView } from '@/lib/hub';
-import { agentHref, channelHref, skillsHref, wsHref } from '@/lib/routes';
+import { agentHref, channelHref, skillsHref } from '@/lib/routes';
 
 type Props = {
   params: Promise<{ ws: string; id: string }>;
@@ -47,16 +48,7 @@ export default async function SkillDetailPage({ params, searchParams }: Props) {
   const isProcess = skill.type === 'process';
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-        <Link
-          href={wsHref(ws)}
-          scroll={false}
-          aria-label="Close, back to the canvas"
-          className="-mt-2 -ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden"
-        >
-          <Icon name="close" size={22} />
-        </Link>
+    <PanelPage ws={ws}>
         <div className="mx-auto max-w-2xl space-y-6">
           <Link
             href={skillsHref(ws)}
@@ -263,7 +255,6 @@ export default async function SkillDetailPage({ params, searchParams }: Props) {
             </details>
           )}
         </div>
-      </div>
-    </main>
+    </PanelPage>
   );
 }

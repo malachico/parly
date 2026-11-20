@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { AppSearch } from '@/components/AppSearch';
-import { Icon } from '@/components/Icon';
 import { PendingButton } from '@/components/PendingButton';
 import { ErrorNote, PageHeader } from '@/components/ui';
+import { PanelPage } from '@/components/PanelPage';
 import { deleteSkillAction, setScopeSkillOn } from '@/lib/actions';
 import { hub, meOrLogin, type ScopedSkillView, type SkillSummaryView } from '@/lib/hub';
-import { appsHref, skillsHref, triggersHref, wsHref } from '@/lib/routes';
+import { appsHref, skillsHref, triggersHref } from '@/lib/routes';
 import { plural } from '@/lib/plural';
 
 type Props = {
@@ -68,11 +68,7 @@ export default async function SkillsLibraryPage({ params, searchParams }: Props)
     }`;
 
   return (
-    <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-        <Link href={wsHref(ws)} scroll={false} aria-label="Close, back to the canvas" className="-mt-2 -ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden">
-          <Icon name="close" size={22} />
-        </Link>
+    <PanelPage ws={ws}>
         <div className="mx-auto max-w-2xl space-y-6">
           <PageHeader title="Skills & Processes" sub="Create reusable playbooks once and attach them plug-and-play to any agent, channel, or your whole workspace.">
             <div className="flex flex-wrap items-center gap-2">
@@ -196,7 +192,6 @@ export default async function SkillsLibraryPage({ params, searchParams }: Props)
             Attach skills and processes per agent (on its profile) or per channel (in its settings). See also <Link href={appsHref(ws)} className="underline">Apps</Link> and <Link href={triggersHref(ws)} className="underline">Triggers</Link>.
           </p>
         </div>
-      </div>
-    </main>
+    </PanelPage>
   );
 }
