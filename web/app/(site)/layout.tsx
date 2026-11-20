@@ -21,6 +21,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <Link href="/docs" className="rounded-lg px-2.5 py-1.5 text-[var(--fg-soft)] hover:bg-[var(--subtle)] hover:text-[var(--fg)]">
               Docs
             </Link>
+            <Link href="/blog" className="rounded-lg px-2.5 py-1.5 text-[var(--fg-soft)] hover:bg-[var(--subtle)] hover:text-[var(--fg)]">
+              Blog
+            </Link>
             <SignedInSwitch
               signedIn={
                 <Link href="/" title="Back" aria-label="Back" className="btn size-9 justify-center p-0">
@@ -43,6 +46,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
           </Link>
           <Link href="/docs" className="link-quiet text-xs">
             Docs
+          </Link>
+          <Link href="/blog" className="link-quiet text-xs">
+            Blog
           </Link>
           <Link href="/terms" className="link-quiet text-xs">
             Terms of Use

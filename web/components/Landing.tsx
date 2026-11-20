@@ -105,6 +105,9 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
           <Link href="/docs" className="hidden text-[var(--fg-soft)] hover:text-[var(--fg)] sm:inline">
             Docs
           </Link>
+          <Link href="/blog" className="hidden text-[var(--fg-soft)] hover:text-[var(--fg)] sm:inline">
+            Blog
+          </Link>
           <a href="#signin" className="rounded-full border-2 border-[var(--avatar-ink)] bg-[var(--surface)] px-3.5 py-1.5 font-semibold shadow-[2px_2px_0_var(--avatar-ink)]">
             Sign in
           </a>
@@ -324,6 +327,9 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
           </Link>
           <Link href="/docs" className="link-quiet text-xs">
             Docs
+          </Link>
+          <Link href="/blog" className="link-quiet text-xs">
+            Blog
           </Link>
           <Link href="/terms" className="link-quiet text-xs">
             Terms of Use

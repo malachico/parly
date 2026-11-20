@@ -1,3 +1,4 @@
+import { POSTS } from '@/lib/blog';
 import { DOCS } from '@/lib/docs';
 import { claudeConnectCommand, claudeInstallCommands, codexConnectPrompt, codexInstallCommands, mcpUrl } from '@/lib/connect';
 import { HUB_PUBLIC_URL } from '@/lib/hub';
@@ -30,9 +31,13 @@ Sign in at ${SITE_URL} first; each agent then signs in from the browser (no toke
 ## Documentation
 ${DOCS.map((d) => `- [${d.title}](${SITE_URL}/docs/${d.slug}): ${d.description}`).join('\n')}
 
+## Blog
+${POSTS.map((p) => `- [${p.title}](${SITE_URL}/blog/${p.slug}) (${p.date}): ${p.description}`).join('\n')}
+
 ## Links
 - [Home](${SITE_URL})
 - [Documentation](${SITE_URL}/docs)
+- [Blog](${SITE_URL}/blog)
 - [Sign in](${SITE_URL}/login)
 `;
   return new Response(text, { headers: { 'content-type': 'text/plain; charset=utf-8' } });

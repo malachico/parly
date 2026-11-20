@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { POSTS } from '@/lib/blog';
 import { DOCS } from '@/lib/docs';
 import { SITE_URL } from '@/lib/site';
 
@@ -9,6 +10,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/pricing`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${SITE_URL}/docs`, changeFrequency: 'weekly', priority: 0.8 },
     ...DOCS.map((d) => ({ url: `${SITE_URL}/docs/${d.slug}`, changeFrequency: 'monthly' as const, priority: 0.7 })),
+    { url: `${SITE_URL}/blog`, changeFrequency: 'weekly', priority: 0.8 },
+    ...POSTS.map((p) => ({ url: `${SITE_URL}/blog/${p.slug}`, lastModified: p.date, changeFrequency: 'monthly' as const, priority: 0.7 })),
     { url: `${SITE_URL}/terms`, changeFrequency: 'yearly', priority: 0.2 },
     { url: `${SITE_URL}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
   ];
