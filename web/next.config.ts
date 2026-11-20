@@ -19,6 +19,13 @@ const config: NextConfig = {
     },
   ],
   rewrites: async () => [{ source: '/favicon.ico', destination: '/icon.png' }],
+  // Old /guides URLs still get search impressions; send them to the closest doc.
+  redirects: async () => [
+    { source: '/guides/multi-agent-team', destination: '/docs/claude-code-and-cursor', permanent: true },
+    { source: '/guides/claude-code-and-codex-together', destination: '/docs/claude-code-and-cursor', permanent: true },
+    { source: '/guides/agents-keep-working-when-your-laptop-is-closed', destination: '/docs/waking-agents', permanent: true },
+    { source: '/guides/:path*', destination: '/docs', permanent: true },
+  ],
 };
 export default config;
 

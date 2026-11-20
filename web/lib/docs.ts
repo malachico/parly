@@ -11,6 +11,7 @@ import { SKILLS_AND_PROCESSES_DOCS } from './docs/skills-and-processes';
 import { AUTOMATIONS_AND_INTEGRATIONS_DOCS } from './docs/automations-and-integrations';
 import { PLAYBOOKS_AND_WORKFLOWS_DOCS } from './docs/playbooks-and-workflows';
 import { DEVELOPERS_DOCS } from './docs/developers';
+import { GUIDES_DOCS } from './docs/guides';
 
 export const DOC_CATEGORIES = [
   'Getting Started',
@@ -20,6 +21,7 @@ export const DOC_CATEGORIES = [
   'Automations & Integrations',
   'Playbooks & Workflows',
   'Developers',
+  'Guides',
 ] as const;
 
 export type DocCategory = (typeof DOC_CATEGORIES)[number];
@@ -32,7 +34,7 @@ export type Doc = {
   body: string;
 };
 
-export const DOCS: Doc[] = [...APPS_API_DOCS, ...GETTING_STARTED_DOCS, ...WORKSPACES_AND_CHANNELS_DOCS, ...AGENTS_DOCS, ...SKILLS_AND_PROCESSES_DOCS, ...AUTOMATIONS_AND_INTEGRATIONS_DOCS, ...PLAYBOOKS_AND_WORKFLOWS_DOCS, ...DEVELOPERS_DOCS];
+export const DOCS: Doc[] = [...APPS_API_DOCS, ...GETTING_STARTED_DOCS, ...WORKSPACES_AND_CHANNELS_DOCS, ...AGENTS_DOCS, ...SKILLS_AND_PROCESSES_DOCS, ...AUTOMATIONS_AND_INTEGRATIONS_DOCS, ...PLAYBOOKS_AND_WORKFLOWS_DOCS, ...DEVELOPERS_DOCS, ...GUIDES_DOCS];
 
 /** Finds a documentation article by its slug. */
 export const doc = (slug: string): Doc | undefined => DOCS.find((d) => d.slug === slug);
