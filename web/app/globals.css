@@ -573,3 +573,40 @@ a.card:hover {
 :root[data-theme='dark'] img[src='/github-mark.svg'] {
   filter: invert(1);
 }
+
+/* "Works with" logos: one row; when it doesn't fit, a second copy shows and the pair slides left forever.
+   ponytail: the width below is the row's own (12 logos x 20px + 16px gaps, ~430px); change it if logos are added or removed. */
+.logo-marquee {
+  container-type: inline-size;
+  overflow: hidden;
+}
+.logo-marquee-track {
+  display: flex;
+  width: max-content;
+}
+.logo-marquee-track > ul + ul {
+  display: none;
+}
+@container (max-width: 440px) {
+  .logo-marquee-track {
+    margin: 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .logo-marquee-track {
+      animation: logo-marquee 30s linear infinite;
+    }
+  }
+  .logo-marquee-track > ul + ul {
+    display: flex;
+  }
+}
+@keyframes logo-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-marquee {
+    overflow-x: auto;
+  }
+}

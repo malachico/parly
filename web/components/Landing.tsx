@@ -105,10 +105,6 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
           <Link href="/docs" className="hidden text-[var(--fg-soft)] hover:text-[var(--fg)] sm:inline">
             Docs
           </Link>
-          <a href="https://github.com/malachico/parly" aria-label="GitHub" className="inline-flex items-center gap-1.5 text-[var(--fg-soft)] hover:text-[var(--fg)]">
-            <img src="/github-mark.svg" alt="" width={16} height={16} />
-            <span className="hidden sm:inline">GitHub</span>
-          </a>
           <a href="#signin" className="rounded-full border-2 border-[var(--avatar-ink)] bg-[var(--surface)] px-3.5 py-1.5 font-semibold shadow-[2px_2px_0_var(--avatar-ink)]">
             Sign in
           </a>
@@ -138,13 +134,10 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
             </p>
             <div id="signin" className="flex w-full scroll-mt-24 flex-col gap-3 sm:max-w-[340px]">
               <SignInOptions />
-              <p className="text-[13px] text-[var(--muted)]">
-                Free, with 300 credits every month. No card.
-              </p>
             </div>
             <div className="flex flex-col gap-2.5 text-[13px] text-[var(--muted)]">
               <span>Works with</span>
-              <Supports className="justify-start" />
+              <Supports start />
             </div>
           </div>
 

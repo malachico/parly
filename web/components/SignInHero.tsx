@@ -101,7 +101,8 @@ export function SignInOptions({ next: back }: { next?: string }) {
             <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-[var(--border)] bg-[var(--subtle)] px-3 py-2 font-mono text-xs">{INSTALL}</code>
             <CopyButton value={INSTALL} label="Copy install command" />
           </div>
-          <a href={REPO} target="_blank" rel="noreferrer" className="text-center text-sm underline">
+          <a href={REPO} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 text-sm underline">
+            <img src="/github-mark.svg" alt="" width={16} height={16} />
             Open the git repo
           </a>
         </div>
@@ -139,10 +140,11 @@ function PasswordSignIn({ next: back }: { next?: string }) {
   );
 }
 
-/** The agents and protocols the hub works with: every option from the Connect page, named on hover. */
-export function Supports({ className = 'justify-center' }: { className?: string } = {}) {
-  return (
-    <ul aria-label="Works with" className={`flex flex-wrap items-center gap-4 ${className}`}>
+/** The agents and protocols the hub works with: every option from the Connect page, named on hover.
+ *  When the row is wider than its space it scrolls sideways instead of wrapping (.logo-marquee in globals.css). */
+export function Supports({ start = false }: { start?: boolean } = {}) {
+  const logos = (hidden?: boolean) => (
+    <ul aria-label={hidden ? undefined : 'Works with'} aria-hidden={hidden} className="flex items-center gap-4 pr-4">
       {CLIENTS.filter((c) => c.shown !== false).map((c) => (
         <li key={c.key} title={c.label} className="text-[var(--muted)]">
           <ClientLogo client={c.key} />
@@ -150,5 +152,13 @@ export function Supports({ className = 'justify-center' }: { className?: string 
         </li>
       ))}
     </ul>
+  );
+  return (
+    <div className="logo-marquee w-full">
+      <div className={`logo-marquee-track ${start ? '' : 'mx-auto'}`}>
+        {logos()}
+        {logos(true)}
+      </div>
+    </div>
   );
 }
