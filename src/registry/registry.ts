@@ -1436,15 +1436,7 @@ export class Registry {
 
   async createSkill(
     owner: AgentRecord,
-    input: {
-      name: string;
-      description: string;
-      type?: SkillType;
-      instructions?: string;
-      steps?: Array<{ order?: number; role: string; action: string; output?: string; transition?: string; skillId?: string }>;
-      scope?: SkillScope;
-      id?: string;
-    },
+    input: registrySkills.CreateSkillInput,
   ): Promise<SkillRecord> {
     return registrySkills.createSkill(this, owner, input);
   }
@@ -1452,13 +1444,7 @@ export class Registry {
   async updateSkill(
     caller: AgentRecord,
     skillId: string,
-    changes: {
-      name?: string;
-      description?: string;
-      type?: SkillType;
-      instructions?: string;
-      steps?: Array<{ order?: number; role: string; action: string; output?: string; transition?: string; skillId?: string }>;
-    },
+    changes: registrySkills.UpdateSkillChanges,
   ): Promise<SkillRecord> {
     return registrySkills.updateSkill(this, caller, skillId, changes);
   }

@@ -22,6 +22,26 @@ export function isSkillOwner(skill: SkillRecord, caller: AgentRecord): boolean {
   return isOwner(skill, caller);
 }
 
+/** What `createSkill` takes. */
+export interface CreateSkillInput {
+  name: string;
+  description: string;
+  type?: SkillType;
+  instructions?: string;
+  steps?: Array<{ order?: number; role: string; action: string; output?: string; transition?: string; skillId?: string }>;
+  scope?: SkillScope;
+  id?: string;
+}
+
+/** What `updateSkill` may change. */
+export interface UpdateSkillChanges {
+  name?: string;
+  description?: string;
+  type?: SkillType;
+  instructions?: string;
+  steps?: Array<{ order?: number; role: string; action: string; output?: string; transition?: string; skillId?: string }>;
+}
+
 /**
  * Creates a reusable skill (`type: 'skill'`, default) or multi-agent workflow template (`type: 'process'`)
  * owned by `owner` (and their human owner if `owner` is a bot).
@@ -30,15 +50,7 @@ export function isSkillOwner(skill: SkillRecord, caller: AgentRecord): boolean {
 export async function createSkill(
   registry: Registry,
   owner: AgentRecord,
-  input: {
-    name: string;
-    description: string;
-    type?: SkillType;
-    instructions?: string;
-    steps?: Array<{ order?: number; role: string; action: string; output?: string; transition?: string; skillId?: string }>;
-    scope?: SkillScope;
-    id?: string;
-  },
+  input: CreateSkillInput,
 ): Promise<SkillRecord> {
   const name = cleanSkillName(input.name);
   const description = cleanSkillDescription(input.description);
@@ -108,13 +120,7 @@ export async function updateSkill(
   registry: Registry,
   caller: AgentRecord,
   skillId: string,
-  changes: {
-    name?: string;
-    description?: string;
-    type?: SkillType;
-    instructions?: string;
-    steps?: Array<{ order?: number; role: string; action: string; output?: string; transition?: string; skillId?: string }>;
-  },
+  changes: UpdateSkillChanges,
 ): Promise<SkillRecord> {
   if (isBuiltinSkillId(skillId)) {
     throw new HubError('forbidden', 'Built-in skills are read-only; create and attach a workspace skill to override it');
