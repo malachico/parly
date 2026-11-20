@@ -7,6 +7,7 @@ import { SlackStore } from './slack/store.js';
 import { TelegramBridge } from './telegram/bridge.js';
 import { TelegramStore } from './telegram/store.js';
 import { AI_MARKUP, LlmMeter } from './llm/llm.js';
+import { GraphStore } from './graph/store.js';
 import { llmRouter } from './llm/router.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { Database } from './db/types.js';
@@ -93,6 +94,8 @@ function oauthStoreFor(db: Database, config: HubConfig): OAuthStore {
 export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogle, fileStore, oauthStore, queue, computerDriver, cloudFetch, cloudToken, composioFetch, githubFetch, telegramFetch, mcpEventsFetch }: AppDeps): HubService {
   const oauthTokens = oauthStore ?? oauthStoreFor(db, config);
   const webUrl = config.webUrl ?? config.publicUrl;
+  const meter = new LlmMeter(db, Math.round(config.llmMonthlyAllowanceUsd * 1_000_000));
+  const graph = new GraphStore(db, meter, { enabled: config.contextGraphEnabled, dailyCapMicros: Math.round(config.contextGraphDailyCapUsd * 1_000_000) });
   const registry = new Registry(db, {
     plans: Boolean(config.cloudAgents || config.paddle),
     fetchCard,
@@ -107,8 +110,9 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     passwordLogin: config.passwordLogin,
     // Deleting a bot or rotating its token also ends its OAuth sign-ins.
     revokeTokens: (ids) => oauthTokens.revokeAgents(ids),
+    // Archiving a workspace or channel drops its context graph (the registry logs a failed purge, never fails the archive).
+    purgeGraph: (scope) => graph.purgeGraphFor(scope),
   });
-  const meter = new LlmMeter(db, Math.round(config.llmMonthlyAllowanceUsd * 1_000_000));
   // A cloud agent's per-message breaker is in model cost (before AI_MARKUP): the turn cap in credits, converted.
   const turnCapMicros = config.agentTurnCreditCap ? Math.round((config.agentTurnCreditCap * CREDIT_MICROS) / AI_MARKUP) : TASK_BUDGET_MICROS;
   // Cloud agents (no computer) are answered by the hub itself; every other endpoint agent is called over A2A.

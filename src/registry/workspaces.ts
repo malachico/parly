@@ -413,8 +413,10 @@ export async function setWorkspaceArchived(registry: Registry, owner: AgentRecor
   } else {
     await write();
   }
-  if (archived) workspace.archived = true;
-  else delete workspace.archived;
+  if (archived) {
+    workspace.archived = true;
+    await registry.purgeGraph?.({ workspaceId: workspace.id });
+  } else delete workspace.archived;
   return workspace;
 }
 

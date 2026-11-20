@@ -533,6 +533,12 @@ export const MONGO_INDEXES: { collection: string; keys: Record<string, 1 | -1> }
   { collection: 'activity', keys: { conversationId: 1 } },
   { collection: 'activity', keys: { channelId: 1 } },
   { collection: 'activity', keys: { atMs: 1 } },
+  // Context graph (src/graph/store.ts): edge traversal and cross-conversation edge purge. Workspace+conversation
+  // lookups ride the unique (workspaceId, conversationId, kind, key) index created in ensureIndexes.
+  { collection: 'graph_edges', keys: { from: 1 } },
+  { collection: 'graph_edges', keys: { to: 1 } },
+  { collection: 'graph_edges', keys: { workspaceId: 1, fromConversationId: 1 } },
+  { collection: 'graph_edges', keys: { workspaceId: 1, toConversationId: 1 } },
 ];
 const MONGO_TTL_COLLECTIONS = [
   'invites',
@@ -572,6 +578,8 @@ async function ensureIndexes(db: Db): Promise<void> {
     ...['paddleSubscriptionId', 'paddleCustomerId'].map((f) => db.collection('billing').createIndex({ [f]: 1 })),
     // Messages' attachments (multikey) for array-contains lookups.
     db.collection('messages').createIndex({ files: 1 }),
+    // Context graph idempotency: one row per (workspace, conversation, kind, normalized key).
+    ...['graph_nodes', 'graph_edges', 'graph_embeddings'].map((c) => db.collection(c).createIndex({ workspaceId: 1, conversationId: 1, kind: 1, key: 1 }, { unique: true })),
   ]);
 }
 

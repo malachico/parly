@@ -63,6 +63,8 @@ export function testConfig(overrides: Partial<HubConfig> = {}): HubConfig {
     searchModel: 'flash-lite',
     threadDeltaRule: false,
     threadDigest: false,
+    contextGraphEnabled: true,
+    contextGraphDailyCapUsd: 0.25,
     computerIdleMs: 30 * 60_000,
     githubAppSlug: 'parly-dev',
     ...overrides,

@@ -260,6 +260,8 @@ export async function updateChannel(
     throw new HubError('invalid', 'Give a new name, archived: true/false, open: true/false, public: true/false or a context');
   }
   await registry.channelStore.updateChannel(channel.id, update, goPrivate);
+  // channelId covers chat.ts's channelKey() and every threadKey() under it, without importing chat here.
+  if (changes.archived === true) await registry.purgeGraph?.({ workspaceId: channel.workspaceId, channelId: channel.id });
   const updated = { ...channel, ...update };
   if (goPrivate) delete updated.publicFromSeq;
   return updated;

@@ -321,6 +321,24 @@ export class BillingStore {
     return (snap.data()?.micros as number | undefined) ?? 0;
   }
 
+  /** Context-graph extraction spend for one workspace and day, in raw model micro-dollars (Parly's cost, no markup). */
+  async getGraphSpent(workspaceId: string, day: string): Promise<number> {
+    const snap = await this.db.collection(USAGE).doc(`_graph_${workspaceId}_${day}`).get();
+    return (snap.data()?.costMicros as number | undefined) ?? 0;
+  }
+
+  /**
+   * Parly pays for graph extraction: this only counts toward the graph cap and never touches anyone's credits.
+   * ponytail: one doc per workspace per day that never expires; add a TTL index or a cleanup sweep if they pile up.
+   */
+  async addGraphSpend(workspaceId: string, cost: number, day: string): Promise<void> {
+    if (cost <= 0) return;
+    await this.db
+      .collection(USAGE)
+      .doc(`_graph_${workspaceId}_${day}`)
+      .set({ workspaceId, day, costMicros: FieldValue.increment(cost), updatedAt: new Date().toISOString() }, { merge: true });
+  }
+
   async addPublicShowcaseSpend(cost: number, day: string): Promise<void> {
     const micros = markedUpMicros(cost);
     if (micros <= 0) return;

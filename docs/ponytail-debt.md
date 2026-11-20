@@ -69,6 +69,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - first Team subscription wins a pool; another one (e.g. a $75 checkout by someone who knows the owner's id) is ignored until the first ends or lapses. A legit replacement needs the first cancelled.
 - a Team pool keeps the buyer's paddleCustomerId (its portal needs it), so ownerOfCustomer's limit(1) may pick the pool or the buyer's own doc for a customer-only event; only adjustments without custom_data hit that fallback.
+- one doc per workspace per day that never expires; add a TTL index or a cleanup sweep if they pile up.
 
 ## `src/chat/activity.ts`
 
@@ -110,6 +111,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - telegram_events sets expiresAt too but is left off deliberately to keep its history; add it here when that cleanup is worth more than the audit trail
 - non-unique sign-in lookups; a unique index on email/googleSub wants a dedup + backfill first (see docs/ponytail-debt.md)
+
+## `src/graph/store.ts`
+
+- soft cap (check, then record after the call), so concurrent extractions can overshoot by one call each; reserve-then-settle if that matters.
 
 ## `src/hub/canvasService.ts`
 
@@ -366,4 +371,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**126 markers, 33 with no trigger.**
+**128 markers, 33 with no trigger.**

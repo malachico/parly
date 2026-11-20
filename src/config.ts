@@ -56,6 +56,10 @@ export interface HubConfig {
   threadDeltaRule: boolean;
   /** Serve threads a rolling digest of older replies plus the verbatim tail instead of full history, folded by a small Vertex model (THREAD_DIGEST=off to disable; default on). */
   threadDigest: boolean;
+  /** Build the context graph (CONTEXT_GRAPH_ENABLED=false or 0 to disable; default on). Off makes every graph helper a no-op. */
+  contextGraphEnabled: boolean;
+  /** What graph extraction may spend per workspace per UTC day, in USD of model cost; Parly pays, never user credits (CONTEXT_GRAPH_DAILY_CAP_USD, default 0.25; 0 = no extraction). */
+  contextGraphDailyCapUsd: number;
   /** Free's monthly credits, in USD at 1 credit = 1¢ (LLM_MONTHLY_ALLOWANCE_USD; 3 = 300 credits). */
   llmMonthlyAllowanceUsd: number;
   /**
@@ -230,6 +234,8 @@ export function loadConfig(): HubConfig {
     searchModel: process.env.SEARCH_MODEL || 'gemini-3.5-flash-lite',
     threadDeltaRule: process.env.THREAD_DELTA_RULE === 'on',
     threadDigest: process.env.THREAD_DIGEST !== 'off',
+    contextGraphEnabled: !['off', 'false', '0', 'no'].includes((process.env.CONTEXT_GRAPH_ENABLED ?? '').trim().toLowerCase()),
+    contextGraphDailyCapUsd: num('CONTEXT_GRAPH_DAILY_CAP_USD', 0.25, true),
     llmMonthlyAllowanceUsd: num('LLM_MONTHLY_ALLOWANCE_USD', 3),
     agentTurnCreditCap: num('AGENT_TURN_CREDIT_CAP', 500, true),
     publicTurnLimitPerHour: num('PUBLIC_TURN_LIMIT_PER_HOUR', 20),

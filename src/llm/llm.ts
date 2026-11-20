@@ -114,6 +114,16 @@ export class LlmMeter {
     await this.store.addPublicShowcaseSpend(cost, day);
   }
 
+  /** Today's context-graph extraction spend for `workspaceId` (raw model micro-dollars). */
+  async graphSpent(workspaceId: string, day = dayOf()): Promise<number> {
+    return this.store.getGraphSpent(workspaceId, day);
+  }
+
+  /** Records graph extraction `cost` (raw model micro-dollars) against the workspace's daily graph cap. Parly pays: no credits are debited. */
+  async addGraphSpend(workspaceId: string, cost: number, day = dayOf()): Promise<void> {
+    await this.store.addGraphSpend(workspaceId, cost, day);
+  }
+
   /** This month's spend and what could be spent: the allowance plus top-ups (spent this month and left). */
   async balance(ownerId: string, period = periodOf()): Promise<{ spentMicros: number; capMicros: number }> {
     const { usage, billing } = await this.store.getUsageAndBilling(ownerId, period);

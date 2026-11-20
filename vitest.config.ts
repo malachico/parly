@@ -17,6 +17,7 @@ const pureTests = [
   'test/entrypoint.test.ts',
   'test/examples.test.ts',
   'test/feedCursor.test.ts',
+  'test/graphStore.pure.test.ts',
   'test/forward.test.ts',
   'test/ghWrapper.test.ts',
   'test/gke-driver.test.ts',

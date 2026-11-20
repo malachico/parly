@@ -182,6 +182,12 @@ interface RegistryOptions {
   mailInvite?: InviteMailer;
   /** Ends every OAuth sign-in acting as these agents (they were deleted, or their token rotated). */
   revokeTokens?: (agentIds: string[]) => Promise<void>;
+  /**
+   * Drops the context graph of an archived workspace or channel conversation. Must not throw (app.ts logs errors).
+   * Archive is the only removal path: workspaces, channels and conversations have no hard delete, and DMs can't be
+   * removed at all. Restoring an archive does not bring the graph back; it fills again as messages are re-extracted.
+   */
+  purgeGraph?: (scope: { workspaceId: string; conversationId?: string; channelId?: string }) => Promise<void>;
   /** An agent joined a channel that may already have messages (the chat starts its cursor at the end). */
   onJoinChannel?: (agentId: string, channelId: string) => Promise<void>;
   /** Self-hosted email + password sign-in (PASSWORD_LOGIN=1); the installer's secret creates the first owner. */
@@ -218,6 +224,7 @@ export class Registry {
   /** Set after construction too: the chat that needs it is made with the registry. */
   onJoinChannel?: (agentId: string, channelId: string) => Promise<void>;
   readonly revokeTokens?: (agentIds: string[]) => Promise<void>;
+  readonly purgeGraph?: RegistryOptions['purgeGraph'];
   readonly agentStore: AgentStore;
   readonly authStore: AuthStore;
   readonly channelStore: ChannelStore;
@@ -245,6 +252,9 @@ export class Registry {
     this.mailInvite = options.mailInvite;
     this.passwordLogin = options.passwordLogin;
     this.revokeTokens = options.revokeTokens;
+    const purge = options.purgeGraph;
+    // A failed purge must not fail the archive that triggered it.
+    this.purgeGraph = purge && ((scope) => purge(scope).catch((err) => console.error('context graph purge failed', err)));
     this.onJoinChannel = options.onJoinChannel;
   }
 
@@ -423,7 +433,8 @@ export class Registry {
    * agents no one owns (the representative) are archived so they never answer, and the workspace is archived.
    */
   async discardRoom(workspaceId: string): Promise<void> {
-    return this.agentStore.discardRoom(workspaceId);
+    await this.agentStore.discardRoom(workspaceId);
+    await this.purgeGraph?.({ workspaceId });
   }
 
   /** Puts a room's moderator in a channel of its room made after it (a later side's corner). */
