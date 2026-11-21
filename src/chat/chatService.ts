@@ -511,11 +511,25 @@ export class ChatService {
    * a bot in a DM (an owner sees all its bot's conversations).
    */
   async canRead(agent: AgentRecord, conversationId: string): Promise<boolean> {
-    const p = parseKey(conversationId);
-    if (p.kind !== 'dm') return (agent.channels ?? []).includes(p.channelId);
-    if (p.ids.includes(agent.id)) return true;
-    if (agent.kind !== 'human') return false;
-    return (await this.registry.getMany(p.ids)).some((a) => a.kind !== 'human' && a.ownerId === agent.id);
+    parseKey(conversationId); // an unknown key is invalid, not merely unreadable
+    return (await this.readableConversations(agent, [conversationId])).has(conversationId);
+  }
+
+  /** The `ids` `agent` may read (canRead's rule), with one registry lookup for all of them. Anything that isn't a conversation key is unreadable. */
+  async readableConversations(agent: AgentRecord, ids: Iterable<string>): Promise<Set<string>> {
+    const readable = new Set<string>();
+    const othersDms = new Map<string, string[]>();
+    for (const id of new Set(ids)) {
+      let p: ReturnType<typeof parseKey>;
+      try { p = parseKey(id); } catch { continue; }
+      if (p.kind !== 'dm') { if ((agent.channels ?? []).includes(p.channelId)) readable.add(id); }
+      else if (p.ids.includes(agent.id)) readable.add(id);
+      else if (agent.kind === 'human') othersDms.set(id, p.ids);
+    }
+    if (othersDms.size === 0) return readable;
+    const mine = new Set((await this.registry.getMany([...othersDms.values()].flat())).filter((a) => a.kind !== 'human' && a.ownerId === agent.id).map((a) => a.id));
+    for (const [id, pair] of othersDms) if (pair.some((x) => mine.has(x))) readable.add(id);
+    return readable;
   }
 
   /** Whether `agent` can read a message a file is attached to. */
