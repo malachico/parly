@@ -7,6 +7,7 @@ import { SlackStore } from './slack/store.js';
 import { TelegramBridge } from './telegram/bridge.js';
 import { TelegramStore } from './telegram/store.js';
 import { AI_MARKUP, LlmMeter } from './llm/llm.js';
+import { createGraphSearch } from './graph/search.js';
 import { GraphStore } from './graph/store.js';
 import { llmRouter } from './llm/router.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -26,6 +27,7 @@ import { GitHubInstalls } from './hub/githubInstalls.js';
 import { GitHubInstallOAuth } from './hub/githubInstallOAuth.js';
 import { verifyGitHubSignature } from './hub/triggers.js';
 import { textOf } from './lib/wire.js';
+import { embed } from './lib/vertex.js';
 import { retryingMemo } from './lib/retryingMemo.js';
 import { parseKey } from './chat/chat.js';
 import { callMcpTool, listMcpTools } from './mcp/inProcess.js';
@@ -252,6 +254,15 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     hub.vertexPrices = config.vertex.prices;
     if (config.channelRouter && !config.channelRouterModel.startsWith('gemini-decision')) hub.chat.route = vertexRouter({ ...config.vertex, model: config.channelRouterModel, accessToken: cloudToken });
   }
+  // Internal context-graph search: vector when Vertex and an Atlas vector index are there, exact-word otherwise.
+  const emb = config.contextGraphEmbedding;
+  hub.graphSearch = createGraphSearch({
+    db, graph, enabled: config.contextGraphEnabled,
+    embedding: config.vertex?.project ? {
+      ...emb,
+      embed: (text) => embed({ project: config.vertex!.project, location: emb.location, model: emb.model, text, taskType: 'RETRIEVAL_QUERY', dimensions: emb.dimensions, accessToken: cloudToken, fetchImpl: cloudFetch }),
+    } : undefined,
+  });
   // CHANNEL_ROUTER_MODEL=gemini-decision-1 routes on the Decisions API instead (AI Studio key, not Vertex).
   if (config.channelRouter && config.channelRouterModel.startsWith('gemini-decision') && config.geminiApiKey) hub.chat.route = decisionsRouter({ apiKey: config.geminiApiKey, model: config.channelRouterModel });
   // Cloud agents remember the conversation and can read and post in their channels, as themselves.

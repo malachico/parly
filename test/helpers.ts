@@ -65,6 +65,7 @@ export function testConfig(overrides: Partial<HubConfig> = {}): HubConfig {
     threadDigest: false,
     contextGraphEnabled: true,
     contextGraphDailyCapUsd: 0.25,
+    contextGraphEmbedding: { model: 'gemini-embedding-001', location: 'us-central1', dimensions: 768, pricePerMTok: 0.15 },
     computerIdleMs: 30 * 60_000,
     githubAppSlug: 'parly-dev',
     ...overrides,

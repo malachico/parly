@@ -47,6 +47,7 @@ import type { Forwarder } from './forward.js';
 import { type Waker } from './wake.js';
 import { CanvasService, type CanvasSchedule, type CanvasView, type Presence } from './canvasService.js';
 import { ScheduleService } from './scheduleService.js';
+import type { GraphSearch } from '../graph/search.js';
 import { WakeService, type WakeCheck, type WakeTiming } from './wakeService.js';
 
 export type { CanvasSchedule, CanvasView, Presence, WakeCheck, WakeTiming };
@@ -169,6 +170,8 @@ export class HubService {
   /** Apps' own agents (/v1/agents), and what ranks the listed ones for search (unset: search is unavailable). */
   readonly appAgents: AppAgents;
   agentRanker?: AgentRanker;
+  /** Context graph search. Internal: no permission check yet (context graph PR 3), so never expose it to a caller as-is. */
+  graphSearch?: GraphSearch;
   /** Model prices for charging a search to the app's maker. */
   vertexPrices?: LlmPrices;
   /** Room events to the webhooks of the apps that opened the rooms. */

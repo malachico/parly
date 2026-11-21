@@ -11,11 +11,15 @@ export interface GraphScope {
   channelId?: string;
 }
 
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const NODES = 'graph_nodes';
+export const NODES = 'graph_nodes';
 const EDGES = 'graph_edges';
-const EMBEDDINGS = 'graph_embeddings';
+export const EMBEDDINGS = 'graph_embeddings';
+
+/** Mongo filter for `conversationId`: a channel plus its threads, one conversation, or undefined (whole workspace). */
+export const conversationFilter = ({ conversationId, channelId }: GraphScope) =>
+  channelId !== undefined ? { $regex: `^(channel:${escapeRegex(channelId)}$|thread:${escapeRegex(channelId)}:)` } : conversationId;
 
 /** Case/whitespace-insensitive identity, so "Use  Mongo" and "use mongo" are one node. */
 export const normalizeKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -90,8 +94,8 @@ export class GraphStore {
   /** Deletes the scope's nodes and embeddings, and every edge with either end in it. */
   async purgeGraphFor(scope: GraphScope): Promise<void> {
     if (!this.options.enabled) return;
-    const { workspaceId, conversationId, channelId } = scope;
-    const conv = channelId !== undefined ? { $regex: `^(channel:${escapeRegex(channelId)}$|thread:${escapeRegex(channelId)}:)` } : conversationId;
+    const { workspaceId } = scope;
+    const conv = conversationFilter(scope);
     const own = conv === undefined ? { workspaceId } : { workspaceId, conversationId: conv };
     const edges = conv === undefined ? { workspaceId } : { workspaceId, $or: [{ fromConversationId: conv }, { toConversationId: conv }] };
     const col = (name: string) => this.db.mongoDb.collection(name);

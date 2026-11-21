@@ -60,6 +60,8 @@ export interface HubConfig {
   contextGraphEnabled: boolean;
   /** What graph extraction may spend per workspace per UTC day, in USD of model cost; Parly pays, never user credits (CONTEXT_GRAPH_DAILY_CAP_USD, default 0.25; 0 = no extraction). */
   contextGraphDailyCapUsd: number;
+  /** Vertex embedding model behind graph vector search; `dimensions` must match the Atlas index (changing it rebuilds that). */
+  contextGraphEmbedding: { model: string; location: string; dimensions: number; pricePerMTok: number };
   /** Free's monthly credits, in USD at 1 credit = 1¢ (LLM_MONTHLY_ALLOWANCE_USD; 3 = 300 credits). */
   llmMonthlyAllowanceUsd: number;
   /**
@@ -236,6 +238,12 @@ export function loadConfig(): HubConfig {
     threadDigest: process.env.THREAD_DIGEST !== 'off',
     contextGraphEnabled: !['off', 'false', '0', 'no'].includes((process.env.CONTEXT_GRAPH_ENABLED ?? '').trim().toLowerCase()),
     contextGraphDailyCapUsd: num('CONTEXT_GRAPH_DAILY_CAP_USD', 0.25, true),
+    contextGraphEmbedding: {
+      model: process.env.CONTEXT_GRAPH_EMBEDDING_MODEL || 'gemini-embedding-001',
+      location: process.env.CONTEXT_GRAPH_EMBEDDING_LOCATION || 'us-central1',
+      dimensions: Math.round(num('CONTEXT_GRAPH_EMBEDDING_DIMENSIONS', 768)),
+      pricePerMTok: num('CONTEXT_GRAPH_EMBEDDING_PRICE_PER_MTOK', 0.15, true),
+    },
     llmMonthlyAllowanceUsd: num('LLM_MONTHLY_ALLOWANCE_USD', 3),
     agentTurnCreditCap: num('AGENT_TURN_CREDIT_CAP', 500, true),
     publicTurnLimitPerHour: num('PUBLIC_TURN_LIMIT_PER_HOUR', 20),

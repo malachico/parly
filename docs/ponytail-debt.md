@@ -112,6 +112,11 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - telegram_events sets expiresAt too but is left off deliberately to keep its history; add it here when that cleanup is worth more than the audit trail
 - non-unique sign-in lookups; a unique index on email/googleSub wants a dedup + backfill first (see docs/ponytail-debt.md)
 
+## `src/graph/search.ts`
+
+- channel scope over-fetches 5x workspace-wide then filters, so a busy workspace can starve a quiet channel; store channelId on embeddings and pre-filter it when that bites.
+- scans the 500 most recent substring candidates in the workspace; add a text index when graphs outgrow that.
+
 ## `src/graph/store.ts`
 
 - soft cap (check, then record after the call), so concurrent extractions can overshoot by one call each; reserve-then-settle if that matters.
@@ -371,4 +376,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**128 markers, 33 with no trigger.**
+**130 markers, 33 with no trigger.**
