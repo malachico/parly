@@ -1,7 +1,7 @@
 import type { Server } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
-import { CloudTasksQueue, parsePushJob, type PushJob, type PushQueue } from '../src/chat/queue.js';
+import { CloudTasksQueue, parsePushJob, type PushQueue, type QueueJob } from '../src/chat/queue.js';
 import type { ForwardResult } from '../src/hub/forward.js';
 import { HubError } from '../src/lib/errors.js';
 import type { WireMessage } from '../src/lib/wire.js';
@@ -34,7 +34,7 @@ describe('Cloud Tasks', () => {
   describe('/internal/push', () => {
     let hubUrl: string;
     let server: Server;
-    const jobs: PushJob[] = [];
+    const jobs: QueueJob[] = [];
     const sent: WireMessage[] = [];
     // The queue only records jobs: the test plays Cloud Tasks and delivers them to /internal/push itself.
     const queue: PushQueue = { enqueue: async (job) => void jobs.push(job) };

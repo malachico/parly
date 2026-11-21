@@ -38,6 +38,10 @@ export class GraphStore {
     private readonly options: { enabled: boolean; dailyCapMicros: number },
   ) {}
 
+  get enabled(): boolean {
+    return this.options.enabled;
+  }
+
   /** Inserts or refreshes a node (keyed by `key`, default its title) and returns its id; undefined when disabled. */
   async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[] }): Promise<string | undefined> {
     if (!this.options.enabled) return undefined;

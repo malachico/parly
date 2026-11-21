@@ -384,7 +384,7 @@ describe('pushing to endpoint agents', () => {
         : { kind: 'task', task: { id, contextId: 'down-ctx', status: { state: 'TASK_STATE_COMPLETED', message: { messageId: `${id}-a`, role: 'ROLE_AGENT', parts: [{ text: 'done' }] } } } };
     const delays: number[] = [];
     const enqueue = queue.enqueue.bind(queue);
-    queue.enqueue = (job, delayMs) => (job.poll && delays.push(delayMs ?? 0), enqueue(job, delayMs));
+    queue.enqueue = (job, delayMs) => ('poll' in job && job.poll && delays.push(delayMs ?? 0), enqueue(job, delayMs));
     await chat.post(owner, { channelId: channel.id }, say('slow again'));
     await queue.idle();
     queue.enqueue = enqueue;

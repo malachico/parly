@@ -19,10 +19,10 @@ import { ToolUsage, type ToolUse } from './toolUsage.js';
 import { TriggerStore } from './triggers.js';
 import { HubStore } from './hubStore.js';
 import type { Database } from '../db/types.js';
-import { channelKey, dmWith, type MessageDoc } from '../chat/chat.js';
+import { channelKey, dmWith, threadKey, type MessageDoc } from '../chat/chat.js';
 import { ChatService, isFor, type InboxItem, type Posted, type Target } from '../chat/chatService.js';
 import { Pusher } from '../chat/push.js';
-import type { PushQueue } from '../chat/queue.js';
+import type { GraphJob, PushQueue } from '../chat/queue.js';
 import { ChatStore } from '../chat/store.js';
 import type { FileRecord, Files } from '../files/files.js';
 import { HubError, PlanLimitError } from '../lib/errors.js';
@@ -174,6 +174,8 @@ export class HubService {
   graphSearch?: GraphSearch;
   /** Model prices for charging a search to the app's maker. */
   vertexPrices?: LlmPrices;
+  /** Extracts a done thread into the context graph; set only when CONTEXT_GRAPH_ENABLED and Vertex are. */
+  extractGraph?: (job: GraphJob) => Promise<void>;
   /** Room events to the webhooks of the apps that opened the rooms. */
   readonly appEvents: AppWebhooks;
   readonly schedules: Schedules;
@@ -212,7 +214,7 @@ export class HubService {
     db: Database,
     readonly registry: Registry,
     private readonly forwarder: Forwarder,
-    queue: PushQueue,
+    private readonly queue: PushQueue,
     readonly maxWaitMs: number,
     sendLimiter: RateLimiter | undefined,
     readonly files: Files,
@@ -529,6 +531,11 @@ export class HubService {
         this.chat.activity?.clearThread(channelId, post, chConv?.seq === m.seq).catch(() => {}),
         this.chat.markRead(caller, `thread:${channelId}:${post}`).catch(() => {}),
       ]);
+      // Fire-and-forget, and only on the open -> done transition: the graph never holds up or fails marking a thread done.
+      if (this.extractGraph && updated.workspaceId && !m.done) {
+        const conversationId = threadKey(channelId, post);
+        this.queue.enqueue({ kind: 'graph', workspaceId: updated.workspaceId, conversationId }).catch((err) => console.error(`graph job for ${conversationId}`, err));
+      }
     }
     return updated;
   }

@@ -101,6 +101,10 @@ or obsolete variable names whenever hub source changes.
 | `WAKE_TIMEOUT_MS` | `10000` | Timeout for one Routine fire. |
 | `WAKE_SWEEP_MS` | `60000` | Background wake sweep interval. |
 
+### Context graph extraction
+
+With `CONTEXT_GRAPH_ENABLED` on and Vertex configured, marking a thread done queues a job on the push queue (`/internal/push`, same auth). The job asks the flash-lite model for the thread's decisions, people and topics, and replaces that thread's graph nodes and edges, so re-running a thread updates rather than duplicates. Each run checks `CONTEXT_GRAPH_DAILY_CAP_USD` first and meters its cost after; at the cap it logs and skips. Model 429s, 5xx and timeouts retry; other failures only log. Extraction never blocks marking a thread done. Search embeddings and the read-permission filter are separate; nothing user-facing reads the graph yet.
+
 ## Integrations and billing
 
 | Variable | Default | Purpose |

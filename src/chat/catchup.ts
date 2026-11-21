@@ -42,13 +42,13 @@ interface CatchupSummarizerInput {
 
 export type CatchupSummarizer = (input: CatchupSummarizerInput) => Promise<CatchupSummary | undefined>;
 
-function truncateMessageText(text: string, maxChars = MAX_CATCHUP_MESSAGE_CHARS): string {
+export function truncateMessageText(text: string, maxChars = MAX_CATCHUP_MESSAGE_CHARS): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (clean.length <= maxChars) return clean;
   return `${clean.slice(0, maxChars - 1)}…`;
 }
 
-function normalizeList(items: unknown, maxItems = 6): string[] {
+export function normalizeList(items: unknown, maxItems = 6): string[] {
   if (!Array.isArray(items)) return [];
   const out: string[] = [];
   for (const item of items) {

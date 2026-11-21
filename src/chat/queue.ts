@@ -13,12 +13,22 @@ export interface PushJob {
   poll?: { taskId: string; messageId: string; until: number; every?: number };
 }
 
+/** Extracting a done thread's decisions, people and topics into the context graph (src/graph/extract.ts). */
+export interface GraphJob {
+  kind: 'graph';
+  workspaceId: string;
+  conversationId: string;
+}
+
+export type QueueJob = PushJob | GraphJob;
+
 /** Where push jobs wait. The handler retries nothing itself: a job that throws is the queue's to retry. */
 export interface PushQueue {
-  enqueue(job: PushJob, delayMs?: number): Promise<void>;
+  enqueue(job: QueueJob, delayMs?: number): Promise<void>;
 }
 
 type PushHandler = (job: PushJob) => Promise<void>;
+type GraphHandler = (job: GraphJob) => Promise<void>;
 
 /**
  * Runs jobs in this process (local development and tests). A failed job is logged, not retried: the next
@@ -26,18 +36,21 @@ type PushHandler = (job: PushJob) => Promise<void>;
  */
 export class InlineQueue implements PushQueue {
   private handler?: PushHandler;
+  private graphHandler?: GraphHandler;
   private readonly running = new Set<Promise<void>>();
 
-  setHandler(handler: PushHandler): void {
+  /** Graph jobs go to `graph`; without one they are dropped. */
+  setHandler(handler: PushHandler, graph?: GraphHandler): void {
     this.handler = handler;
+    this.graphHandler = graph;
   }
 
-  async enqueue(job: PushJob, delayMs = 0): Promise<void> {
+  async enqueue(job: QueueJob, delayMs = 0): Promise<void> {
     const handler = this.handler;
     if (!handler) throw new Error('InlineQueue has no handler');
     const run: Promise<void> = new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-      .then(() => handler(job))
-      .catch((err) => console.error(`Push to ${job.agentId} in ${job.conversationId} failed`, err))
+      .then(() => ('kind' in job ? this.graphHandler?.(job) : handler(job)))
+      .catch((err) => console.error(`${'kind' in job ? 'Graph extraction' : `Push to ${job.agentId}`} in ${job.conversationId} failed`, err))
       .finally(() => this.running.delete(run));
     this.running.add(run);
   }
@@ -77,7 +90,7 @@ export class CloudTasksQueue implements PushQueue {
     if (!QUEUE_NAME.test(opts.queue)) throw new Error(`CLOUD_TASKS_QUEUE must be projects/<p>/locations/<l>/queues/<q>, got "${opts.queue}"`);
   }
 
-  async enqueue(job: PushJob, delayMs = 0): Promise<void> {
+  async enqueue(job: QueueJob, delayMs = 0): Promise<void> {
     await this.createTask(`https://cloudtasks.googleapis.com/v2/${this.opts.queue}/tasks`, {
       task: {
         ...(delayMs > 0 ? { scheduleTime: new Date(Date.now() + delayMs).toISOString() } : {}),
@@ -94,12 +107,12 @@ export class CloudTasksQueue implements PushQueue {
 }
 
 /** Reads a push job from a call to /internal/push, or throws when the call isn't from the queue. */
-export type PushVerifier = (authorization: string | undefined, body: unknown) => Promise<PushJob>;
+export type PushVerifier = (authorization: string | undefined, body: unknown) => Promise<QueueJob>;
 
 /** Checks that a call to /internal/push comes from Cloud Tasks as our service account, and reads its job. */
 export function pushRequestVerifier(opts: Pick<CloudTasksOptions, 'serviceAccount' | 'url'>): PushVerifier {
   const client = new OAuth2Client();
-  return async (authorization: string | undefined, body: unknown): Promise<PushJob> => {
+  return async (authorization: string | undefined, body: unknown): Promise<QueueJob> => {
     const token = /^Bearer (.+)$/i.exec(authorization ?? '')?.[1];
     if (!token) throw new HubError('unauthorized', 'Missing token');
     const payload = (await client.verifyIdToken({ idToken: token, audience: opts.url }).catch(() => undefined))?.getPayload();
@@ -108,7 +121,12 @@ export function pushRequestVerifier(opts: Pick<CloudTasksOptions, 'serviceAccoun
   };
 }
 
-export function parsePushJob(body: unknown): PushJob {
+export function parsePushJob(body: unknown): QueueJob {
+  const g = body as Partial<GraphJob> | undefined;
+  if (g?.kind === 'graph') {
+    if (typeof g.workspaceId !== 'string' || typeof g.conversationId !== 'string') throw new HubError('invalid', 'Not a graph job');
+    return { kind: 'graph', workspaceId: g.workspaceId, conversationId: g.conversationId };
+  }
   const b = body as Partial<PushJob> | undefined;
   if (!b || typeof b.agentId !== 'string' || typeof b.conversationId !== 'string') throw new HubError('invalid', 'Not a push job');
   const p = b.poll;

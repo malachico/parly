@@ -7,6 +7,7 @@ import { SlackStore } from './slack/store.js';
 import { TelegramBridge } from './telegram/bridge.js';
 import { TelegramStore } from './telegram/store.js';
 import { AI_MARKUP, LlmMeter } from './llm/llm.js';
+import { graphExtractor } from './graph/extract.js';
 import { createGraphSearch } from './graph/search.js';
 import { GraphStore } from './graph/store.js';
 import { llmRouter } from './llm/router.js';
@@ -212,7 +213,7 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     wake,
     { staleMs: config.wakeStaleMs, retryMs: config.wakeRetryMs },
   );
-  if (pushes instanceof InlineQueue) pushes.setHandler((job) => hub.push.run(job));
+  if (pushes instanceof InlineQueue) pushes.setHandler((job) => hub.push.run(job), async (job) => hub.extractGraph?.(job));
   if (config.slack) {
     const slackStore = new SlackStore(db, config.credentialsKey);
     const slack = new SlackBridge(slackStore, hub, { signingSecret: config.slack.signingSecret, webUrl });
@@ -252,6 +253,9 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     if (config.threadDigest) hub.chat.fold = vertexThreadDigestFolder(flashLite);
     hub.agentRanker = vertexAgentRanker({ ...config.vertex, model: config.searchModel, accessToken: cloudToken, fetchImpl: cloudFetch });
     hub.vertexPrices = config.vertex.prices;
+    if (config.contextGraphEnabled) {
+      hub.extractGraph = graphExtractor({ graph, store: hub.chat.store, llm: flashLite });
+    }
     if (config.channelRouter && !config.channelRouterModel.startsWith('gemini-decision')) hub.chat.route = vertexRouter({ ...config.vertex, model: config.channelRouterModel, accessToken: cloudToken });
   }
   // Internal context-graph search: vector when Vertex and an Atlas vector index are there, exact-word otherwise.
@@ -421,8 +425,9 @@ export function createApp(deps: AppDeps): { app: express.Express; hub: HubServic
       verify(req.header('authorization'), req.body)
         .then((job) => {
         const started = Date.now();
-        return hub.push.run(job).catch((err) => {
-          console.error(`push failed: agent ${job.agentId}, conversation ${job.conversationId}, after ${Date.now() - started}ms`, err);
+        const [run, what] = 'kind' in job ? [Promise.resolve(hub.extractGraph?.(job)), 'graph extraction'] : [hub.push.run(job), `push to agent ${job.agentId}`];
+        return run.catch((err) => {
+          console.error(`${what} failed: conversation ${job.conversationId}, after ${Date.now() - started}ms`, err);
           throw err;
         });
       })

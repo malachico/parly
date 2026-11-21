@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHub } from '../src/app.js';
-import type { PushJob, PushQueue } from '../src/chat/queue.js';
+import type { PushQueue, QueueJob } from '../src/chat/queue.js';
 import { crew, testConfig, testDb } from './helpers.js';
 
 /** A queue whose first `failures` enqueues reject, like a Cloud Tasks blip; it records the ones that went through. */
 function flakyQueue(failures: number) {
-  const queued: PushJob[] = [];
+  const queued: QueueJob[] = [];
   let calls = 0;
   const queue: PushQueue = {
     async enqueue(job) {

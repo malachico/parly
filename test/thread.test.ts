@@ -338,4 +338,25 @@ describe('threads', () => {
     expect(conv.doneBackfilled).toBe(true);
     expect(conv.doneBackfillSeq).toBeUndefined();
   });
+
+  it('queues graph extraction only on the done transition, and a failed enqueue never blocks done', async () => {
+    const { owner, channel } = await crew(hub.registry, 'graphq', []);
+    const root = (await hub.send(owner, { channel: channel.id }, say('Pick a DB'))).message;
+    await hub.wakeService.idle();
+    const queue = (hub as unknown as { queue: { enqueue: (job: unknown) => Promise<void> } }).queue;
+    const enqueue = vi.spyOn(queue, 'enqueue').mockRejectedValue(new Error('queue down'));
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    hub.extractGraph = async () => {};
+    try {
+      expect((await hub.setThreadDone(owner, channel.id, root.id, true)).doneThreads).toEqual([root.id]);
+      expect((await hub.setThreadDone(owner, channel.id, root.id, true)).doneThreads).toEqual([root.id]);
+      const graphJobs = enqueue.mock.calls.filter(([j]) => (j as { kind?: string }).kind === 'graph');
+      expect(graphJobs).toEqual([[{ kind: 'graph', workspaceId: channel.workspaceId, conversationId: threadKey(channel.id, root.id) }]]);
+      await vi.waitFor(() => expect(err).toHaveBeenCalledWith(expect.stringContaining('graph job'), expect.any(Error)));
+    } finally {
+      hub.extractGraph = undefined;
+      enqueue.mockRestore();
+      err.mockRestore();
+    }
+  });
 });

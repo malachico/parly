@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { MessageDoc } from '../src/chat/chat.js';
+import { graphExtractor } from '../src/graph/extract.js';
 import { GraphStore } from '../src/graph/store.js';
 import { LlmMeter } from '../src/llm/llm.js';
 import { Registry } from '../src/registry/registry.js';
@@ -95,5 +97,37 @@ describe('GraphStore', () => {
     await graph.recordGraphSpend('w', 400);
     expect(await graph.canSpendOnGraph('w')).toBe(false);
     expect(await graph.canSpendOnGraph('w2')).toBe(true);
+  });
+
+  it('extracts a thread idempotently, and a reworded rerun replaces the old nodes', async () => {
+    const { graph, count } = setup();
+    const msg = (id: string, from: string, fromId: string, text: string) => ({ id, from, fromId, parts: [{ kind: 'text', text }] }) as unknown as MessageDoc;
+    const answers = [
+      { decisions: [{ title: 'Ship Monday', text: 'After QA.', people: ['Ana', 'Bo'], topics: ['release', 'qa'] }] },
+      { decisions: [{ title: 'Release on Monday', text: 'Once QA passes.', people: ['ana'], topics: ['launch'] }] },
+    ];
+    let answer = answers[0];
+    const run = graphExtractor({
+      graph,
+      store: { message: async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?'), page: async () => [msg('r', 'Bo', 'agent-bo', 'Yes')] },
+      llm: {
+        project: 'p',
+        location: 'global',
+        model: 'm',
+        accessToken: async () => 't',
+        fetchImpl: (async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }] }))) as typeof fetch,
+      },
+    });
+    const job = { kind: 'graph' as const, workspaceId: 'w', conversationId: 'thread:c:p' };
+    await run(job);
+    await run(job);
+    expect(await count('graph_nodes')).toBe(5);
+    expect(await count('graph_edges')).toBe(4);
+    expect(await count('graph_nodes', { kind: 'person', conversationId: 'thread:c:p' })).toBe(2);
+    answer = answers[1];
+    await run(job);
+    expect(await count('graph_nodes')).toBe(3);
+    expect(await count('graph_edges')).toBe(2);
+    expect(await count('graph_nodes', { title: 'Ship Monday' })).toBe(0);
   });
 });
