@@ -30,6 +30,53 @@ export const normalizeKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g
 /** Deterministic id from the idempotency key: re-extracting the same thing lands on the same row. */
 const idOf = (...parts: string[]) => createHash('sha256').update(parts.join('\u0000')).digest('hex').slice(0, 32);
 
+/** Topic word-set overlap (Jaccard) at or above which two topics are one entry: "Mongo migrations" ~ "migration to Mongo", not "Q3 launch" ~ "Q4 launch". */
+export const TOPIC_MERGE_THRESHOLD = 0.6;
+
+/** Lowercased words with a plain plural `s` dropped, so case, order, punctuation and plurals don't split an entry. */
+const words = (s: string) => new Set((s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)));
+
+export interface EntityRef { kind: GraphNodeKind; key: string; title: string }
+
+/**
+ * Whether two person or topic entries name the same thing. Same key always does. A person keyed by agent id (key
+ * isn't their name) is that agent, so two agents never merge whatever their names; otherwise one name's words must
+ * all be in the other's ("Dana" ~ "Dana Levi"). Topics merge at TOPIC_MERGE_THRESHOLD word overlap.
+ * ponytail: lexical only; compare entity embeddings with a cosine threshold once entity nodes are embedded.
+ */
+export function sameEntity(a: EntityRef, b: EntityRef): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.key === b.key) return true;
+  const wa = words(a.title);
+  const wb = words(b.title);
+  if (!wa.size || !wb.size) return false;
+  const shared = [...wa].filter((w) => wb.has(w)).length;
+  if (a.kind === 'person') {
+    const byAgent = (e: EntityRef) => e.key !== normalizeKey(e.title);
+    return !(byAgent(a) && byAgent(b)) && shared === Math.min(wa.size, wb.size);
+  }
+  return shared / (wa.size + wb.size - shared) >= TOPIC_MERGE_THRESHOLD;
+}
+
+/**
+ * The canonical id a new person or topic entry joins, given the workspace's existing ones of its kind. A same-key
+ * entry's group wins; else the one group whose every member is sameEntity (all, not any, so "Dan" can't chain "Dan
+ * Smith" and "Dan Jones" together); several or none: a group of its own, id'd by its key so a rerun lands on it again.
+ */
+export function canonicalIdFor(entry: EntityRef & { workspaceId: string }, existing: (EntityRef & { _id: string; canonicalId?: string })[]): string {
+  const groups = new Map<string, EntityRef[]>();
+  for (const n of existing) {
+    const id = n.canonicalId ?? n._id;
+    if (n.key === entry.key && n.kind === entry.kind) return id;
+    groups.set(id, [...(groups.get(id) ?? []), n]);
+  }
+  const fits = [...groups].filter(([, members]) => members.every((m) => sameEntity(entry, m)));
+  return fits.length === 1 ? fits[0]![0] : idOf(entry.workspaceId, entry.kind, entry.key);
+}
+
+// ponytail: matches against the 500 most recently updated entries of the kind, read then written, so two concurrent extractions can split one entity into two groups; a unique index on (workspaceId, kind, key) groups if that bites.
+const MERGE_CANDIDATES = 500;
+
 /**
  * The context graph's storage. Every helper is a no-op when the graph is disabled. Extraction is paid by Parly,
  * capped per workspace per day through the LlmMeter's graph counter; nothing here touches user credits.
@@ -52,11 +99,16 @@ export class GraphStore {
     const key = normalizeKey(node.key ?? title);
     const id = idOf(workspaceId, conversationId, kind, key);
     const now = new Date().toISOString();
+    // Duplicate people and topics share a canonicalId; each keeps its own row, text and source (see mergedReadableGraph).
+    const canonicalId = kind === 'person' || kind === 'topic'
+      ? canonicalIdFor({ workspaceId, kind, key, title }, await this.db.execute(() => this.db.mongoDb.collection<EntityRef & { _id: string; canonicalId?: string }>(NODES)
+        .find({ workspaceId, kind }, { projection: { kind: 1, key: 1, title: 1, canonicalId: 1 } }).sort({ updatedAt: -1 }).limit(MERGE_CANDIDATES).toArray()))
+      : undefined;
     await this.db.execute(() => this.db.mongoDb.collection<{ _id: string }>(NODES).updateOne(
       { _id: id },
       {
         $set: { title, ...(text !== undefined ? { text } : {}), source, updatedAt: now },
-        $setOnInsert: { workspaceId, conversationId, kind, key, createdAt: now },
+        $setOnInsert: { workspaceId, conversationId, kind, key, ...(canonicalId ? { canonicalId } : {}), createdAt: now },
         $addToSet: { sourceMessageIds: { $each: node.sourceMessageIds ?? [] } },
       },
       { upsert: true },

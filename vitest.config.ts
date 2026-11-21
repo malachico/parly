@@ -21,6 +21,7 @@ const pureTests = [
   'test/graphExtract.pure.test.ts',
   'test/graphSearch.pure.test.ts',
   'test/graphSources.pure.test.ts',
+  'test/graphMerge.pure.test.ts',
   'test/forward.test.ts',
   'test/ghWrapper.test.ts',
   'test/gke-driver.test.ts',

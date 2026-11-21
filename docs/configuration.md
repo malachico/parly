@@ -108,6 +108,8 @@ With `CONTEXT_GRAPH_ENABLED` on and Vertex configured, marking a thread done que
 
 The context graph also mirrors room documents (a `doc` node on the room's shared channel) and workspace- or channel-scoped skills (a `skill` node) as metadata only: title, a short excerpt, ids, no LLM call. Each node records a `source` (`conversation`, `room_doc` or `skill`); `canReadGraphSource` checks skill nodes with `canAccessSkill`. A deleted skill drops its node and edges. Archiving a channel drops its room doc and channel-scoped skill nodes; restoring it puts them back. Room side briefs are never added to the graph. Unscoped and agent-scoped skills get no node.
 
+Duplicate people and topics merge into one entry. A node stays per source; on insert it takes the `canonicalId` of the one existing group whose every member is the same entity: a person whose name's words contain or are contained in the other's (two different agent authors never merge), or a topic whose word overlap (Jaccard) reaches `TOPIC_MERGE_THRESHOLD` (0.6). `mergedReadableGraph` runs the read-permission filter first, then groups, so a merged entry's id, title and per-source text come only from sources the reader can read. A rerun lands in the same group, since a new group's id derives from its key.
+
 ## Integrations and billing
 
 | Variable | Default | Purpose |

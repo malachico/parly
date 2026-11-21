@@ -128,6 +128,8 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `src/graph/store.ts`
 
 - soft cap (check, then record after the call), so concurrent extractions can overshoot by one call each; reserve-then-settle if that matters.
+- lexical only; compare entity embeddings with a cosine threshold once entity nodes are embedded.
+- matches against the 500 most recently updated entries of the kind, read then written, so two concurrent extractions can split one entity into two groups; a unique index on (workspaceId, kind, key) groups if that bites.
 
 ## `src/hub/canvasService.ts`
 
@@ -384,4 +386,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**132 markers, 33 with no trigger.**
+**134 markers, 33 with no trigger.**

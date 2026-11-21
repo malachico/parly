@@ -36,3 +36,49 @@ export async function readableGraph<N extends GraphNodeAcl, E extends GraphEdgeA
     edges: edges.filter((e) => shown.has(e.from) && shown.has(e.to) && readable.has(e.fromConversationId) && readable.has(e.toConversationId)),
   };
 }
+
+/** One entry per canonical entity: duplicates (same canonicalId) folded together, each source's text kept apart under it. */
+export interface MergedNode {
+  id: string;
+  workspaceId: string;
+  kind?: string;
+  title?: string;
+  sources: { nodeId: string; conversationId: string; title?: string; text?: string }[];
+}
+
+/**
+ * readableGraph, then duplicates folded into one entry each (GraphStore gives a duplicate person or topic its
+ * group's canonicalId). Merging runs only over what the reader can see, so an entry's title and sources come from
+ * readable conversations alone: a source the reader can't read adds nothing, not even its existence. Edges move to
+ * their ends' entries, one per (kind, from, to).
+ */
+export async function mergedReadableGraph<N extends GraphNodeAcl & { canonicalId?: string; kind?: string; title?: string; text?: string }, E extends GraphEdgeAcl & { kind?: string }>(
+  reader: AgentRecord,
+  chat: Pick<ChatService, 'readableConversations'>,
+  graph: { nodes: N[]; edges: E[] },
+): Promise<{ nodes: MergedNode[]; edges: (E & { from: string; to: string })[] }> {
+  const { nodes, edges } = await readableGraph(reader, chat, graph);
+  // The entry id is its smallest visible member id, not canonicalId: that hashes the group's first key, which may be a hidden source's name.
+  const firstOf = new Map<string, string>();
+  for (const n of nodes) {
+    const g = n.canonicalId ?? n._id;
+    if (!firstOf.has(g) || n._id < firstOf.get(g)!) firstOf.set(g, n._id);
+  }
+  const entryOf = new Map(nodes.map((n) => [n._id, firstOf.get(n.canonicalId ?? n._id)!]));
+  const merged = new Map<string, MergedNode>();
+  for (const n of nodes) {
+    const id = entryOf.get(n._id)!;
+    const entry = merged.get(id) ?? merged.set(id, { id, workspaceId: n.workspaceId, kind: n.kind, title: n.title, sources: [] }).get(id)!;
+    // The longest visible name is the fullest ("Dana Levi" over "Dana").
+    if ((n.title?.length ?? 0) > (entry.title?.length ?? 0)) entry.title = n.title;
+    entry.sources.push({ nodeId: n._id, conversationId: n.conversationId, title: n.title, text: n.text });
+  }
+  const seen = new Set<string>();
+  return {
+    nodes: [...merged.values()],
+    edges: edges.map((e) => ({ ...e, from: entryOf.get(e.from)!, to: entryOf.get(e.to)! })).filter((e) => {
+      const k = `${e.kind}\u0000${e.from}\u0000${e.to}`;
+      return !seen.has(k) && !!seen.add(k);
+    }),
+  };
+}

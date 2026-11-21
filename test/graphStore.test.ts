@@ -89,6 +89,19 @@ describe('GraphStore', () => {
     quiet.mockRestore();
   });
 
+  it('groups the same person across threads, keeping one node per source', async () => {
+    const { db, graph, count } = setup();
+    const person = (conversationId: string, title: string, key?: string) => graph.upsertNode({ workspaceId: 'w', conversationId, kind: 'person', title, key });
+    const a = (await person('thread:c:1', 'Ana Gomez', 'agent-ana'))!;
+    const b = (await person('thread:c:2', 'ana'))!;
+    const c = (await person('thread:c:3', 'Bo'))!;
+    await person('thread:c:2', 'ana'); // rerun keeps the group
+    const canon = async (id: string) => (await db.execute(() => db.mongoDb.collection<{ _id: string; canonicalId?: string }>('graph_nodes').findOne({ _id: id })))?.canonicalId;
+    expect(await count('graph_nodes')).toBe(3);
+    expect(await canon(b)).toBe(await canon(a));
+    expect(await canon(c)).not.toBe(await canon(a));
+  });
+
   it('keeps a per-channel watermark that never rewinds and is purged with the channel', async () => {
     const { graph } = setup();
     expect(await graph.channelWatermark('w', 'channel:c')).toBe(0);
