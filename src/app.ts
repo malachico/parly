@@ -8,6 +8,7 @@ import { TelegramBridge } from './telegram/bridge.js';
 import { TelegramStore } from './telegram/store.js';
 import { AI_MARKUP, LlmMeter } from './llm/llm.js';
 import { graphExtractor } from './graph/extract.js';
+import { backfillGraph } from './graph/backfill.js';
 import { createGraphSearch } from './graph/search.js';
 import { syncGraphSource } from './graph/sources.js';
 import { GraphStore } from './graph/store.js';
@@ -265,6 +266,7 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     hub.vertexPrices = config.vertex.prices;
     if (config.contextGraphEnabled) {
       hub.extractGraph = graphExtractor({ graph, store: hub.chat.store, registry, requeue: (j, d) => pushes.enqueue(j, d), llm: flashLite });
+      hub.backfillGraph = (options) => backfillGraph({ db, graph, registry, queue: pushes }, options);
       hub.chat.graphChannelDelayMs = config.graphChannelQuietMinutes * 60_000;
     }
     if (config.channelRouter && !config.channelRouterModel.startsWith('gemini-decision')) hub.chat.route = vertexRouter({ ...config.vertex, model: config.channelRouterModel, accessToken: cloudToken });

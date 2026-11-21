@@ -105,6 +105,10 @@ export class GraphStore {
     return this.options.enabled;
   }
 
+  get dailyCapMicros(): number {
+    return this.options.dailyCapMicros;
+  }
+
   /** Inserts or refreshes a node (keyed by `key`, default its title) and returns its id; undefined when disabled. `source` defaults to its conversation. */
   async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[]; source?: GraphSource }): Promise<string | undefined> {
     if (!this.options.enabled) return undefined;
@@ -253,6 +257,11 @@ export class GraphStore {
    * Whether `workspaceId` is still under today's graph extraction cap.
    * ponytail: soft cap (check, then record after the call), so concurrent extractions can overshoot by one call each; reserve-then-settle if that matters.
    */
+  /** True once a thread run has started for this conversation (the backfill skips those). */
+  async hasGraphRun(workspaceId: string, conversationId: string): Promise<boolean> {
+    return !!(await this.db.execute(() => this.db.mongoDb.collection(RUNS).findOne({ _id: idOf(workspaceId, conversationId) as never }, { projection: { _id: 1 } })));
+  }
+
   async canSpendOnGraph(workspaceId: string): Promise<boolean> {
     if (!this.options.enabled || this.options.dailyCapMicros <= 0) return false;
     return (await this.meter.graphSpent(workspaceId)) < this.options.dailyCapMicros;

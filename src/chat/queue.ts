@@ -20,6 +20,8 @@ export interface GraphJob {
   conversationId: string;
   /** Channels: the seq of the post that scheduled it; a newer post means a later job will run instead. */
   seq?: number;
+  /** How many times the daily cap has pushed this job to a later day. */
+  deferred?: number;
 }
 
 export type QueueJob = PushJob | GraphJob;
@@ -34,9 +36,9 @@ export interface PushQueue {
  * The day keeps a cap-skipped run's next-day requeue distinct from the run itself.
  */
 export function graphTaskId(job: QueueJob, runAt: number): string | undefined {
-  if (!('kind' in job) || job.seq === undefined) return undefined;
+  if (!('kind' in job) || (job.seq === undefined && !job.deferred)) return undefined;
   const day = new Date(runAt).toISOString().slice(0, 10).replaceAll('-', '');
-  return `graph-${job.conversationId.replace(/[^A-Za-z0-9_-]/g, '_')}-${job.seq}-${day}`;
+  return `graph-${job.conversationId.replace(/[^A-Za-z0-9_-]/g, '_')}-${job.seq ?? 'thread'}-${day}`;
 }
 
 type PushHandler = (job: PushJob) => Promise<void>;
@@ -159,7 +161,7 @@ export function parsePushJob(body: unknown): QueueJob {
   const g = body as Partial<GraphJob> | undefined;
   if (g?.kind === 'graph') {
     if (typeof g.workspaceId !== 'string' || typeof g.conversationId !== 'string') throw new HubError('invalid', 'Not a graph job');
-    return { kind: 'graph', workspaceId: g.workspaceId, conversationId: g.conversationId, ...(typeof g.seq === 'number' ? { seq: g.seq } : {}) };
+    return { kind: 'graph', workspaceId: g.workspaceId, conversationId: g.conversationId, ...(typeof g.seq === 'number' ? { seq: g.seq } : {}), ...(typeof g.deferred === 'number' ? { deferred: g.deferred } : {}) };
   }
   const b = body as Partial<PushJob> | undefined;
   if (!b || typeof b.agentId !== 'string' || typeof b.conversationId !== 'string') throw new HubError('invalid', 'Not a push job');

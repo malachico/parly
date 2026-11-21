@@ -15,10 +15,11 @@ const registry = (channel: { archived?: boolean; publicFromSeq?: number; publicT
   workspaceDoc: vi.fn(async (_id: string) => workspace ?? undefined),
 });
 
-function setup(opts: { enabled?: boolean; canSpend?: boolean; latestSeq?: number; since?: MessageDoc[]; registry?: ReturnType<typeof registry>; decisions?: { id: string; title: string; conversationId: string }[]; body?: unknown } = {}) {
+function setup(opts: { enabled?: boolean; canSpend?: boolean; cap?: number; latestSeq?: number; since?: MessageDoc[]; registry?: ReturnType<typeof registry>; decisions?: { id: string; title: string; conversationId: string }[]; body?: unknown } = {}) {
   let runs = 0;
   const graph = {
     enabled: opts.enabled ?? true,
+    dailyCapMicros: opts.cap ?? 1,
     startGraphRun: vi.fn(async () => ++runs),
     isLatestGraphRun: vi.fn(async (_w: string, _c: string, run: number) => run === runs),
     canSpendOnGraph: vi.fn(async () => opts.canSpend ?? true),
@@ -101,8 +102,8 @@ describe('graph extraction (pure)', () => {
     expect(graph.upsertNode.mock.calls.map(([n]) => n.title)).toEqual(['New snapshot']);
   });
 
-  it('skips with a log line once the daily cap is spent', async () => {
-    const { graph, fetchImpl, store, run } = setup({ canSpend: false });
+  it('skips with a log line once the daily cap is spent, and retries after midnight UTC', async () => {
+    const { graph, fetchImpl, store, requeue, run } = setup({ canSpend: false });
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     await expect(run(job)).resolves.toBeUndefined();
     expect(log).toHaveBeenCalledWith(expect.stringContaining('daily cap'));
@@ -110,6 +111,29 @@ describe('graph extraction (pure)', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(store.page).not.toHaveBeenCalled();
     expect(graph.upsertNode).not.toHaveBeenCalled();
+    expect(requeue).toHaveBeenCalledWith({ ...job, deferred: 1 }, expect.any(Number));
+  });
+
+  it.each([
+    ['a cap of 0', { cap: 0 }, job],
+    ['a job already deferred 3 times', {}, { ...job, deferred: 3 }],
+  ])('drops instead of requeueing %s', async (_name, opts, j) => {
+    const { requeue, fetchImpl, run } = setup({ canSpend: false, ...opts });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await run(j);
+    log.mockRestore();
+    expect(requeue).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an archived channel', registry({ archived: true })],
+    ['a channel in a missing workspace', registry({}, null)],
+  ])('skips a thread in %s', async (_name, reg) => {
+    const { graph, fetchImpl, run } = setup({ registry: reg });
+    await run(job);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(graph.startGraphRun).not.toHaveBeenCalled();
   });
 
   it('does nothing when the flag is off', async () => {
@@ -189,15 +213,25 @@ describe('graph extraction (pure)', () => {
     it('keeps the watermark when the daily cap is spent, so the window is retried later', async () => {
       const { graph, fetchImpl, requeue, run } = setup({ canSpend: false });
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-      await run(chan);
-      log.mockRestore();
+      // Re-enqueued for the next UTC midnight, when the cap resets, plus up to 3 hours of jitter.
+      vi.useFakeTimers({ now: Date.parse('2026-11-20T22:00:00Z') });
+      const random = vi.spyOn(Math, 'random');
+      try {
+        random.mockReturnValue(0);
+        await run(chan);
+        random.mockReturnValue(1 - 1e-9); // Math.random is < 1
+        await run({ ...chan, deferred: 1 });
+      } finally {
+        random.mockRestore();
+        log.mockRestore();
+        vi.useRealTimers();
+      }
       expect(fetchImpl).not.toHaveBeenCalled();
       expect(graph.setChannelWatermark).not.toHaveBeenCalled();
-      // Re-enqueued for the next UTC midnight, when the cap resets.
-      expect(requeue).toHaveBeenCalledWith(chan, expect.any(Number));
-      const delay = requeue.mock.calls[0]![1];
-      expect(delay).toBeGreaterThan(0);
-      expect(new Date(Date.now() + delay).toISOString()).toMatch(/T00:00:00/);
+      expect(requeue.mock.calls.map(([j, d]) => [j, d])).toEqual([
+        [{ ...chan, deferred: 1 }, 2 * 3_600_000],
+        [{ ...chan, deferred: 2 }, 5 * 3_600_000 - 1],
+      ]);
     });
 
     it.each([
@@ -295,6 +329,17 @@ describe('graph extraction (pure)', () => {
       await expect(queue.enqueue(chan, 1000)).resolves.toBeUndefined();
       expect(bodies).toHaveLength(1);
       expect(bodies[0].task.name).toMatch(/^projects\/p\/locations\/l\/queues\/q\/tasks\/graph-channel_c1-7-\d{8}$/);
+    });
+
+    it('names a cap-deferred thread job by conversation and run day, so concurrent deferrals dedupe', async () => {
+      const names: string[] = [];
+      const queue = new CloudTasksQueue({ queue: 'projects/p/locations/l/queues/q', serviceAccount: 's', url: 'u' }, async (_url, body: any) => void names.push(body.task.name));
+      const thread = { kind: 'graph' as const, workspaceId: 'w', conversationId: 'thread:c1:p' };
+      await queue.enqueue(thread, 1000);
+      await queue.enqueue({ ...thread, deferred: 1 }, 1000);
+      expect(names[0]).toBeUndefined();
+      expect(names[1]).toMatch(/\/tasks\/graph-thread_c1_p-thread-\d{8}$/);
+      expect(parsePushJob({ ...thread, deferred: 2 })).toEqual({ ...thread, deferred: 2 });
     });
 
     it('runs the same channel graph job once on the inline queue, without holding up idle()', async () => {

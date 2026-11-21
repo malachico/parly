@@ -61,7 +61,10 @@ describe('admin dashboard API', () => {
     for (const token of [undefined, sender.token, sender.owner.token]) {
       expect((await call(token, 'GET', '/admin/overview')).status).toBe(404);
       expect((await call(token, 'POST', `/admin/agents/${sleeper.agent.id}/actions`, { action: 'archive' })).status).toBe(404);
+      expect((await call(token, 'POST', '/admin/graph/backfill')).status).toBe(404);
     }
+    // The graph is off in tests, so a super admin reaches the route and is told so.
+    expect((await call(adminToken, 'POST', '/admin/graph/backfill')).status).toBe(502);
     expect((await call(sender.owner.token, 'GET', '/me')).json.admin).toBeUndefined();
     expect((await call(adminToken, 'GET', '/me')).json.admin).toBe(true);
   });

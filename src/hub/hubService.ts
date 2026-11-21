@@ -47,6 +47,7 @@ import type { Forwarder } from './forward.js';
 import { type Waker } from './wake.js';
 import { CanvasService, type CanvasSchedule, type CanvasView, type Presence } from './canvasService.js';
 import { ScheduleService } from './scheduleService.js';
+import type { BackfillSummary } from '../graph/backfill.js';
 import type { GraphSearch } from '../graph/search.js';
 import type { GraphStore } from '../graph/store.js';
 import { WakeService, type WakeCheck, type WakeTiming } from './wakeService.js';
@@ -179,6 +180,8 @@ export class HubService {
   graph?: Pick<GraphStore, 'nodes' | 'edgesOf'>;
   /** Extracts a done thread into the context graph; set only when CONTEXT_GRAPH_ENABLED and Vertex are. */
   extractGraph?: (job: GraphJob) => Promise<void>;
+  /** Enqueues the last 90 days' graph jobs (see backfillGraph); set with extractGraph. */
+  backfillGraph?: (options: { limit?: number }) => Promise<BackfillSummary>;
   /** Room events to the webhooks of the apps that opened the rooms. */
   readonly appEvents: AppWebhooks;
   readonly schedules: Schedules;

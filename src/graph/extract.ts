@@ -59,6 +59,10 @@ export function sameReaders(a: string, b: string, channel: Pick<ChannelRecord, '
 const MAX_REPLACEABLE = 20;
 
 /** gemini-3.5-flash-lite, USD per million tokens. ponytail: hardcoded; move to config if the extraction model changes. */
+/** Cap deferrals: requeued up to MAX_DEFERRALS times, landing within DEFER_JITTER_MS after midnight UTC. */
+const MAX_DEFERRALS = 3;
+const DEFER_JITTER_MS = 3 * 3_600_000;
+
 const FLASH_LITE_PRICES: LlmPrices = { input: 0.1, output: 0.4 };
 
 /**
@@ -67,16 +71,16 @@ const FLASH_LITE_PRICES: LlmPrices = { input: 0.1, output: 0.4 };
  * the conversation. A thread run first purges the thread's graph, so a rerun replaces rather than accumulates; ids
  * are deterministic. A channel run never purges: it skips when a newer post scheduled a later run, and moves the
  * channel's watermark only after its writes. Skips, with a log line, once the
- * workspace's daily cap is spent; throws (so the queue retries) only on 429, 5xx or a timeout.
+ * workspace's daily cap is spent, and requeues the job for a few hours after midnight UTC (at most 3 times); throws (so the queue retries) only on 429, 5xx or a timeout.
  */
 export function graphExtractor(deps: {
   graph: GraphStore;
   store: Pick<ChatStore, 'message' | 'page' | 'since' | 'conversation'>;
-  /** Channel runs skip archived (or deleted) channels and workspaces. */
+  /** Runs skip archived (or deleted) channels and workspaces. */
   registry: { channelDoc(id: string): Promise<(Pick<ChannelRecord, 'publicFromSeq' | 'publicThreads'> & { archived?: boolean }) | undefined>; workspaceDoc(id: string): Promise<{ archived?: boolean } | undefined> };
   llm: { project: string; location: string; model: string; accessToken?: () => Promise<string>; fetchImpl?: typeof fetch };
   prices?: LlmPrices;
-  /** Re-schedules a channel job the daily cap skipped. */
+  /** Re-schedules a job the daily cap skipped. */
   requeue?: (job: GraphJob, delayMs: number) => Promise<void>;
 }): (job: GraphJob) => Promise<void> {
   const { graph, store, registry, llm, prices = FLASH_LITE_PRICES, requeue } = deps;
@@ -85,31 +89,30 @@ export function graphExtractor(deps: {
     if (!graph.enabled) return;
     const key = parseKey(conversationId);
     if (key.kind === 'dm') return;
+    if (key.kind === 'channel' && seq !== undefined && ((await store.conversation(conversationId))?.seq ?? 0) > seq) return; // debounce: a newer post scheduled its own run
+    const [channel, workspace] = await Promise.all([registry.channelDoc(key.channelId), registry.workspaceDoc(workspaceId)]);
+    if (!channel || channel.archived || !workspace || workspace.archived) return;
     let messages: MessageDoc[] | undefined;
-    let channel: Awaited<ReturnType<typeof registry.channelDoc>>;
     if (key.kind === 'channel') {
-      // Debounce: a newer post scheduled its own run, which will cover this one's messages.
-      if (seq !== undefined && ((await store.conversation(conversationId))?.seq ?? 0) > seq) return;
-      let workspace;
-      [channel, workspace] = await Promise.all([registry.channelDoc(key.channelId), registry.workspaceDoc(workspaceId)]);
-      if (!channel || channel.archived || !workspace || workspace.archived) return;
       // ponytail: a burst over the cap keeps only its newest MAX_CATCHUP_MESSAGES; page from the watermark if big bursts lose facts.
       messages = await store.since(conversationId, await graph.channelWatermark(workspaceId, conversationId), MAX_CATCHUP_MESSAGES);
       if (!messages.length) return;
     }
     if (!(await graph.canSpendOnGraph(workspaceId))) {
       console.log(`graph: daily cap reached for workspace ${workspaceId}, skipping ${conversationId}`);
-      // The watermark stays put, so a channel retries the window once the cap resets at the next UTC midnight.
-      if (key.kind === 'channel' && requeue) {
+      // Retried after the cap resets at the next UTC midnight, spread over a few hours (a channel's watermark stays
+      // put, so it rereads the window). Dropped when there is no cap to wait for, or after MAX_DEFERRALS days.
+      const deferred = job.deferred ?? 0;
+      if (requeue && graph.dailyCapMicros > 0 && deferred < MAX_DEFERRALS) {
         const now = new Date();
-        await requeue(job, Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime());
+        const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+        await requeue({ ...job, deferred: deferred + 1 }, midnight - now.getTime() + Math.floor(Math.random() * DEFER_JITTER_MS));
       }
       return;
     }
     if (key.kind === 'thread') {
       const root = await store.message(key.post);
       messages = [...(root ? [root] : []), ...(await store.page(conversationId, MAX_CATCHUP_MESSAGES))];
-      channel = await registry.channelDoc(key.channelId);
     }
     // Overlapping thread runs (a reopen and a re-done, or a duplicate task): the last-started one writes, older ones drop.
     const run = key.kind === 'thread' ? await graph.startGraphRun(workspaceId, conversationId) : 0;

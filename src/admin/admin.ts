@@ -94,6 +94,12 @@ export class Admin {
 
   private readonly store: AdminStore;
 
+  /** One batch of the 90-day context graph backfill; rerun until `done`. */
+  async backfillGraph(limit?: number) {
+    if (!this.hub.backfillGraph) throw new HubError('unavailable', 'The context graph is off on this hub');
+    return this.hub.backfillGraph({ limit });
+  }
+
   /** The health page: agents, messages in the last `hours` (one bucket per hour), and endpoint agents with problems. */
   async overview(hours = 24, now = Date.now()) {
     const since = new Date(now - hours * 60 * 60_000).toISOString();

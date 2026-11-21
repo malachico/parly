@@ -524,6 +524,7 @@ export const MONGO_INDEXES: { collection: string; keys: Record<string, 1 | -1> }
   { collection: 'conversations', keys: { participants: 1, lastAt: -1 } },
   { collection: 'conversations', keys: { participants: 1, changedAt: 1 } },
   { collection: 'conversations', keys: { channelId: 1, changedAt: 1 } },
+  { collection: 'conversations', keys: { kind: 1, lastAt: 1 } },
   { collection: 'cursors', keys: { agentId: 1, updatedAt: 1 } },
   { collection: 'status_log', keys: { agentId: 1, at: -1 } },
   { collection: 'cursors', keys: { agentId: 1, handedUntilMs: 1 } },

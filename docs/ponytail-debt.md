@@ -122,6 +122,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - unscoped and agent-scoped skills have no workspace to live in, so they get no node; add one when the graph reads skills across workspaces.
 
+## `src/graph/backfill.ts`
+
+- reads the whole 90-day window (kind+lastAt index) each call to find the cursors; page by _id if a run gets slow.
+
 ## `src/graph/extract.ts`
 
 - a burst over the cap keeps only its newest MAX_CATCHUP_MESSAGES; page from the watermark if big bursts lose facts.
@@ -389,4 +393,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**137 markers, 33 with no trigger.**
+**138 markers, 33 with no trigger.**

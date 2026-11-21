@@ -55,6 +55,9 @@ export function adminRouter(admin: Admin, billing: Billing): Router {
 
   router.get('/admin/connect-clients', json(async () => ({ shown: await admin.connectClients() })));
 
+  /** `?limit=`: enqueues the next batch of the 90-day context graph backfill. Run by hand; resumes where it stopped. */
+  router.post('/admin/graph/backfill', json(async (req) => admin.backfillGraph(num(req.query.limit))));
+
   /** `{client, shown}`: show or hide a client on the Connect page. */
   router.post(
     '/admin/connect-clients',
