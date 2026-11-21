@@ -19,6 +19,8 @@ export const appsHref = (ws: string, toolkit?: string) => `/w/${encodeURICompone
 /** A workspace's developer apps: API keys for its servers (owners only). */
 export const devAppsHref = (ws: string) => `/w/${encodeURIComponent(ws)}/developers`;
 export const triggersHref = (ws: string, id?: string) => `/w/${encodeURIComponent(ws)}/triggers${id ? `/${encodeURIComponent(id)}` : ''}`;
+/** The workspace's Knowledge page: what its conversations decided and who and what they were about; `entry` opens one. */
+export const knowledgeHref = (ws: string, params?: { entry?: string }) => withParams(`/w/${encodeURIComponent(ws)}/knowledge`, params);
 export const skillsHref = (ws: string, id?: string, params?: Record<string, string | undefined>) =>
   withParams(`/w/${encodeURIComponent(ws)}/skills${id ? `/${encodeURIComponent(id)}` : ''}`, params);
 

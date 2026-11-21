@@ -5,7 +5,7 @@ import { startTour } from '@/components/Tour';
 import { joinChannel } from '@/lib/actions';
 import type { CanvasAgent, CanvasBox, CanvasTeam, WaitingItem } from '@/lib/hub';
 import { shortTime } from '@/lib/labels';
-import { agentHref, channelHref, chatHref, dmHref, skillsHref, wsHref } from '@/lib/routes';
+import { agentHref, channelHref, chatHref, dmHref, knowledgeHref, skillsHref, wsHref } from '@/lib/routes';
 
 export type CanvasContextMenu = {
   x: number;
@@ -177,6 +177,7 @@ export function buildPaletteItems({
       }),
     ...(canUseNotes ? [{ id: 'act:note', group: 'Actions' as const, title: 'Add note', icon: '＋', run: () => addNote() }] : []),
     { id: 'act:connect', group: 'Actions', title: 'Add an agent', icon: '＋', run: () => connectAgent() },
+    { id: 'act:knowledge', group: 'Actions', title: 'Knowledge', subtitle: 'Decisions, people, topics and docs from your conversations', icon: '🧠', run: () => pushPanel(knowledgeHref(ws)) },
     { id: 'act:skills', group: 'Actions', title: 'Skills & Processes library', subtitle: 'Create reusable playbooks and team workflows', icon: '📘', run: () => pushPanel(skillsHref(ws)) },
     { id: 'act:team', group: 'Actions', title: 'New team', icon: '▢', run: () => startNewTeam() },
     { id: 'act:tidy', group: 'Actions', title: 'Tidy up the canvas', subtitle: 'Teams in rows, none overlapping', icon: '▦', run: () => tidyUp() },
