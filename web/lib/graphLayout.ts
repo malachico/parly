@@ -165,3 +165,60 @@ export function nextFocus(nodes: PlacedNode[], index: number, key: string): numb
 export function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 }
+
+export type GraphPoint = MapEntry & { x: number; y: number };
+
+/**
+ * The workspace graph: a small force layout (connected entries pull together, all push apart,
+ * a weak pull to the middle keeps loose ones on screen). Seeded on a spiral in kind/title order
+ * and run a fixed number of steps, so the same entries always draw the same picture.
+ */
+// ponytail: O(n²) per step; fine for a few hundred entries, use a quadtree (Barnes-Hut) past that.
+export function workspaceLayout(entries: MapEntry[], edges: { from: string; to: string }[], steps = 150): { nodes: GraphPoint[]; size: number } {
+  const sorted = [...entries].sort(byKindTitle);
+  const index = new Map(sorted.map((n, i) => [n.id, i]));
+  const k = 60; // ideal edge length
+  const pts = sorted.map((_, i) => ({ x: Math.cos(i * 2.39996) * k * Math.sqrt(i + 0.5), y: Math.sin(i * 2.39996) * k * Math.sqrt(i + 0.5) }));
+  const links = edges.flatMap((e) => {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    return a === undefined || b === undefined || a === b ? [] : [[Math.min(a, b), Math.max(a, b)] as const];
+  }).sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  let temp = k * 2;
+  for (let s = 0; s < steps; s++) {
+    const d = pts.map(() => ({ x: 0, y: 0 }));
+    for (let i = 0; i < pts.length; i++)
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[i]!.x - pts[j]!.x || 0.01;
+        const dy = pts[i]!.y - pts[j]!.y;
+        const dist2 = Math.max(dx * dx + dy * dy, 1);
+        const f = (k * k) / dist2;
+        d[i]!.x += dx * f;
+        d[i]!.y += dy * f;
+        d[j]!.x -= dx * f;
+        d[j]!.y -= dy * f;
+      }
+    for (const [a, b] of links) {
+      const dx = pts[a]!.x - pts[b]!.x;
+      const dy = pts[a]!.y - pts[b]!.y;
+      const f = Math.hypot(dx, dy) / k;
+      d[a]!.x -= dx * f;
+      d[a]!.y -= dy * f;
+      d[b]!.x += dx * f;
+      d[b]!.y += dy * f;
+    }
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i]!;
+      d[i]!.x -= p.x * 0.02;
+      d[i]!.y -= p.y * 0.02;
+      const len = Math.hypot(d[i]!.x, d[i]!.y) || 1;
+      const move = Math.min(len, temp);
+      p.x += (d[i]!.x / len) * move;
+      p.y += (d[i]!.y / len) * move;
+    }
+    temp = Math.max(temp * 0.97, 1);
+  }
+  const nodes = sorted.map((n, i) => ({ ...n, ...at(Math.atan2(pts[i]!.y, pts[i]!.x), Math.hypot(pts[i]!.x, pts[i]!.y)) }));
+  const size = Math.max(k, ...nodes.map((n) => Math.max(Math.abs(n.x), Math.abs(n.y))));
+  return { nodes, size };
+}

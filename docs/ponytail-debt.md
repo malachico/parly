@@ -114,6 +114,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `src/graph/queries.ts`
 
+- capped at EDGE_MAX; page by _id if a page of 100 entries ever has more lines than that.
 - offset paging, so a node updated between pages can repeat or be skipped; keyset on (updatedAt, _id) if that shows.
 
 ## `src/graph/search.ts`
@@ -343,6 +344,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - no Team price configured yet; the ask lands in Admin → Leads as an Enterprise lead.
 
+## `web/components/Knowledge.tsx`
+
+- lines between pages are not drawn; ask the hub for edges among all loaded ids if that matters.
+
 ## `web/components/Composer.tsx`
 
 - `no-trigger` prefix-then-substring match over the member list; fine for channels of tens.
@@ -379,6 +384,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - single trusted proxy — take the last X-Forwarded-For entry (the one the proxy appended); earlier entries are client-spoofable.
 
+## `web/lib/graphLayout.ts`
+
+- O(n²) per step; fine for a few hundred entries, use a quadtree (Barnes-Hut) past that.
+
 ## `web/lib/hub.ts`
 
 - slow hub calls in the runtime logs; a real trace (OpenTelemetry) if this stops being enough
@@ -401,4 +410,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**140 markers, 33 with no trigger.**
+**143 markers, 33 with no trigger.**

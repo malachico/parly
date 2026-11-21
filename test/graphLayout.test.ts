@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_MAP_NODES, type MapInput, neighbourLayout, nextFocus } from '../web/lib/graphLayout.js';
+import { MAX_MAP_NODES, type MapInput, neighbourLayout, nextFocus, workspaceLayout } from '../web/lib/graphLayout.js';
 
 const entry = (id: string, kind = 'decision') => ({ id, kind, title: `Entry ${id}` });
 
@@ -66,5 +66,19 @@ describe('neighbourLayout', () => {
     expect(nextFocus(l.nodes, nextFocus(l.nodes, i, 'ArrowDown'), 'ArrowUp')).toBe(i);
     expect(nextFocus(l.nodes, i, 'ArrowUp')).toBe(0);
     expect(l.nodes[nextFocus(l.nodes, i, 'ArrowRight')]!.ring).toBe(1);
+  });
+});
+
+describe('workspaceLayout', () => {
+  it('is deterministic, keeps entries apart and pulls connected ones closer than unconnected', () => {
+    const entries = Array.from({ length: 20 }, (_, i) => entry(`e${i}`, i % 3 ? 'topic' : 'person'));
+    const edges = [{ from: 'e0', to: 'e1' }, { from: 'e1', to: 'e2' }, { from: 'e0', to: 'missing' }];
+    const a = workspaceLayout(entries, edges);
+    expect(workspaceLayout([...entries].reverse(), [...edges].reverse())).toEqual(a);
+    expect(minGap(a.nodes)).toBeGreaterThan(15);
+    const p = new Map(a.nodes.map((n) => [n.id, n]));
+    const dist = (x: string, y: string) => Math.hypot(p.get(x)!.x - p.get(y)!.x, p.get(x)!.y - p.get(y)!.y);
+    const avg = a.nodes.reduce((s, n) => s + dist('e0', n.id), 0) / (a.nodes.length - 1);
+    expect(dist('e0', 'e1')).toBeLessThan(avg);
   });
 });

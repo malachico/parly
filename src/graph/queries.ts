@@ -99,6 +99,21 @@ export const webNodeView = (n: MergedNode) => ({
 
 export const GRAPH_KINDS: GraphNodeKind[] = ['decision', 'person', 'topic', 'doc', 'skill'];
 const NODE_MAX = 30;
+const EDGE_MAX = 1000;
+
+/** The read-checked edges between `entries` (both ends among them): the lines the explorer's graph draws. */
+async function edgesAmong(hub: HubService, caller: AgentRecord, entries: MergedNode[]) {
+  const ids = entries.flatMap((n) => n.sources.map((s) => s.nodeId));
+  if (!hub.graph || !ids.length) return [];
+  const readable = readableFilter(caller);
+  const [docs, edges] = await Promise.all([
+    hub.graph.nodes(caller.workspaces, { _id: { $in: ids } }, ids.length),
+    // ponytail: capped at EDGE_MAX; page by _id if a page of 100 entries ever has more lines than that.
+    hub.graph.edgesOf(caller.workspaces, ids, EDGE_MAX, { from: { $in: ids }, to: { $in: ids }, fromConversationId: readable, toConversationId: readable }),
+  ]);
+  const kept = new Set(entries.map((n) => n.id));
+  return (await visible(hub, caller, docs, edges)).edges.filter((e) => kept.has(e.from) && kept.has(e.to)).map((e) => ({ kind: e.kind, from: e.from, to: e.to }));
+}
 
 /** An entry as the explorer shows it: each source as the channel, thread and messages the web deep-links to. */
 export const explorerNodeView = (n: MergedNode) => ({
@@ -115,13 +130,13 @@ export const explorerNodeView = (n: MergedNode) => ({
 export type ExplorerNode = ReturnType<typeof explorerNodeView>;
 
 /**
- * The caller's readable entries (of `kind`, in `channel` or one `workspace` of theirs), newest first, or best match first with `q`, and how many of each kind there are.
+ * The caller's readable entries (of `kind`, in `channel` or one `workspace` of theirs), newest first, or best match first with `q`, and how many of each kind there are, with the edges between the entries returned.
  * `cursor` is an offset; search has no next page.
  */
 export async function listEntries(hub: HubService, caller: AgentRecord, args: { channel?: string; thread?: string; workspace?: string; kind?: GraphNodeKind; q?: string; limit: number; cursor?: number }) {
   if (args.thread && !args.channel) throw new HubError('invalid', 'A thread needs a channel.');
   const graph = hub.graph;
-  if (!graph) return { entries: [], counts: {}, nextCursor: null };
+  if (!graph) return { entries: [], edges: [], counts: {}, nextCursor: null };
   const ch = args.channel ? await hub.registry.resolveMemberChannel(caller, args.channel) : undefined;
   const ws = args.workspace ? (await hub.registry.resolveMemberWorkspace(caller, args.workspace)).id : undefined;
   if (ch && ws && ch.workspaceId !== ws) throw new HubError('not_found', 'No such channel in that workspace.');
@@ -129,7 +144,10 @@ export async function listEntries(hub: HubService, caller: AgentRecord, args: { 
   // Channel and thread conversations of the caller's channels: what the ACL lets them read, minus DMs and skills.
   const scope = { conversationId: ch ? args.thread ? threadKey(ch.id, args.thread) : conversationFilter({ workspaceId: ch.workspaceId, channelId: ch.id }) : readableFilter(caller) };
   const counts = await graph.countByKind(workspaces, scope);
-  if (args.q) return { entries: (await searchEntries(hub, caller, args.q, { channel: args.channel, thread: args.thread, workspaceId: ws, kind: args.kind, limit: args.limit })).map(explorerNodeView), counts, nextCursor: null };
+  if (args.q) {
+    const found = await searchEntries(hub, caller, args.q, { channel: args.channel, thread: args.thread, workspaceId: ws, kind: args.kind, limit: args.limit });
+    return { entries: found.map(explorerNodeView), edges: await edgesAmong(hub, caller, found), counts, nextCursor: null };
+  }
   const skip = args.cursor ?? 0;
   // ponytail: offset paging, so a node updated between pages can repeat or be skipped; keyset on (updatedAt, _id) if that shows.
   const page = await graph.nodes(workspaces, { ...scope, ...(args.kind ? { kind: args.kind } : {}) }, args.limit, { newestFirst: true, skip });
@@ -137,8 +155,8 @@ export async function listEntries(hub: HubService, caller: AgentRecord, args: { 
   const { nodes } = await visible(hub, caller, await withReadableDupes(hub, caller, page));
   // A group may show up on more than one page (its members' updatedAt differ); within a page it is one entry, at its newest member.
   const at = (n: MergedNode) => Math.min(...n.sources.map((s) => rank.get(s.nodeId) ?? Infinity));
-  const entries = nodes.filter((n) => at(n) < Infinity).sort((a, b) => at(a) - at(b)).map(explorerNodeView);
-  return { entries, counts, nextCursor: page.length === args.limit ? String(skip + page.length) : null };
+  const shown = nodes.filter((n) => at(n) < Infinity).sort((a, b) => at(a) - at(b));
+  return { entries: shown.map(explorerNodeView), edges: await edgesAmong(hub, caller, shown), counts, nextCursor: page.length === args.limit ? String(skip + page.length) : null };
 }
 
 /**

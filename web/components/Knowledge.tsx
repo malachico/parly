@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { WorkspaceGraph } from '@/components/graph/WorkspaceGraph';
 import { KnowledgeDrawer } from '@/components/KnowledgeDrawer';
 import { type GraphEntries, type GraphEntry, listGraphEntries } from '@/lib/actions/graph';
 import { appendPage, groupByKind, isFillingIn, KIND_LABEL, KNOWLEDGE_KINDS, type KnowledgeKind, searchQuery } from '@/lib/knowledge';
@@ -11,12 +12,13 @@ import { knowledgeHref } from '@/lib/routes';
 const pill = (active: boolean) =>
   `inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${active ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-ink)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)]'}`;
 
-/** The Knowledge page's list: kind chips, a search, entries grouped by kind, and more pages. A row sets `?entry=<id>`. */
+/** The Knowledge page: kind chips, a search, then a graph (default) or entries grouped by kind, and more pages. An entry sets `?entry=<id>`. */
 export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphEntries }) {
   const [kind, setKind] = useState<KnowledgeKind | undefined>();
   const [q, setQ] = useState('');
   const [data, setData] = useState(initial);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<'graph' | 'list'>('graph');
   const latest = useRef(0);
   const first = useRef(true);
   const selected = useSearchParams().get('entry');
@@ -49,7 +51,8 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
     setLoading(true);
     const d = await listGraphEntries(ws, { kind, q: query, cursor: data.nextCursor });
     if (n !== latest.current) return;
-    setData((prev) => ({ ...d, entries: appendPage(prev.entries, d.entries) }));
+    // ponytail: lines between pages are not drawn; ask the hub for edges among all loaded ids if that matters.
+    setData((prev) => ({ ...d, entries: appendPage(prev.entries, d.entries), edges: [...prev.edges, ...d.edges] }));
     setLoading(false);
   };
 
@@ -91,6 +94,13 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
             </button>
           ))}
         </nav>
+        <div role="group" aria-label="View" className="flex gap-2">
+          {(['graph', 'list'] as const).map((v) => (
+            <button key={v} type="button" aria-pressed={view === v} className={pill(view === v)} onClick={() => setView(v)}>
+              {v === 'graph' ? 'Graph' : 'List'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <p aria-live="polite" className="sr-only">
@@ -99,6 +109,8 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
 
       {groups.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">{loading ? 'Loading…' : query ? `Nothing matches “${q.trim()}”${kind ? ` in ${KIND_LABEL[kind].toLowerCase()}` : ''}.` : `No ${kind ? KIND_LABEL[kind].toLowerCase() : 'entries'} yet.`}</p>
+      ) : view === 'graph' ? (
+        <WorkspaceGraph entries={data.entries} edges={data.edges} selected={selected} onOpen={open} />
       ) : (
         groups.map((g) => (
           <section key={g.kind} aria-labelledby={`knowledge-${g.kind}`} className="space-y-1">

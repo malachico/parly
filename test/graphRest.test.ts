@@ -230,6 +230,18 @@ describe('graph explorer routes', () => {
     expect((await app.get(tokens.member, '/graph/entries?q=dana&kind=topic')).body.entries).toEqual([]);
   });
 
+  it('entries: the edges between the entries returned, never one to an entry the caller cannot read', async () => {
+    const has = (body: any, kind: string, from: string, to: string) => body.edges.some((e: any) => e.kind === kind && e.from === from && e.to === to);
+    const mine = (await app.get(tokens.member, '/graph/entries?limit=100')).body;
+    expect(has(mine, 'supersedes', ids.priv, ids.pub) && has(mine, 'involves', ids.pub, ids.dana) && has(mine, 'about', ids.priv, ids.hidden)).toBe(true);
+    const out = (await app.get(tokens.outsider, '/graph/entries?limit=100')).body;
+    expect(has(out, 'involves', ids.pub, ids.dana)).toBe(true);
+    expect(JSON.stringify(out.edges)).not.toContain(ids.priv);
+    // Only edges with both ends on the page: decisions alone have the one between them.
+    expect((await app.get(tokens.member, '/graph/entries?kind=decision')).body.edges).toEqual([{ kind: 'supersedes', from: ids.priv, to: ids.pub }]);
+    expect((await app.get(tokens.outsider, '/graph/entries?kind=decision')).body.edges).toEqual([]);
+  });
+
   it('node: summary, sources and neighbours by relation; unreadable or unknown is 404', async () => {
     const mine = await app.get(tokens.member, `/graph/node/${ids.pub}`);
     expect(mine.status).toBe(200);
@@ -328,7 +340,7 @@ describe('graph explorer routes', () => {
     try {
       const w = await crew(off.hub.registry, 'graph-ex-off', []);
       const { token } = await off.hub.registry.createBot(w.owner, { name: 'graph-ex-off-bot' });
-      expect(await off.get(token, '/graph/entries?q=mongo')).toEqual({ status: 200, body: { entries: [], counts: {}, nextCursor: null } });
+      expect(await off.get(token, '/graph/entries?q=mongo')).toEqual({ status: 200, body: { entries: [], edges: [], counts: {}, nextCursor: null } });
       expect((await off.get(token, '/graph/node/x')).status).toBe(404);
     } finally {
       await new Promise((r) => off.server.close(r));

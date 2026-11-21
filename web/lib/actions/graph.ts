@@ -16,7 +16,10 @@ export type GraphEntry = {
   sources: { channelId: string; thread?: string; messageIds: string[] }[];
 };
 
-export type GraphEntries = { entries: GraphEntry[]; counts: Partial<Record<GraphKind, number>>; nextCursor: string | null; error?: true };
+export type GraphEdge = { kind: string; from: string; to: string };
+
+/** `edges` are those between `entries` (both ends on the page). */
+export type GraphEntries = { entries: GraphEntry[]; edges: GraphEdge[]; counts: Partial<Record<GraphKind, number>>; nextCursor: string | null; error?: true };
 
 export type GraphNodeDetails = {
   node: GraphEntry;
@@ -24,14 +27,14 @@ export type GraphNodeDetails = {
   neighbours: Record<string, { id: string; direction: 'out' | 'in' }[]>;
   /** Every other entry reached, at most 29. */
   nodes: GraphEntry[];
-  edges: { kind: string; from: string; to: string }[];
+  edges: GraphEdge[];
 };
 
 /** The explorer's list in workspace `ws`: newest first, or matching `q`; failed loads carry `error`. */
 export async function listGraphEntries(ws: string, opts: { channel?: string; thread?: string; kind?: GraphKind; q?: string; limit?: number; cursor?: string } = {}): Promise<GraphEntries> {
   const params = new URLSearchParams({ workspace: ws });
   for (const [k, v] of Object.entries(opts)) if (v !== undefined && v !== '') params.set(k, String(v));
-  return hub<GraphEntries>(`/graph/entries?${params}`).catch(() => ({ entries: [], counts: {}, nextCursor: null, error: true }));
+  return hub<GraphEntries>(`/graph/entries?${params}`).catch(() => ({ entries: [], edges: [], counts: {}, nextCursor: null, error: true }));
 }
 
 /** Counts already cover all canonical groups in this thread; only fetch the entry to open. */

@@ -382,7 +382,7 @@ export function conversationsRoutes(router: Router, hub: HubService, stream: { s
   /**
    * The graph explorer's list: entries of every kind (or `kind`) in conversations you can read (or one `channel` or `workspace` of yours),
    * newest first, or best match first for `q` (2+ characters). `limit` ≤ 100; `cursor` is the last page's `nextCursor`.
-   * `counts` is entries per kind in the same scope, ignoring `kind` and `q`. Empty when the graph is off.
+   * `counts` is entries per kind in the same scope, ignoring `kind` and `q`; `edges` are those between the entries returned. Empty when the graph is off.
    */
   router.get(
     '/graph/entries',

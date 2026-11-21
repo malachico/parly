@@ -11,14 +11,14 @@ export type NeighbourMapProps = {
   onDepthChange: (d: 1 | 2) => void;
 };
 
-const KIND_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
+export const KIND_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
   decision: { fill: 'var(--info-bg)', stroke: 'var(--info-fg)', label: 'Decision' },
   topic: { fill: 'var(--warn-bg)', stroke: 'var(--warn-fg)', label: 'Topic' },
   person: { fill: 'var(--ok-bg)', stroke: 'var(--ok-fg)', label: 'Person' },
   doc: { fill: 'var(--subtle)', stroke: 'var(--fg-soft)', label: 'Doc' },
   skill: { fill: 'var(--bad-bg)', stroke: 'var(--bad-fg)', label: 'Skill' },
 };
-const styleOf = (kind: string) => KIND_STYLE[kind] ?? { fill: 'var(--subtle)', stroke: 'var(--muted)', label: kind };
+export const styleOf = (kind: string) => KIND_STYLE[kind] ?? { fill: 'var(--subtle)', stroke: 'var(--muted)', label: kind };
 
 // Room beyond the outer ring for side labels (wide) and top/bottom labels (short).
 const PAD_X = 120;
