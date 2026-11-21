@@ -240,6 +240,7 @@ export class ChatService {
     let quote: MessageDoc['replyTo'];
     // An agent's thread reply the router can't place: who was in the thread before it (see ROUTE_FALLBACK_RUN).
     let fallback: string[] = [];
+    let reopened = false;
     if (target.thread) {
       post = await this.store.message(target.thread);
       if (!post || post.conversationId !== channelKey(channel.id)) throw new HubError('not_found', `No post ${target.thread} in this channel to reply to`);
@@ -253,6 +254,7 @@ export class ChatService {
         }
         await Promise.all([this.registry.clearThreadDone(channel.id, post.id), this.store.setThreadDone(channel.id, post.id, null)]);
         channel.doneThreads = (channel.doneThreads ?? []).filter((p) => p !== post!.id);
+        reopened = true;
       }
       // Those it's addressed to (in a room) and those it mentions join the thread.
       join = [...mentions, ...(input.to ?? [])];
@@ -314,8 +316,9 @@ export class ChatService {
       // Context graph: each top-level channel post schedules a run after the quiet period; the run skips if a newer post came (debounce).
       const { kind, workspaceId, id: conversationId } = stored.conversation;
       const { seq } = stored.message;
-      if (this.graphChannelDelayMs !== undefined && kind === 'channel' && workspaceId) {
-        const job = { kind: 'graph' as const, workspaceId, conversationId, seq }, delay = this.graphChannelDelayMs;
+      // A reopened done thread is re-extracted now (the same job as marking it done; a thread run replaces its graph).
+      if (this.graphChannelDelayMs !== undefined && (kind === 'channel' || reopened) && workspaceId) {
+        const job = { kind: 'graph' as const, workspaceId, conversationId, ...(reopened ? {} : { seq }) }, delay = reopened ? 0 : this.graphChannelDelayMs;
         void this.queue.enqueue(job, delay)
           .catch(() => new Promise((ok) => setTimeout(ok, PUSH_RETRY_MS)).then(() => this.queue.enqueue(job, delay)))
           .catch((err) => console.error(`graph job for ${conversationId}`, err));

@@ -377,6 +377,26 @@ describe('threads', () => {
     }
   });
 
+  it('re-extracts a done thread when a post reopens it, once', async () => {
+    const { owner, channel } = await crew(hub.registry, 'graphr', []);
+    const root = (await hub.send(owner, { channel: channel.id }, say('Pick a DB'))).message;
+    await hub.wakeService.idle();
+    const queue = (hub as unknown as { queue: { enqueue: (job: unknown, delayMs?: number) => Promise<void> } }).queue;
+    const enqueue = vi.spyOn(queue, 'enqueue').mockResolvedValue();
+    hub.chat.graphChannelDelayMs = 1234;
+    try {
+      await hub.setThreadDone(owner, channel.id, root.id, true);
+      enqueue.mockClear();
+      await hub.send(owner, { channel: channel.id, thread: root.id }, say('Actually, Postgres'));
+      await hub.send(owner, { channel: channel.id, thread: root.id }, say('still open'));
+      const graphJobs = enqueue.mock.calls.filter(([j]) => (j as { kind?: string }).kind === 'graph');
+      expect(graphJobs).toEqual([[{ kind: 'graph', workspaceId: channel.workspaceId, conversationId: threadKey(channel.id, root.id) }, 0]]);
+    } finally {
+      hub.chat.graphChannelDelayMs = undefined;
+      enqueue.mockRestore();
+    }
+  });
+
   it('wires channel graph jobs only when CONTEXT_GRAPH_ENABLED is on', () => {
     const vertex = { model: 'gemini-test', project: 'test-proj', location: 'us-central1', prices: { input: 1, output: 2 } };
     const app = (contextGraphEnabled: boolean) => createApp({ db: testDb(), config: testConfig({ vertex, contextGraphEnabled }), cloudToken: async () => 't' }).hub;

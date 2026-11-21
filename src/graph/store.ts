@@ -23,6 +23,8 @@ export const conversationFilter = ({ conversationId, channelId }: GraphScope) =>
   channelId !== undefined ? { $regex: `^(channel:${escapeRegex(channelId)}$|thread:${escapeRegex(channelId)}:)` } : conversationId;
 /** Per channel: the highest message seq already extracted. */
 const WATERMARKS = 'graph_watermarks';
+/** Per thread: a counter bumped by each extraction run, so only the last-started run writes. */
+const RUNS = 'graph_runs';
 
 /** Case/whitespace-insensitive identity, so "Use  Mongo" and "use mongo" are one node. */
 export const normalizeKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -159,6 +161,8 @@ export class GraphStore {
     const edges = conv === undefined ? { workspaceId } : { workspaceId, $or: [{ fromConversationId: conv }, { toConversationId: conv }] };
     const col = (name: string) => this.db.mongoDb.collection(name);
     await this.db.execute(() => Promise.all([col(NODES).deleteMany(own), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges), col(WATERMARKS).deleteMany(own)]));
+    // A thread run purges its own graph; its run counter must outlive that, so only wider purges drop counters.
+    if (scope.conversationId === undefined) await this.db.execute(() => col(RUNS).deleteMany(own));
     // Channel-scoped skill nodes live under `skill:<id>`, not the channel's conversations.
     if (scope.channelId !== undefined) await this.deleteNodes({ workspaceId, kind: 'skill', 'source.channelId': scope.channelId });
   }
@@ -178,6 +182,15 @@ export class GraphStore {
     });
   }
 
+  /** The channel's (and its threads') most recently extracted decisions, newest first; none when disabled. */
+  async recentDecisions(workspaceId: string, channelId: string, limit: number): Promise<{ id: string; title: string; conversationId: string }[]> {
+    if (!this.options.enabled) return [];
+    const docs = await this.db.execute(() => this.db.mongoDb.collection<{ _id: string; title: string; conversationId: string }>(NODES)
+      .find({ workspaceId, kind: 'decision', conversationId: conversationFilter({ workspaceId, channelId }) }, { projection: { title: 1, conversationId: 1 } })
+      .sort({ updatedAt: -1 }).limit(limit).toArray());
+    return docs.map((d) => ({ id: d._id, title: d.title, conversationId: d.conversationId }));
+  }
+
   /** The highest seq of `conversationId` already extracted; 0 when never (or disabled). */
   async channelWatermark(workspaceId: string, conversationId: string): Promise<number> {
     if (!this.options.enabled) return 0;
@@ -193,6 +206,24 @@ export class GraphStore {
       { $max: { seq }, $setOnInsert: { workspaceId, conversationId } },
       { upsert: true },
     ));
+  }
+
+  /** Starts an extraction run of `conversationId` and returns its token; a later start gets a larger one. 0 when disabled. */
+  async startGraphRun(workspaceId: string, conversationId: string): Promise<number> {
+    if (!this.options.enabled) return 0;
+    const doc = await this.db.execute(() => this.db.mongoDb.collection<{ _id: string; run: number }>(RUNS).findOneAndUpdate(
+      { _id: idOf(workspaceId, conversationId) },
+      { $inc: { run: 1 }, $setOnInsert: { workspaceId, conversationId } },
+      { upsert: true, returnDocument: 'after' },
+    ));
+    return doc?.run ?? 0;
+  }
+
+  /** Whether `run` is still the newest run started for `conversationId` (always true when disabled). */
+  async isLatestGraphRun(workspaceId: string, conversationId: string, run: number): Promise<boolean> {
+    if (!this.options.enabled) return true;
+    const doc = await this.db.execute(() => this.db.mongoDb.collection<{ _id: string; run: number }>(RUNS).findOne({ _id: idOf(workspaceId, conversationId) }));
+    return (doc?.run ?? 0) === run;
   }
 
   /**

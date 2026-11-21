@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationDoc, MessageDoc } from '../src/chat/chat.js';
 import { CloudTasksQueue, InlineQueue, parsePushJob } from '../src/chat/queue.js';
-import { graphExtractor, parseGraphExtraction } from '../src/graph/extract.js';
+import { graphExtractor, parseGraphExtraction, sameReaders } from '../src/graph/extract.js';
 import type { GraphStore } from '../src/graph/store.js';
 
 const msg = (id: string, from: string, fromId: string, text: string, seq = 0) => ({ id, from, fromId, seq, parts: [{ kind: 'text', text }] }) as unknown as MessageDoc;
@@ -10,14 +10,17 @@ const vertex = (body: unknown = answer) =>
   vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(body) }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10 } })));
 
 // null = the doc is missing.
-const registry = (channel: { archived?: boolean } | null = {}, workspace: { archived?: boolean } | null = {}) => ({
+const registry = (channel: { archived?: boolean; publicFromSeq?: number; publicThreads?: string[] } | null = {}, workspace: { archived?: boolean } | null = {}) => ({
   channelDoc: vi.fn(async (_id: string) => channel ?? undefined),
   workspaceDoc: vi.fn(async (_id: string) => workspace ?? undefined),
 });
 
-function setup(opts: { enabled?: boolean; canSpend?: boolean; latestSeq?: number; since?: MessageDoc[]; registry?: ReturnType<typeof registry> } = {}) {
+function setup(opts: { enabled?: boolean; canSpend?: boolean; latestSeq?: number; since?: MessageDoc[]; registry?: ReturnType<typeof registry>; decisions?: { id: string; title: string; conversationId: string }[]; body?: unknown } = {}) {
+  let runs = 0;
   const graph = {
     enabled: opts.enabled ?? true,
+    startGraphRun: vi.fn(async () => ++runs),
+    isLatestGraphRun: vi.fn(async (_w: string, _c: string, run: number) => run === runs),
     canSpendOnGraph: vi.fn(async () => opts.canSpend ?? true),
     recordGraphSpend: vi.fn(async () => {}),
     purgeGraphFor: vi.fn(async () => {}),
@@ -25,6 +28,7 @@ function setup(opts: { enabled?: boolean; canSpend?: boolean; latestSeq?: number
     upsertEdge: vi.fn(async (_e: { kind: string; to: { id: string } }) => 'e'),
     channelWatermark: vi.fn(async () => 4),
     setChannelWatermark: vi.fn(async () => {}),
+    recentDecisions: vi.fn(async (_w: string, _c: string, _l: number) => opts.decisions ?? []),
   };
   const store = {
     message: vi.fn(async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?')),
@@ -32,7 +36,7 @@ function setup(opts: { enabled?: boolean; canSpend?: boolean; latestSeq?: number
     conversation: vi.fn(async () => ({ seq: opts.latestSeq ?? 7 }) as ConversationDoc),
     since: vi.fn(async (_c: string, _s: number, _l: number) => opts.since ?? [msg('m5', 'Ana', 'agent-ana', 'Ship Monday?', 5), msg('m7', 'Bo', 'agent-bo', 'Yes, after QA', 7)]),
   };
-  const fetchImpl = vertex();
+  const fetchImpl = vertex(opts.body);
   const requeue = vi.fn(async (_job: unknown, _delayMs: number) => {});
   const run = graphExtractor({
     graph: graph as unknown as GraphStore,
@@ -78,6 +82,23 @@ describe('graph extraction (pure)', () => {
       ['involves', 'person:agent-bo'],
       ['about', 'topic:release'],
     ]);
+  });
+
+  it('lets the last-started of two overlapping thread runs write, so an older run finishing last never wins', async () => {
+    const { graph, store } = setup();
+    let releaseA!: () => void;
+    const gateA = new Promise<void>((ok) => { releaseA = ok; });
+    const reply = (title: string) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ decisions: [{ title, text: '', people: [], topics: [] }] }) }] } }] }));
+    let calls = 0;
+    const fetchImpl = (async () => (++calls === 1 ? gateA.then(() => reply('Old snapshot')) : reply('New snapshot'))) as typeof fetch;
+    const run = graphExtractor({ graph: graph as unknown as GraphStore, store, registry: registry(), llm: { project: 'p', location: 'global', model: 'm', accessToken: async () => 't', fetchImpl } });
+    const a = run(job);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    await run(job);
+    releaseA();
+    await a;
+    expect(graph.purgeGraphFor).toHaveBeenCalledTimes(1);
+    expect(graph.upsertNode.mock.calls.map(([n]) => n.title)).toEqual(['New snapshot']);
   });
 
   it('skips with a log line once the daily cap is spent', async () => {
@@ -207,6 +228,55 @@ describe('graph extraction (pure)', () => {
       expect(store.since).not.toHaveBeenCalled();
       expect(graph.canSpendOnGraph).not.toHaveBeenCalled();
       expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('replaced decisions', () => {
+    const old = (n: string, conversationId: string) => ({ id: `old-${n}`, title: `Old ${n}`, conversationId });
+    const replacing = (replaces: number) => ({ decisions: [{ ...answer.decisions[0], replaces }] });
+    const prompt = (fetchImpl: ReturnType<typeof vertex>) => JSON.stringify((fetchImpl.mock.calls as unknown as [string, RequestInit][])[0]?.[1]?.body);
+    const supersedes = (graph: ReturnType<typeof setup>['graph']) => graph.upsertEdge.mock.calls.map(([e]) => e).filter((e) => e.kind === 'supersedes');
+
+    it('only links decisions with the same readers, failing closed', () => {
+      const priv = {};
+      expect(sameReaders('thread:c1:p', 'channel:c1', priv)).toBe(true);
+      expect(sameReaders('thread:c1:p', 'thread:c1:q', priv)).toBe(true);
+      expect(sameReaders('thread:c1:p', 'channel:c2', priv)).toBe(false);
+      expect(sameReaders('dm:a:b', 'channel:c1', priv)).toBe(false);
+      expect(sameReaders('junk', 'channel:c1', priv)).toBe(false);
+      expect(sameReaders('thread:c1:p', 'channel:c1', undefined)).toBe(false);
+      expect(sameReaders('thread:c1:p', 'channel:c1', { publicFromSeq: 3 })).toBe(false);
+      expect(sameReaders('thread:c1:p', 'channel:c1', { publicThreads: ['q'] })).toBe(false);
+    });
+
+    it('keeps a positive integer "replaces" and drops anything else', () => {
+      const parse = (replaces: unknown) => parseGraphExtraction(JSON.stringify({ decisions: [{ title: 'T', replaces }] }))[0]?.replaces;
+      expect(parse(2)).toBe(2);
+      for (const bad of [0, -1, 1.5, '2', null]) expect(parse(bad)).toBeUndefined();
+    });
+
+    it('links a replacement to the numbered earlier decision, in its own conversation', async () => {
+      const { graph, fetchImpl, run } = setup({ decisions: [old('a', 'channel:c1'), old('b', 'thread:c1:q')], body: replacing(2) });
+      await run(job);
+      expect(prompt(fetchImpl)).toContain('2. Old b');
+      expect(supersedes(graph)).toEqual([expect.objectContaining({ from: { id: 'decision:Ship on Monday', conversationId: job.conversationId }, to: { id: 'old-b', conversationId: 'thread:c1:q' } })]);
+    });
+
+    it('writes no link for an out-of-range number', async () => {
+      const { graph, run } = setup({ decisions: [old('a', 'channel:c1')], body: replacing(5) });
+      await run(job);
+      expect(supersedes(graph)).toEqual([]);
+    });
+
+    it('offers nothing in a channel with any public part, nor the thread its own decisions', async () => {
+      const pub = setup({ decisions: [old('a', 'channel:c1')], body: replacing(1), registry: registry({ publicThreads: ['x'] }) });
+      await pub.run(job);
+      expect(prompt(pub.fetchImpl)).not.toContain('Old a');
+      expect(supersedes(pub.graph)).toEqual([]);
+      const own = setup({ decisions: [old('self', job.conversationId), old('a', 'channel:c1')], body: replacing(1) });
+      await own.run(job);
+      expect(prompt(own.fetchImpl)).not.toContain('Old self');
+      expect(supersedes(own.graph)).toEqual([expect.objectContaining({ to: { id: 'old-a', conversationId: 'channel:c1' } })]);
     });
   });
 

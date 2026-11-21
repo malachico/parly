@@ -4,6 +4,7 @@ import type { GraphJob } from '../chat/queue.js';
 import type { ChatStore } from '../chat/store.js';
 import { type LlmPrices, costMicros } from '../lib/llmCost.js';
 import { generate } from '../lib/vertex.js';
+import type { ChannelRecord } from '../registry/types.js';
 import { textOf } from '../lib/wire.js';
 import type { GraphStore } from './store.js';
 
@@ -12,6 +13,8 @@ export interface ExtractedDecision {
   text: string;
   people: string[];
   topics: string[];
+  /** 1-based index into the earlier decisions offered in the prompt that this one replaces. */
+  replaces?: number;
 }
 
 /** The model's answer as decisions with trimmed, de-duplicated people and topics; malformed answers yield none. */
@@ -28,10 +31,32 @@ export function parseGraphExtraction(text: string): ExtractedDecision[] {
   for (const d of list.slice(0, 12) as Partial<Record<keyof ExtractedDecision, unknown>>[]) {
     const title = typeof d?.title === 'string' ? d.title.trim() : '';
     if (!title) continue;
-    out.push({ title, text: typeof d.text === 'string' ? d.text.trim() : '', people: normalizeList(d.people), topics: normalizeList(d.topics) });
+    out.push({
+      title, text: typeof d.text === 'string' ? d.text.trim() : '', people: normalizeList(d.people), topics: normalizeList(d.topics),
+      ...(Number.isInteger(d.replaces) && (d.replaces as number) > 0 ? { replaces: d.replaces as number } : {}),
+    });
   }
   return out;
 }
+
+/**
+ * Decision 3: whether conversations `a` and `b` have the same readers, so a decision in one may be marked as
+ * replacing one in the other. A channel and its threads are read by the channel's members, unless some of it is
+ * public (`channel` is the channel both are in). Fails closed: a DM, another channel, a bad key, a missing channel
+ * doc, or a channel with anything public (even one shared thread) is never the same readers.
+ */
+export function sameReaders(a: string, b: string, channel: Pick<ChannelRecord, 'publicFromSeq' | 'publicThreads'> | undefined): boolean {
+  try {
+    const [x, y] = [parseKey(a), parseKey(b)];
+    if (x.kind === 'dm' || y.kind === 'dm' || x.channelId !== y.channelId) return false;
+  } catch {
+    return false;
+  }
+  return !!channel && channel.publicFromSeq === undefined && !channel.publicThreads?.length;
+}
+
+/** How many of the channel's newest decisions a run offers the model as replaceable. */
+const MAX_REPLACEABLE = 20;
 
 /** gemini-3.5-flash-lite, USD per million tokens. ponytail: hardcoded; move to config if the extraction model changes. */
 const FLASH_LITE_PRICES: LlmPrices = { input: 0.1, output: 0.4 };
@@ -48,7 +73,7 @@ export function graphExtractor(deps: {
   graph: GraphStore;
   store: Pick<ChatStore, 'message' | 'page' | 'since' | 'conversation'>;
   /** Channel runs skip archived (or deleted) channels and workspaces. */
-  registry: { channelDoc(id: string): Promise<{ archived?: boolean } | undefined>; workspaceDoc(id: string): Promise<{ archived?: boolean } | undefined> };
+  registry: { channelDoc(id: string): Promise<(Pick<ChannelRecord, 'publicFromSeq' | 'publicThreads'> & { archived?: boolean }) | undefined>; workspaceDoc(id: string): Promise<{ archived?: boolean } | undefined> };
   llm: { project: string; location: string; model: string; accessToken?: () => Promise<string>; fetchImpl?: typeof fetch };
   prices?: LlmPrices;
   /** Re-schedules a channel job the daily cap skipped. */
@@ -61,10 +86,12 @@ export function graphExtractor(deps: {
     const key = parseKey(conversationId);
     if (key.kind === 'dm') return;
     let messages: MessageDoc[] | undefined;
+    let channel: Awaited<ReturnType<typeof registry.channelDoc>>;
     if (key.kind === 'channel') {
       // Debounce: a newer post scheduled its own run, which will cover this one's messages.
       if (seq !== undefined && ((await store.conversation(conversationId))?.seq ?? 0) > seq) return;
-      const [channel, workspace] = await Promise.all([registry.channelDoc(key.channelId), registry.workspaceDoc(workspaceId)]);
+      let workspace;
+      [channel, workspace] = await Promise.all([registry.channelDoc(key.channelId), registry.workspaceDoc(workspaceId)]);
       if (!channel || channel.archived || !workspace || workspace.archived) return;
       // ponytail: a burst over the cap keeps only its newest MAX_CATCHUP_MESSAGES; page from the watermark if big bursts lose facts.
       messages = await store.since(conversationId, await graph.channelWatermark(workspaceId, conversationId), MAX_CATCHUP_MESSAGES);
@@ -82,12 +109,25 @@ export function graphExtractor(deps: {
     if (key.kind === 'thread') {
       const root = await store.message(key.post);
       messages = [...(root ? [root] : []), ...(await store.page(conversationId, MAX_CATCHUP_MESSAGES))];
+      channel = await registry.channelDoc(key.channelId);
     }
+    // Overlapping thread runs (a reopen and a re-done, or a duplicate task): the last-started one writes, older ones drop.
+    const run = key.kind === 'thread' ? await graph.startGraphRun(workspaceId, conversationId) : 0;
     if (!messages?.length) return;
+    // Decisions this one may replace: only ones with the same readers (Decision 3), and never the thread's own,
+    // which the purge below drops.
+    // ponytail: only the channel's MAX_REPLACEABLE newest decisions are offered, so an older one is never marked
+    // replaced; "newer" is extraction order, so a reopened old thread can claim to replace a later decision; and a
+    // thread rerun's purge drops other conversations' supersedes edges into it; page candidates or keep those edges if that bites.
+    const replaceable = (await graph.recentDecisions(workspaceId, key.channelId, MAX_REPLACEABLE))
+      .filter((c) => !(key.kind === 'thread' && c.conversationId === conversationId) && sameReaders(conversationId, c.conversationId, channel));
     const prompt = [
       'Extract the decisions this team conversation reached. For each: a short "title", one sentence of "text" on what was decided and why,',
       'the "people" (by the names shown) who made or own it, and up to three short "topics". No decisions: an empty array.',
       'Write in the conversation\'s language.',
+      ...(replaceable.length
+        ? ['', 'Earlier decisions in this channel, numbered. If a decision here replaces one of them, set its "replaces" to that number:', ...replaceable.map((c, i) => `${i + 1}. ${c.title}`)]
+        : []),
       '',
       ...messages.map((m) => `${m.from}: ${truncateMessageText(textOf(m))}`),
     ].join('\n');
@@ -103,7 +143,7 @@ export function graphExtractor(deps: {
             type: 'ARRAY',
             items: {
               type: 'OBJECT',
-              properties: { title: { type: 'STRING' }, text: { type: 'STRING' }, people: { type: 'ARRAY', items: { type: 'STRING' } }, topics: { type: 'ARRAY', items: { type: 'STRING' } } },
+              properties: { title: { type: 'STRING' }, text: { type: 'STRING' }, people: { type: 'ARRAY', items: { type: 'STRING' } }, topics: { type: 'ARRAY', items: { type: 'STRING' } }, replaces: { type: 'INTEGER' } },
               required: ['title', 'text', 'people', 'topics'],
             },
           },
@@ -118,7 +158,12 @@ export function graphExtractor(deps: {
       console.error(`${msg}; not retrying`, out.errorText);
       return;
     }
-    if (key.kind === 'thread') await graph.purgeGraphFor({ workspaceId, conversationId });
+    if (key.kind === 'thread') {
+      // ponytail: check-then-write, not a lock; a newer run that starts and finishes its model call within this run's
+      // few-ms write window can interleave with it. Serialise per thread (or write under a run tag) if that ever bites.
+      if (!(await graph.isLatestGraphRun(workspaceId, conversationId, run))) return;
+      await graph.purgeGraphFor({ workspaceId, conversationId });
+    }
     // A person the thread knows is keyed on their agent id (titled with their thread name), so a rename or a
     // differently-cased mention is one node. ponytail: names the thread never posted as stay keyed by name.
     const authors = new Map(messages.map((m) => [m.from.toLowerCase(), { id: m.fromId, name: m.from }]));
@@ -130,6 +175,10 @@ export function graphExtractor(deps: {
     };
     for (const d of parseGraphExtraction(out.text)) {
       const decision = await node('decision', d.title, { text: d.text });
+      const old = d.replaces !== undefined ? replaceable[d.replaces - 1] : undefined;
+      if (decision && old && old.id !== decision) {
+        await graph.upsertEdge({ workspaceId, kind: 'supersedes', from: { id: decision, conversationId }, to: { id: old.id, conversationId: old.conversationId } });
+      }
       // TODO(#787): embed the decision nodes once graph embeddings land.
       await Promise.all([
         ...d.people.map((p) => {
