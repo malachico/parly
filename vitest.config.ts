@@ -25,6 +25,7 @@ const pureTests = [
   'test/graphAclSupersedes.pure.test.ts',
   'test/graphQuality.test.ts',
   'test/graphLayout.test.ts',
+  'test/knowledgeDrawer.test.ts',
   'test/forward.test.ts',
   'test/ghWrapper.test.ts',
   'test/gke-driver.test.ts',

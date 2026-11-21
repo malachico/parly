@@ -180,6 +180,17 @@ Open the workspace menu (top right of the canvas) and choose **Knowledge**, or g
 - Only entries from the workspace you're in, and only from conversations you can read. A channel you're not in never shows up, even when a teammate's entry mentions it.
 - Counts per kind at the top. Pick a kind to show only that kind.
 - **Search** matches titles and text once you type at least 2 characters.
-- Each entry shows how many conversations it came from. Clicking one adds \`?entry=<id>\` to the address, so the link points at that entry.`,
+- Each entry shows how many conversations it came from. Clicking one adds \`?entry=<id>\` to the address, so the link points at that entry.
+
+## An entry's details
+
+Clicking an entry opens its details beside the list (full screen on a phone):
+
+- Its kind, title and what was said about it.
+- **Where it was said**: links to the original messages, opening the thread when it was said in one.
+- **Connections**: the entries it's linked to, grouped by how (for example \`about\` or \`involves\`), with a map of them. Press **One more step out** to see their connections too. Click a connection, or a dot on the map, to open it; the trail at the top takes you back.
+- Close it with **✕** or **Esc**. The browser's back button steps back through the entries you opened.
+
+An entry you can't read (it came from a conversation you're not in) or that no longer exists says so instead.`,
   },
 ];

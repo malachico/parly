@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { KnowledgeDrawer } from '@/components/KnowledgeDrawer';
 import { type GraphEntries, type GraphEntry, listGraphEntries } from '@/lib/actions/graph';
 import { appendPage, groupByKind, isFillingIn, KIND_LABEL, KNOWLEDGE_KINDS, type KnowledgeKind, searchQuery } from '@/lib/knowledge';
 import { plural } from '@/lib/plural';
@@ -52,7 +53,7 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
     setLoading(false);
   };
 
-  // Only the URL changes here; the drawer that reads `?entry=` comes later. The native history call skips a server round trip.
+  // Only the URL changes here; KnowledgeDrawer reads `?entry=`. The native history call skips a server round trip.
   const open = (e: GraphEntry) => {
     const params = new URLSearchParams(window.location.search);
     params.set('entry', e.id);
@@ -69,6 +70,7 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
         <p className="text-[var(--muted)]">
           Knowledge fills in as conversations happen: decisions, the people and topics involved, and the docs shared show up here on their own.
         </p>
+        {selected && <KnowledgeDrawer ws={ws} id={selected} />}
       </div>
     );
 
@@ -128,6 +130,8 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
           {loading ? 'Loading…' : 'Load more'}
         </button>
       )}
+
+      {selected && <KnowledgeDrawer ws={ws} id={selected} />}
     </div>
   );
 }

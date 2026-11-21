@@ -1,6 +1,7 @@
 'use server';
 
 import { hub, HubError } from '../hub';
+import { isMissing } from '../knowledge';
 
 export type GraphKind = 'decision' | 'person' | 'topic' | 'doc' | 'skill';
 
@@ -38,7 +39,8 @@ export async function graphNode(id: string, depth: 1 | 2 = 1): Promise<GraphNode
   try {
     return await hub<GraphNodeDetails>(`/graph/node/${encodeURIComponent(id)}?depth=${depth}`);
   } catch (err) {
-    if (err instanceof HubError) return null;
+    // Only a 404/403 means gone; an outage rethrows so the drawer offers Try again.
+    if (err instanceof HubError && isMissing(err.status)) return null;
     throw err;
   }
 }
