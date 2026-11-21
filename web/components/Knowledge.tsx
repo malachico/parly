@@ -31,7 +31,7 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
     const t = setTimeout(
       () => {
         setLoading(true);
-        listGraphEntries({ kind, q: query }).then((d) => {
+        listGraphEntries(ws, { kind, q: query }).then((d) => {
           if (n !== latest.current) return;
           setData(d);
           setLoading(false);
@@ -40,13 +40,13 @@ export function KnowledgeExplorer({ ws, initial }: { ws: string; initial: GraphE
       query ? 250 : 0,
     );
     return () => clearTimeout(t);
-  }, [kind, query]);
+  }, [ws, kind, query]);
 
   const more = async () => {
     if (!data.nextCursor) return;
     const n = latest.current;
     setLoading(true);
-    const d = await listGraphEntries({ kind, q: query, cursor: data.nextCursor });
+    const d = await listGraphEntries(ws, { kind, q: query, cursor: data.nextCursor });
     if (n !== latest.current) return;
     setData((prev) => ({ ...d, entries: appendPage(prev.entries, d.entries) }));
     setLoading(false);

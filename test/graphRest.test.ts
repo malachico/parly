@@ -114,10 +114,12 @@ describe('graph web routes', () => {
 
 describe('graph explorer routes', () => {
   let app: Awaited<ReturnType<typeof serve>>;
-  let tokens: Record<'member' | 'outsider' | 'elsewhere', string>;
+  let tokens: Record<'member' | 'outsider' | 'elsewhere' | 'both', string>;
+  let wsIds: Record<'mine' | 'other', string>;
   let ids: Record<'pub' | 'priv' | 'dana' | 'storage' | 'hidden' | 'docs', string>;
   let channel: string;
   let privateChannel: string;
+  let otherChannel: string;
   const titlesOf = (nodes: { title: string }[]) => nodes.map((n) => n.title).sort();
 
   beforeAll(async () => {
@@ -134,7 +136,15 @@ describe('graph explorer routes', () => {
     const member = await bot(w, 'graph-ex-member');
     const outsider = await bot(w, 'graph-ex-outsider');
     const elsewhere = await bot(other, 'graph-ex-elsewhere');
-    tokens = { member: member.token, outsider: outsider.token, elsewhere: elsewhere.token };
+    // In both workspaces: each workspace's Knowledge page must show only its own entries.
+    const both = await hub.registry.createBot(w.owner, { name: 'graph-ex-both', public: true });
+    await hub.registry.addToWorkspace(w.owner, w.workspace.id, both.agent.id);
+    await hub.registry.addToChannel(w.owner, w.channel.id, both.agent.id);
+    await hub.registry.addToWorkspace(other.owner, other.workspace.id, both.agent.id);
+    await hub.registry.addToChannel(other.owner, other.channel.id, both.agent.id);
+    tokens = { member: member.token, outsider: outsider.token, elsewhere: elsewhere.token, both: both.token };
+    wsIds = { mine: w.workspace.id, other: other.workspace.id };
+    otherChannel = other.channel.id;
     channel = w.channel.id;
     privateChannel = (await hub.registry.createChannel(w.owner, w.workspace.id, 'graph-ex-private')).id;
     await hub.registry.addToChannel(w.owner, privateChannel, member.agent.id);
@@ -197,6 +207,20 @@ describe('graph explorer routes', () => {
     expect(new Set([...p1.body.entries, ...p2.body.entries].map((e: any) => e.id)).size).toBe(35);
     expect((await app.get(tokens.member, '/graph/entries?kind=nope')).status).toBe(400);
     expect((await app.get(tokens.member, '/graph/entries?cursor=-1')).status).toBe(400);
+  });
+
+  it('entries: workspace scopes the list, counts and search to that workspace; not yours is 404', async () => {
+    const mine = await app.get(tokens.both, `/graph/entries?limit=100&workspace=${wsIds.mine}`);
+    expect(mine.body.counts).toEqual({ decision: 1, person: 1, topic: 3, doc: 35 });
+    expect(mine.body.entries.map((e: any) => e.title)).not.toContain('Mongo elsewhere');
+    const other = await app.get(tokens.both, `/graph/entries?workspace=${wsIds.other}`);
+    expect(other.body).toMatchObject({ counts: { decision: 1 }, entries: [{ title: 'Mongo elsewhere' }] });
+    expect(titlesOf((await app.get(tokens.both, `/graph/entries?q=mongo&workspace=${wsIds.mine}`)).body.entries)).toEqual(['Use Mongo for storage']);
+    expect((await app.get(tokens.elsewhere, `/graph/entries?workspace=${wsIds.mine}`)).status).toBe(404);
+    // A channel of another workspace doesn't widen the scope past `workspace`, listing or searching.
+    expect((await app.get(tokens.both, `/graph/entries?workspace=${wsIds.mine}&channel=${otherChannel}`)).status).toBe(404);
+    expect((await app.get(tokens.both, `/graph/entries?q=mongo&workspace=${wsIds.mine}&channel=${otherChannel}`)).status).toBe(404);
+    expect((await app.get(tokens.both, `/graph/entries?workspace=${wsIds.mine}&channel=${channel}`)).status).toBe(200);
   });
 
   it('entries: q searches every kind (or one), only where the caller can read', async () => {

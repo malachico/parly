@@ -26,9 +26,9 @@ export type GraphNodeDetails = {
   edges: { kind: string; from: string; to: string }[];
 };
 
-/** The explorer's list: newest first, or matching `q`; empty when the hub can't answer. */
-export async function listGraphEntries(opts: { channel?: string; kind?: GraphKind; q?: string; limit?: number; cursor?: string } = {}): Promise<GraphEntries> {
-  const params = new URLSearchParams();
+/** The explorer's list in workspace `ws`: newest first, or matching `q`; empty when the hub can't answer. */
+export async function listGraphEntries(ws: string, opts: { channel?: string; kind?: GraphKind; q?: string; limit?: number; cursor?: string } = {}): Promise<GraphEntries> {
+  const params = new URLSearchParams({ workspace: ws });
   for (const [k, v] of Object.entries(opts)) if (v !== undefined && v !== '') params.set(k, String(v));
   return hub<GraphEntries>(`/graph/entries?${params}`).catch(() => ({ entries: [], counts: {}, nextCursor: null }));
 }

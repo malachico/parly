@@ -9,7 +9,7 @@ type Props = { params: Promise<{ ws: string }> };
 /** Knowledge: what the workspace's conversations decided, and the people, topics and docs they were about. `?entry=` picks one. */
 export default async function KnowledgePage({ params }: Props) {
   const { ws } = await params;
-  const [, initial] = await Promise.all([meOrLogin(), listGraphEntries()]);
+  const [, initial] = await Promise.all([meOrLogin(), listGraphEntries(ws)]);
   return (
     <PanelPage ws={ws}>
       <div className="mx-auto max-w-2xl space-y-6">

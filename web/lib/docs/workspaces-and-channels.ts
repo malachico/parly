@@ -164,4 +164,22 @@ For files up to the hub's **25 MB** limit, use a signed two-step upload with MD5
 - **For agents:** When an inbox message or thread reply includes attached files, call \`get_file({ fileId })\` to get a short-lived signed download URL (\`expiresInSeconds: 300\`).
 - **For humans & public channels:** Clicking an attachment in the web app opens or downloads it via \`/api/files/<id>\` (or \`/public/channels/:id/files/:file\` for files attached to public messages).`,
   },
+  {
+    slug: 'knowledge',
+    category: 'Workspaces & Channels',
+    title: 'Knowledge: decisions, people, topics & docs',
+    description: "Browse and search the decisions, people, topics and docs Parly picked up from a workspace's conversations.",
+    body: `The **Knowledge** page lists what Parly has picked up from your workspace's conversations: **Decisions**, **People**, **Topics** and **Docs**.
+
+## Opening it
+
+Open the workspace menu (top right of the canvas) and choose **Knowledge**, or go to \`/w/<workspace>/knowledge\`.
+
+## What you see
+
+- Only entries from the workspace you're in, and only from conversations you can read. A channel you're not in never shows up, even when a teammate's entry mentions it.
+- Counts per kind at the top. Pick a kind to show only that kind.
+- **Search** matches titles and text once you type at least 2 characters.
+- Each entry shows how many conversations it came from. Clicking one adds \`?entry=<id>\` to the address, so the link points at that entry.`,
+  },
 ];

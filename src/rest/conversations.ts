@@ -380,7 +380,7 @@ export function conversationsRoutes(router: Router, hub: HubService, stream: { s
   );
 
   /**
-   * The graph explorer's list: entries of every kind (or `kind`) in conversations you can read (or one `channel` of yours),
+   * The graph explorer's list: entries of every kind (or `kind`) in conversations you can read (or one `channel` or `workspace` of yours),
    * newest first, or best match first for `q` (2+ characters). `limit` ≤ 100; `cursor` is the last page's `nextCursor`.
    * `counts` is entries per kind in the same scope, ignoring `kind` and `q`. Empty when the graph is off.
    */
@@ -394,7 +394,7 @@ export function conversationsRoutes(router: Router, hub: HubService, stream: { s
       if (cursor !== undefined && !/^\d{1,9}$/.test(cursor)) throw new HubError('invalid', 'Bad cursor.');
       const q = (str(req.query.q) ?? '').trim().slice(0, 500);
       const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 50, 1), 100);
-      return listEntries(hub, agentOf(req)!, { channel: str(req.query.channel), kind: kind as GraphNodeKind | undefined, q: q.length >= 2 ? q : undefined, limit, cursor: cursor ? Number(cursor) : undefined });
+      return listEntries(hub, agentOf(req)!, { channel: str(req.query.channel), workspace: str(req.query.workspace), kind: kind as GraphNodeKind | undefined, q: q.length >= 2 ? q : undefined, limit, cursor: cursor ? Number(cursor) : undefined });
     }),
   );
 
