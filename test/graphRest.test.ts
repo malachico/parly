@@ -111,3 +111,149 @@ describe('graph web routes', () => {
     }
   });
 });
+
+describe('graph explorer routes', () => {
+  let app: Awaited<ReturnType<typeof serve>>;
+  let tokens: Record<'member' | 'outsider' | 'elsewhere', string>;
+  let ids: Record<'pub' | 'priv' | 'dana' | 'storage' | 'hidden' | 'docs', string>;
+  let channel: string;
+  let privateChannel: string;
+  const titlesOf = (nodes: { title: string }[]) => nodes.map((n) => n.title).sort();
+
+  beforeAll(async () => {
+    app = await serve();
+    const hub = app.hub;
+    const w = await crew(hub.registry, 'graph-ex');
+    const other = await crew(hub.registry, 'graph-ex-other');
+    const bot = async (o: typeof w, name: string) => {
+      const { agent, token } = await hub.registry.createBot(o.owner, { name });
+      await hub.registry.addToWorkspace(o.owner, o.workspace.id, agent.id);
+      await hub.registry.addToChannel(o.owner, o.channel.id, agent.id);
+      return { agent, token };
+    };
+    const member = await bot(w, 'graph-ex-member');
+    const outsider = await bot(w, 'graph-ex-outsider');
+    const elsewhere = await bot(other, 'graph-ex-elsewhere');
+    tokens = { member: member.token, outsider: outsider.token, elsewhere: elsewhere.token };
+    channel = w.channel.id;
+    privateChannel = (await hub.registry.createChannel(w.owner, w.workspace.id, 'graph-ex-private')).id;
+    await hub.registry.addToChannel(w.owner, privateChannel, member.agent.id);
+    await hub.registry.updateChannel(w.owner, privateChannel, { open: false });
+
+    const graph = hub.graph as GraphStore;
+    const ws = w.workspace.id;
+    const at = (conversationId: string) => async (kind: 'decision' | 'person' | 'topic' | 'doc', title: string, text?: string, sourceMessageIds?: string[]) =>
+      ({ id: (await graph.upsertNode({ workspaceId: ws, conversationId, kind, title, text, sourceMessageIds }))!, conversationId });
+    const pubAt = at(channelKey(channel));
+    const pub = await pubAt('decision', 'Use Mongo for storage', 'public reasoning', ['m1']);
+    const priv = await at(threadKey(privateChannel, 'p1'))('decision', 'Mongo secret migration plan', 'private reasoning', ['m2']);
+    const dana = await pubAt('person', 'Dana');
+    const storage = await pubAt('topic', 'Storage');
+    // Public, but linked only from the private decision: an outsider must not reach it through that hop.
+    const hidden = await pubAt('topic', 'Hidden path');
+    const docs = await pubAt('topic', 'Docs hub');
+    const edge = (kind: string, from: typeof pub, to: typeof pub) => graph.upsertEdge({ workspaceId: ws, kind, from, to });
+    await edge('supersedes', priv, pub);
+    await edge('involves', pub, dana);
+    await edge('about', dana, storage);
+    await edge('about', priv, hidden);
+    await edge('about', docs, storage);
+    for (let i = 0; i < 35; i++) await edge('about', docs, await pubAt('doc', `Doc ${i}`));
+    await graph.upsertNode({ workspaceId: other.workspace.id, conversationId: channelKey(other.channel.id), kind: 'decision', title: 'Mongo elsewhere' });
+    ids = { pub: pub.id, priv: priv.id, dana: dana.id, storage: storage.id, hidden: hidden.id, docs: docs.id };
+  });
+
+  afterAll(async () => {
+    await new Promise((r) => app?.server.close(r));
+  });
+
+  it('entries: newest first with per-kind counts, and an unreadable conversation is never listed or counted', async () => {
+    const mine = await app.get(tokens.member, '/graph/entries?limit=100');
+    expect(mine.status).toBe(200);
+    expect(mine.body.counts).toEqual({ decision: 2, person: 1, topic: 3, doc: 35 });
+    expect(mine.body.entries[0].title).toBe('Doc 34');
+    expect(mine.body.entries.map((e: any) => e.title)).toContain('Mongo secret migration plan');
+    const out = await app.get(tokens.outsider, '/graph/entries?limit=100');
+    expect(out.body.counts).toEqual({ decision: 1, person: 1, topic: 3, doc: 35 });
+    expect(out.body.entries).toHaveLength(40);
+    expect(JSON.stringify(out.body)).not.toContain('private');
+    expect(JSON.stringify(out.body)).not.toContain('secret');
+    expect((await app.get(tokens.elsewhere, '/graph/entries')).body.entries.map((e: any) => e.title)).toEqual(['Mongo elsewhere']);
+    expect((await app.get(tokens.outsider, `/graph/entries?channel=${privateChannel}`)).status).toBe(404);
+  });
+
+  it('entries: kind filter, channel scope and cursor paging', async () => {
+    const decisions = await app.get(tokens.member, '/graph/entries?kind=decision');
+    expect(titlesOf(decisions.body.entries)).toEqual(['Mongo secret migration plan', 'Use Mongo for storage']);
+    expect(decisions.body.entries.find((e: any) => e.id === ids.priv).sources).toEqual([{ channelId: privateChannel, thread: 'p1', messageIds: ['m2'] }]);
+    expect(decisions.body.entries.find((e: any) => e.id === ids.pub)).toMatchObject({ kind: 'decision', summary: 'public reasoning', sources: [{ channelId: channel, messageIds: ['m1'] }] });
+    expect(titlesOf((await app.get(tokens.member, `/graph/entries?channel=${privateChannel}`)).body.entries)).toEqual(['Mongo secret migration plan']);
+    const p1 = await app.get(tokens.member, '/graph/entries?kind=doc&limit=20');
+    expect(p1.body.entries).toHaveLength(20);
+    expect(p1.body.nextCursor).toBe('20');
+    const p2 = await app.get(tokens.member, `/graph/entries?kind=doc&limit=20&cursor=${p1.body.nextCursor}`);
+    expect(p2.body.entries).toHaveLength(15);
+    expect(p2.body.nextCursor).toBeNull();
+    expect(new Set([...p1.body.entries, ...p2.body.entries].map((e: any) => e.id)).size).toBe(35);
+    expect((await app.get(tokens.member, '/graph/entries?kind=nope')).status).toBe(400);
+    expect((await app.get(tokens.member, '/graph/entries?cursor=-1')).status).toBe(400);
+  });
+
+  it('entries: q searches every kind (or one), only where the caller can read', async () => {
+    expect(titlesOf((await app.get(tokens.member, '/graph/entries?q=mongo')).body.entries)).toEqual(['Mongo secret migration plan', 'Use Mongo for storage']);
+    expect(titlesOf((await app.get(tokens.outsider, '/graph/entries?q=mongo')).body.entries)).toEqual(['Use Mongo for storage']);
+    expect(titlesOf((await app.get(tokens.member, '/graph/entries?q=dana')).body.entries)).toEqual(['Dana']);
+    expect((await app.get(tokens.member, '/graph/entries?q=dana&kind=topic')).body.entries).toEqual([]);
+  });
+
+  it('node: summary, sources and neighbours by relation; unreadable or unknown is 404', async () => {
+    const mine = await app.get(tokens.member, `/graph/node/${ids.pub}`);
+    expect(mine.status).toBe(200);
+    expect(mine.body.node).toMatchObject({ id: ids.pub, title: 'Use Mongo for storage', summary: 'public reasoning' });
+    expect(mine.body.neighbours.supersedes).toEqual([{ id: ids.priv, direction: 'in' }]);
+    expect(mine.body.neighbours.involves).toEqual([{ id: ids.dana, direction: 'out' }]);
+    const out = await app.get(tokens.outsider, `/graph/node/${ids.pub}`);
+    expect(out.body.neighbours.supersedes).toBeUndefined();
+    expect(JSON.stringify(out.body)).not.toContain(ids.priv);
+    for (const id of [ids.priv, 'no-such-node']) {
+      const res = await app.get(tokens.outsider, `/graph/node/${id}`);
+      expect(res.status).toBe(404);
+      expect(JSON.stringify(res.body)).not.toContain('private reasoning');
+    }
+    expect((await app.get(tokens.elsewhere, `/graph/node/${ids.pub}`)).status).toBe(404);
+    expect((await app.get(tokens.member, `/graph/node/${ids.pub}?depth=3`)).status).toBe(400);
+  });
+
+  it('node depth 2: reaches neighbours of neighbours through readable hops only, 30 entries at most', async () => {
+    const mine = await app.get(tokens.member, `/graph/node/${ids.pub}?depth=2`);
+    const reached = mine.body.nodes.map((n: any) => n.id);
+    expect(reached.sort()).toEqual([ids.priv, ids.dana, ids.storage, ids.hidden].sort());
+    const kept = new Set([ids.pub, ...reached]);
+    expect(mine.body.edges.every((e: any) => kept.has(e.from) && kept.has(e.to))).toBe(true);
+    const out = await app.get(tokens.outsider, `/graph/node/${ids.pub}?depth=2`);
+    const seen = JSON.stringify(out.body);
+    expect(out.body.nodes.map((n: any) => n.id)).toContain(ids.storage);
+    expect(seen).not.toContain(ids.priv);
+    expect(seen).not.toContain(ids.hidden);
+    for (const depth of [1, 2]) {
+      const big = await app.get(tokens.member, `/graph/node/${ids.docs}?depth=${depth}`);
+      expect(big.body.nodes).toHaveLength(29);
+      const capped = new Set([ids.docs, ...big.body.nodes.map((n: any) => n.id)]);
+      expect(big.body.edges.every((e: any) => capped.has(e.from) && capped.has(e.to))).toBe(true);
+    }
+  });
+
+  it('needs a token; graph off is an empty list and a 404 node', async () => {
+    expect((await app.get(undefined, '/graph/entries')).status).toBe(401);
+    expect((await app.get(undefined, `/graph/node/${ids.pub}`)).status).toBe(401);
+    const off = await serve({ ...testConfig(), contextGraphEnabled: false });
+    try {
+      const w = await crew(off.hub.registry, 'graph-ex-off', []);
+      const { token } = await off.hub.registry.createBot(w.owner, { name: 'graph-ex-off-bot' });
+      expect(await off.get(token, '/graph/entries?q=mongo')).toEqual({ status: 200, body: { entries: [], counts: {}, nextCursor: null } });
+      expect((await off.get(token, '/graph/node/x')).status).toBe(404);
+    } finally {
+      await new Promise((r) => off.server.close(r));
+    }
+  });
+});

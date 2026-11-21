@@ -15,7 +15,7 @@ export interface GraphScope {
 }
 
 /** A node or edge as the agent tools read it. */
-export type GraphNodeDoc = { _id: string; workspaceId: string; conversationId: string; kind: GraphNodeKind; title: string; text?: string; canonicalId?: string };
+export type GraphNodeDoc = { _id: string; workspaceId: string; conversationId: string; kind: GraphNodeKind; title: string; text?: string; canonicalId?: string; sourceMessageIds?: string[] };
 export type GraphEdgeDoc = { _id: string; workspaceId: string; kind: string; from: string; to: string; fromConversationId: string; toConversationId: string };
 
 export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -207,9 +207,21 @@ export class GraphStore {
   }
 
   /** Nodes in `workspaceIds` matching `filter`. Unchecked: show them only through graph/acl.ts. */
-  async nodes(workspaceIds: string[], filter: Record<string, unknown>, limit: number): Promise<GraphNodeDoc[]> {
+  async nodes(workspaceIds: string[], filter: Record<string, unknown>, limit: number, page: { newestFirst?: boolean; skip?: number } = {}): Promise<GraphNodeDoc[]> {
     if (!this.options.enabled) return [];
-    return this.db.execute(() => this.db.mongoDb.collection<GraphNodeDoc>(NODES).find({ ...filter, workspaceId: { $in: workspaceIds } }, { projection: { _id: 1, workspaceId: 1, conversationId: 1, kind: 1, title: 1, text: 1, canonicalId: 1 } }).sort({ _id: 1 }).limit(limit).toArray());
+    return this.db.execute(() => this.db.mongoDb.collection<GraphNodeDoc>(NODES).find({ ...filter, workspaceId: { $in: workspaceIds } }, { projection: { _id: 1, workspaceId: 1, conversationId: 1, kind: 1, title: 1, text: 1, canonicalId: 1, sourceMessageIds: 1 } })
+      .sort(page.newestFirst ? { updatedAt: -1, _id: 1 } : { _id: 1 }).skip(page.skip ?? 0).limit(limit).toArray());
+  }
+
+  /** How many entries (a canonical group counts once) of each kind match `filter` in `workspaceIds`. Unchecked: pass a filter no wider than the caller's ACL. */
+  async countByKind(workspaceIds: string[], filter: Record<string, unknown>): Promise<Record<string, number>> {
+    if (!this.options.enabled) return {};
+    const rows = await this.db.execute(() => this.db.mongoDb.collection<GraphNodeDoc>(NODES).aggregate<{ _id: string; n: number }>([
+      { $match: { ...filter, workspaceId: { $in: workspaceIds } } },
+      { $group: { _id: { kind: '$kind', entry: { $ifNull: ['$canonicalId', '$_id'] } } } },
+      { $group: { _id: '$_id.kind', n: { $sum: 1 } } },
+    ]).toArray());
+    return Object.fromEntries(rows.map((r) => [r._id, r.n]));
   }
 
   /** Edges in `workspaceIds` touching any of `ids` (and matching `filter`). Unchecked: show them only through graph/acl.ts. */

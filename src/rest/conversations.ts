@@ -6,7 +6,8 @@ import { HubError } from '../lib/errors.js';
 import { agentView, channelView, messageView, workspaceView } from '../lib/present.js';
 import { seal, unseal } from '../lib/sealing.js';
 import { fileView } from '../files/files.js';
-import { channelDecisions, findDecisions, relatedEntries, webNodeView } from '../graph/queries.js';
+import { channelDecisions, findDecisions, GRAPH_KINDS, listEntries, nodeDetails, relatedEntries, webNodeView } from '../graph/queries.js';
+import type { GraphNodeKind } from '../graph/store.js';
 import { json, limitOf, pageView, publicMessageView, publicPeople, scheduleView, seqOf, str, webhookView } from './helpers.js';
 import { type AgentRecord, isOpenChannel, isPublicWorkspace } from '../registry/types.js';
 
@@ -375,6 +376,36 @@ export function conversationsRoutes(router: Router, hub: HubService, stream: { s
       if (!channel || !thread) throw new HubError('invalid', 'Give a channel and a thread.');
       const { nodes } = await relatedEntries(hub, agentOf(req)!, { channel, thread, kinds: ['decision'] });
       return { decisions: nodes.map(webNodeView) };
+    }),
+  );
+
+  /**
+   * The graph explorer's list: entries of every kind (or `kind`) in conversations you can read (or one `channel` of yours),
+   * newest first, or best match first for `q` (2+ characters). `limit` ≤ 100; `cursor` is the last page's `nextCursor`.
+   * `counts` is entries per kind in the same scope, ignoring `kind` and `q`. Empty when the graph is off.
+   */
+  router.get(
+    '/graph/entries',
+    requireAgent,
+    json(async (req) => {
+      const kind = str(req.query.kind);
+      if (kind && !GRAPH_KINDS.includes(kind as GraphNodeKind)) throw new HubError('invalid', `kind must be one of ${GRAPH_KINDS.join(', ')}.`);
+      const cursor = str(req.query.cursor);
+      if (cursor !== undefined && !/^\d{1,9}$/.test(cursor)) throw new HubError('invalid', 'Bad cursor.');
+      const q = (str(req.query.q) ?? '').trim().slice(0, 500);
+      const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 50, 1), 100);
+      return listEntries(hub, agentOf(req)!, { channel: str(req.query.channel), kind: kind as GraphNodeKind | undefined, q: q.length >= 2 ? q : undefined, limit, cursor: cursor ? Number(cursor) : undefined });
+    }),
+  );
+
+  /** One graph entry you can read, with its neighbours by relation; `depth=2` adds theirs (30 entries at most). 404 if you can't read it. */
+  router.get(
+    '/graph/node/:id',
+    requireAgent,
+    json(async (req) => {
+      const depth = str(req.query.depth) ?? '1';
+      if (depth !== '1' && depth !== '2') throw new HubError('invalid', 'depth must be 1 or 2.');
+      return nodeDetails(hub, agentOf(req)!, String(req.params.id), depth === '2' ? 2 : 1);
     }),
   );
 
