@@ -31,12 +31,12 @@ export const findDecisions = (hub: HubService, caller: AgentRecord, query: strin
   searchEntries(hub, caller, query, { ...opts, kind: 'decision' });
 
 /** Entries (of `kind`, or any) matching `query` in the conversations the caller can read (or one channel of theirs), best match first. */
-export async function searchEntries(hub: HubService, caller: AgentRecord, query: string, opts: { channel?: string; workspaceId?: string; limit?: number; kind?: GraphNodeKind } = {}): Promise<MergedNode[]> {
+export async function searchEntries(hub: HubService, caller: AgentRecord, query: string, opts: { channel?: string; thread?: string; workspaceId?: string; limit?: number; kind?: GraphNodeKind } = {}): Promise<MergedNode[]> {
   const { graph, graphSearch: search } = hub;
   if (!graph || !search) return [];
   const ch = opts.channel ? await hub.registry.resolveMemberChannel(caller, opts.channel) : undefined;
   // Entries in the caller's channels are filtered in the query, so other matches can't crowd them out of the pool.
-  const scopes = ch ? [{ workspaceId: ch.workspaceId, channelId: ch.id }] : (opts.workspaceId ? [opts.workspaceId] : caller.workspaces).map((workspaceId) => ({ workspaceId, channelIds: caller.channels ?? [] }));
+  const scopes = ch ? [{ workspaceId: ch.workspaceId, ...(opts.thread ? { conversationId: threadKey(ch.id, opts.thread) } : { channelId: ch.id }) }] : (opts.workspaceId ? [opts.workspaceId] : caller.workspaces).map((workspaceId) => ({ workspaceId, channelIds: caller.channels ?? [] }));
   const results = await Promise.all(scopes.map((s) => search(s, query, { limit: SEARCH_POOL, kind: opts.kind })));
   // Only ids and scores from the hits: their titles and text are unchecked.
   const score = new Map(results.flatMap((r) => r.hits).filter((h) => !opts.kind || h.kind === opts.kind).map((h) => [h.nodeId, h.score]));
@@ -118,7 +118,8 @@ export type ExplorerNode = ReturnType<typeof explorerNodeView>;
  * The caller's readable entries (of `kind`, in `channel` or one `workspace` of theirs), newest first, or best match first with `q`, and how many of each kind there are.
  * `cursor` is an offset; search has no next page.
  */
-export async function listEntries(hub: HubService, caller: AgentRecord, args: { channel?: string; workspace?: string; kind?: GraphNodeKind; q?: string; limit: number; cursor?: number }) {
+export async function listEntries(hub: HubService, caller: AgentRecord, args: { channel?: string; thread?: string; workspace?: string; kind?: GraphNodeKind; q?: string; limit: number; cursor?: number }) {
+  if (args.thread && !args.channel) throw new HubError('invalid', 'A thread needs a channel.');
   const graph = hub.graph;
   if (!graph) return { entries: [], counts: {}, nextCursor: null };
   const ch = args.channel ? await hub.registry.resolveMemberChannel(caller, args.channel) : undefined;
@@ -126,9 +127,9 @@ export async function listEntries(hub: HubService, caller: AgentRecord, args: { 
   if (ch && ws && ch.workspaceId !== ws) throw new HubError('not_found', 'No such channel in that workspace.');
   const workspaces = ch ? [ch.workspaceId] : ws ? [ws] : caller.workspaces;
   // Channel and thread conversations of the caller's channels: what the ACL lets them read, minus DMs and skills.
-  const scope = { conversationId: ch ? conversationFilter({ workspaceId: ch.workspaceId, channelId: ch.id }) : readableFilter(caller) };
+  const scope = { conversationId: ch ? args.thread ? threadKey(ch.id, args.thread) : conversationFilter({ workspaceId: ch.workspaceId, channelId: ch.id }) : readableFilter(caller) };
   const counts = await graph.countByKind(workspaces, scope);
-  if (args.q) return { entries: (await searchEntries(hub, caller, args.q, { channel: args.channel, workspaceId: ws, kind: args.kind, limit: args.limit })).map(explorerNodeView), counts, nextCursor: null };
+  if (args.q) return { entries: (await searchEntries(hub, caller, args.q, { channel: args.channel, thread: args.thread, workspaceId: ws, kind: args.kind, limit: args.limit })).map(explorerNodeView), counts, nextCursor: null };
   const skip = args.cursor ?? 0;
   // ponytail: offset paging, so a node updated between pages can repeat or be skipped; keyset on (updatedAt, _id) if that shows.
   const page = await graph.nodes(workspaces, { ...scope, ...(args.kind ? { kind: args.kind } : {}) }, args.limit, { newestFirst: true, skip });

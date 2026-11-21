@@ -248,6 +248,60 @@ describe('graph explorer routes', () => {
     expect((await app.get(tokens.member, `/graph/node/${ids.pub}?depth=3`)).status).toBe(400);
   });
 
+  it('thread entries: all kinds sourced here, across pages, excluding connected entries elsewhere', async () => {
+    const graph = app.hub.graph as GraphStore;
+    const workspaceId = (await app.get(tokens.member, `/graph/node/${ids.priv}`)).body.node.workspaceId;
+    const conversationId = threadKey(privateChannel, 'scope-test');
+    const here = [];
+    for (const kind of ['decision', 'person', 'topic', 'doc'] as const) {
+      here.push((await graph.upsertNode({ workspaceId, conversationId, kind, title: `Threadscope ${kind}` }))!);
+    }
+    await graph.upsertNode({ workspaceId, conversationId: threadKey(privateChannel, 'other-thread'), kind: 'doc', title: 'Threadscope elsewhere' });
+    await graph.upsertEdge({ workspaceId, kind: 'about', from: { id: here[0]!, conversationId }, to: { id: ids.pub, conversationId: channelKey(channel) } });
+    const path = `/graph/entries?channel=${privateChannel}&thread=scope-test`;
+    const entries: { id: string }[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = await app.get(tokens.member, `${path}&limit=2${cursor ? `&cursor=${cursor}` : ''}`);
+      expect(page.status).toBe(200);
+      expect(page.body.counts).toEqual({ decision: 1, person: 1, topic: 1, doc: 1 });
+      entries.push(...page.body.entries);
+      cursor = page.body.nextCursor;
+    } while (cursor);
+    expect(entries.map((e) => e.id).sort()).toEqual(here.sort());
+    expect(titlesOf((await app.get(tokens.member, `${path}&q=Threadscope`)).body.entries)).toEqual(['Threadscope decision', 'Threadscope doc', 'Threadscope person', 'Threadscope topic']);
+    expect(titlesOf((await app.get(tokens.member, `${path}&kind=doc`)).body.entries)).toEqual(['Threadscope doc']);
+    expect((await app.get(tokens.member, `/graph/entries?channel=${privateChannel}&thread=empty`)).body.entries).toEqual([]);
+    for (const token of [tokens.outsider, tokens.elsewhere]) {
+      expect((await app.get(token, path)).status).toBe(404);
+      expect((await app.get(token, `${path}&q=Threadscope`)).status).toBe(404);
+    }
+    expect((await app.get(undefined, path)).status).toBe(401);
+    expect((await app.get(tokens.member, '/graph/entries?thread=scope-test')).status).toBe(400);
+    await graph.purgeGraphFor({ workspaceId, conversationId });
+    await graph.purgeGraphFor({ workspaceId, conversationId: threadKey(privateChannel, 'other-thread') });
+  });
+
+  it('thread counts include every canonical entry even when only one row is fetched', async () => {
+    const graph = app.hub.graph as GraphStore;
+    const workspaceId = (await app.get(tokens.member, `/graph/node/${ids.priv}`)).body.node.workspaceId;
+    const conversationId = threadKey(privateChannel, 'count-test');
+    try {
+      for (const title of ['Storage migration', 'Migration storage']) {
+        await graph.upsertNode({ workspaceId, conversationId, kind: 'topic', title });
+      }
+      await graph.upsertNode({ workspaceId, conversationId, kind: 'doc', title: 'Count test reference' });
+      const page = await app.get(tokens.member, `/graph/entries?workspace=${workspaceId}&channel=${privateChannel}&thread=count-test&limit=1`);
+      expect(page.status).toBe(200);
+      expect(page.body.entries).toHaveLength(1);
+      expect(page.body.nextCursor).not.toBeNull();
+      expect(page.body.counts).toEqual({ topic: 1, doc: 1 });
+      expect(Object.values(page.body.counts).reduce((sum: number, n) => sum + Number(n), 0)).toBe(2);
+    } finally {
+      await graph.purgeGraphFor({ workspaceId, conversationId });
+    }
+  });
+
   it('node depth 2: reaches neighbours of neighbours through readable hops only, 30 entries at most', async () => {
     const mine = await app.get(tokens.member, `/graph/node/${ids.pub}?depth=2`);
     const reached = mine.body.nodes.map((n: any) => n.id);

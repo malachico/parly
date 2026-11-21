@@ -13,7 +13,7 @@ import { LIVE_REFRESH_EVENT } from '@/components/LiveRefresh';
 import { MarkRead, THREAD_READ_EVENT } from '@/components/MarkRead';
 import { PanelSkeleton } from '@/components/PanelSkeleton';
 import { JumpToLatest, LoadOlder, ScrollToBottom } from '@/components/ScrollToBottom';
-import { RelatedDecisions } from '@/components/Decisions';
+import { ThreadRelatedKnowledge } from '@/components/ChannelKnowledge';
 import { ThreadView } from '@/components/Thread';
 import { ThreadHeader } from '@/components/ThreadHeader';
 import { ErrorNote } from '@/components/ui';
@@ -399,7 +399,7 @@ export function ChannelShell({
               )
             }
           />
-          <RelatedDecisions channelId={channel.id} thread={postId} />
+          <ThreadRelatedKnowledge key={postId} ws={ws} channelId={channel.id} thread={postId} />
           <div id="outbox-thread" />
           <JumpToLatest target="thread-pane-scroll" />
         </div>

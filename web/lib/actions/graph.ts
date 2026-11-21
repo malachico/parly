@@ -16,7 +16,7 @@ export type GraphEntry = {
   sources: { channelId: string; thread?: string; messageIds: string[] }[];
 };
 
-export type GraphEntries = { entries: GraphEntry[]; counts: Partial<Record<GraphKind, number>>; nextCursor: string | null };
+export type GraphEntries = { entries: GraphEntry[]; counts: Partial<Record<GraphKind, number>>; nextCursor: string | null; error?: true };
 
 export type GraphNodeDetails = {
   node: GraphEntry;
@@ -27,11 +27,17 @@ export type GraphNodeDetails = {
   edges: { kind: string; from: string; to: string }[];
 };
 
-/** The explorer's list in workspace `ws`: newest first, or matching `q`; empty when the hub can't answer. */
-export async function listGraphEntries(ws: string, opts: { channel?: string; kind?: GraphKind; q?: string; limit?: number; cursor?: string } = {}): Promise<GraphEntries> {
+/** The explorer's list in workspace `ws`: newest first, or matching `q`; failed loads carry `error`. */
+export async function listGraphEntries(ws: string, opts: { channel?: string; thread?: string; kind?: GraphKind; q?: string; limit?: number; cursor?: string } = {}): Promise<GraphEntries> {
   const params = new URLSearchParams({ workspace: ws });
   for (const [k, v] of Object.entries(opts)) if (v !== undefined && v !== '') params.set(k, String(v));
-  return hub<GraphEntries>(`/graph/entries?${params}`).catch(() => ({ entries: [], counts: {}, nextCursor: null }));
+  return hub<GraphEntries>(`/graph/entries?${params}`).catch(() => ({ entries: [], counts: {}, nextCursor: null, error: true }));
+}
+
+/** Counts already cover all canonical groups in this thread; only fetch the entry to open. */
+export async function threadGraphSummary(ws: string, channel: string, thread: string): Promise<{ count: number; entry?: string } | null> {
+  const page = await listGraphEntries(ws, { channel, thread, limit: 1 });
+  return page.error ? null : { count: Object.values(page.counts).reduce((sum, n) => sum + n, 0), entry: page.entries[0]?.id };
 }
 
 /** One entry with its neighbours (`depth` 2: theirs too); null when it's missing or not yours to read. */

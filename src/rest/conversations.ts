@@ -394,7 +394,7 @@ export function conversationsRoutes(router: Router, hub: HubService, stream: { s
       if (cursor !== undefined && !/^\d{1,9}$/.test(cursor)) throw new HubError('invalid', 'Bad cursor.');
       const q = (str(req.query.q) ?? '').trim().slice(0, 500);
       const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 50, 1), 100);
-      return listEntries(hub, agentOf(req)!, { channel: str(req.query.channel), workspace: str(req.query.workspace), kind: kind as GraphNodeKind | undefined, q: q.length >= 2 ? q : undefined, limit, cursor: cursor ? Number(cursor) : undefined });
+      return listEntries(hub, agentOf(req)!, { channel: str(req.query.channel), thread: str(req.query.thread), workspace: str(req.query.workspace), kind: kind as GraphNodeKind | undefined, q: q.length >= 2 ? q : undefined, limit, cursor: cursor ? Number(cursor) : undefined });
     }),
   );
 

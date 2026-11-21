@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
-import { decisionHref } from '@/components/Decisions';
 import { Dialog } from '@/components/Modal';
-import { channelMemberCounts, searchDecisions, searchDirectory, searchMessages, type Decision, type DirectoryEntry, type MessageHit } from '@/lib/actions';
+import { channelMemberCounts, searchDirectory, searchMessages, type DirectoryEntry, type MessageHit } from '@/lib/actions';
+import { type GraphEntry, listGraphEntries } from '@/lib/actions/graph';
 import { shortTime } from '@/lib/labels';
-import { agentHref, channelHref, chatHref, dmHref } from '@/lib/routes';
+import { agentHref, channelHref, chatHref, dmHref, knowledgeHref } from '@/lib/routes';
 import { plural } from '@/lib/plural';
 
 type Show = 'everyone' | 'agents' | 'people' | 'messages';
@@ -48,7 +48,7 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
   const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [hits, setHits] = useState<MessageHit[]>([]);
-  const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [entries, setEntries] = useState<GraphEntry[]>([]);
   const latest = useRef(0);
 
   // Each time it opens, start from the query in the URL (the rail passes what you typed there).
@@ -63,12 +63,13 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
   }, [open, workspaceId]);
 
   useEffect(() => {
-    if (!open) return;
     const id = ++latest.current;
+    setEntries([]);
+    if (!open) return;
     const t = setTimeout(async () => {
       const pending = Promise.all([searchDirectory(query), searchMessages(query)]);
-      // Decisions show only on the message tabs; each search spends embedding budget, so skip it elsewhere.
-      if (show === 'messages' || show === 'everyone') void searchDecisions(query).then((d) => id === latest.current && setDecisions(d));
+      // Each graph search spends embedding budget; only search from two characters on the message tabs.
+      if ((show === 'messages' || show === 'everyone') && query.trim().length >= 2) void listGraphEntries(workspaceId, { q: query.trim() }).then((d) => id === latest.current && setEntries(d.entries)).catch(() => id === latest.current && setEntries([]));
       const [res, found] = await pending;
       if (id !== latest.current) return;
       setHits(found);
@@ -78,7 +79,7 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
       } else setError(res.error);
     }, 200);
     return () => clearTimeout(t);
-  }, [open, query, show]);
+  }, [open, query, show, workspaceId]);
 
   const close = () => router.replace(href('find', undefined), { scroll: false });
   const q = query.trim().toLowerCase();
@@ -87,7 +88,7 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
     show === 'messages' ? [] : (agents ?? []).filter((a) => (show === 'agents' ? a.kind !== 'human' : show === 'people' ? a.kind === 'human' : true));
 
   return (
-    <Dialog open={open} onClose={close} title="Find people, channels and messages" wide>
+    <Dialog open={open} onClose={close} title="Find people, channels, messages and knowledge" wide>
       <div className="flex flex-col gap-2.5">
         <label htmlFor="find-q" className="sr-only">
           Search
@@ -167,15 +168,16 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
             )}
           </section>
         )}
-        {(show === 'messages' || show === 'everyone') && q.length >= 2 && decisions.length > 0 && (
+        {(show === 'messages' || show === 'everyone') && q.length >= 2 && entries.length > 0 && (
           <section className="pt-3">
-            <h3 className="label pb-1.5">Decisions</h3>
+            <h3 className="label pb-1.5">Knowledge</h3>
             <ul className="flex flex-col gap-px">
-              {decisions.map((d) => (
+              {entries.map((d) => (
                 <li key={d.id}>
-                  <Link href={decisionHref(d)} className="flex min-w-0 flex-col rounded-lg px-2 py-2 hover:bg-[var(--subtle)]">
-                    <span className="break-words text-sm">{d.title || 'Untitled decision'}</span>
-                    {d.sources[0]?.text && <span className="truncate text-sm text-[var(--muted)]">{d.sources[0].text}</span>}
+                  <Link href={knowledgeHref(d.workspaceId, { entry: d.id })} scroll={false} className="flex min-w-0 flex-col rounded-lg px-2 py-2 hover:bg-[var(--subtle)]">
+                    <span className="break-words text-sm">{d.title}</span>
+                    <span className="text-xs text-[var(--muted)]">{d.kind}</span>
+                    {d.summary && <span className="truncate text-sm text-[var(--muted)]">{d.summary}</span>}
                   </Link>
                 </li>
               ))}

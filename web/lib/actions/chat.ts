@@ -95,28 +95,6 @@ export async function searchMessages(q: string): Promise<MessageHit[]> {
   return hub<MessageHit[]>(`/search?${new URLSearchParams({ q: q.trim(), limit: '20' })}`).catch(() => []);
 }
 
-/** A context-graph decision, with where each copy of it was recorded (a chat key, and the thread if any). */
-export type Decision = { id: string; workspaceId: string; title?: string; sources: { key: string; thread?: string; text?: string }[] };
-const decisions = (qs: Record<string, string>) => hub<{ decisions: Decision[] }>(`/decisions?${new URLSearchParams(qs)}`).then((r) => r.decisions);
-
-/** Decisions matching `q` in what I can read. Fewer than 2 characters: none. */
-export async function searchDecisions(q: string): Promise<Decision[]> {
-  if (q.trim().length < 2) return [];
-  return decisions({ q: q.trim() }).catch(() => []);
-}
-
-/** A channel's recent decisions; null when the hub can't be asked. */
-export async function channelDecisions(channelId: string): Promise<Decision[] | null> {
-  return decisions({ channel: channelId, limit: '20' }).catch(() => null);
-}
-
-/** Decisions recorded in a thread, and what the graph links them to. */
-export async function relatedDecisions(channelId: string, thread: string): Promise<Decision[]> {
-  return hub<{ decisions: Decision[] }>(`/decisions/related?${new URLSearchParams({ channel: channelId, thread })}`)
-    .then((r) => r.decisions)
-    .catch(() => []);
-}
-
 /**
  * Starts a browser upload. The hub answers with a signed URL locked to this size, type and MD5;
  * the browser PUTs the bytes straight to storage (they never pass through this server).
