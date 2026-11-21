@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Database } from '../db/types.js';
 import type { LlmMeter } from '../llm/llm.js';
+import type { GraphSource } from './sources.js';
 
 export type GraphNodeKind = 'decision' | 'person' | 'topic' | 'doc' | 'skill';
 
@@ -42,17 +43,17 @@ export class GraphStore {
     return this.options.enabled;
   }
 
-  /** Inserts or refreshes a node (keyed by `key`, default its title) and returns its id; undefined when disabled. */
-  async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[] }): Promise<string | undefined> {
+  /** Inserts or refreshes a node (keyed by `key`, default its title) and returns its id; undefined when disabled. `source` defaults to its conversation. */
+  async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[]; source?: GraphSource }): Promise<string | undefined> {
     if (!this.options.enabled) return undefined;
-    const { workspaceId, conversationId, kind, title, text } = node;
+    const { workspaceId, conversationId, kind, title, text, source = { kind: 'conversation', conversationId } } = node;
     const key = normalizeKey(node.key ?? title);
     const id = idOf(workspaceId, conversationId, kind, key);
     const now = new Date().toISOString();
     await this.db.execute(() => this.db.mongoDb.collection<{ _id: string }>(NODES).updateOne(
       { _id: id },
       {
-        $set: { title, ...(text !== undefined ? { text } : {}), updatedAt: now },
+        $set: { title, ...(text !== undefined ? { text } : {}), source, updatedAt: now },
         $setOnInsert: { workspaceId, conversationId, kind, key, createdAt: now },
         $addToSet: { sourceMessageIds: { $each: node.sourceMessageIds ?? [] } },
       },
@@ -104,6 +105,23 @@ export class GraphStore {
     const edges = conv === undefined ? { workspaceId } : { workspaceId, $or: [{ fromConversationId: conv }, { toConversationId: conv }] };
     const col = (name: string) => this.db.mongoDb.collection(name);
     await this.db.execute(() => Promise.all([col(NODES).deleteMany(own), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges)]));
+    // Channel-scoped skill nodes live under `skill:<id>`, not the channel's conversations.
+    if (scope.channelId !== undefined) await this.deleteNodes({ workspaceId, kind: 'skill', 'source.channelId': scope.channelId });
+  }
+
+  /** Deletes the nodes matching `filter`, their embeddings, and every edge touching them. */
+  async deleteNodes(filter: Record<string, unknown>): Promise<void> {
+    if (!this.options.enabled) return;
+    const col = (name: string) => this.db.mongoDb.collection<{ _id: string }>(name);
+    await this.db.execute(async () => {
+      const ids = (await col(NODES).find(filter, { projection: { _id: 1 } }).toArray()).map((n) => n._id);
+      if (ids.length === 0) return;
+      await Promise.all([
+        col(NODES).deleteMany({ _id: { $in: ids } }),
+        col(EMBEDDINGS).deleteMany({ nodeId: { $in: ids } }),
+        col(EDGES).deleteMany({ $or: [{ from: { $in: ids } }, { to: { $in: ids } }] }),
+      ]);
+    });
   }
 
   /**

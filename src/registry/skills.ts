@@ -109,6 +109,7 @@ export async function createSkill(
   if (resolvedScope) {
     await attachSkill(registry, owner, resolvedScope.kind, resolvedScope.id, skill.id);
   }
+  await registry.syncGraph?.({ skill });
   return skill;
 }
 
@@ -212,6 +213,7 @@ export async function updateSkill(
     return { record, patch, deleteFields };
   });
   if (!updated) throw new HubError('not_found', `No skill "${skillId}"`);
+  await registry.syncGraph?.({ skill: updated });
   return updated;
 }
 
@@ -223,6 +225,7 @@ export async function deleteSkill(registry: Registry, caller: AgentRecord, skill
   const skill = await requireSkill(registry, skillId);
   await requireSkillOwner(registry, caller, skill);
   await registry.skillStore.deleteSkillAndDetach(skill.id);
+  await registry.syncGraph?.({ deletedSkillId: skill.id });
   if (caller.attachedSkills?.includes(skill.id)) {
     caller.attachedSkills = caller.attachedSkills.filter((id) => id !== skill.id);
   }

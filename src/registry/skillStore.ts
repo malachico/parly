@@ -131,6 +131,15 @@ export class SkillStore {
     });
   }
 
+  /** Skills created for one workspace or channel (their `scope`). */
+  async listSkillsScopedTo(kind: 'workspace' | 'channel', id: string): Promise<SkillRecord[]> {
+    const snap = await this.skills.where('scope.kind', '==', kind).where('scope.id', '==', id).get();
+    return snap.docs.map((d) => {
+      const data = d.data() as SkillRecord;
+      return data.id ? data : { ...data, id: d.id };
+    });
+  }
+
   async listSkillsCoOwnedBy(ownerId: string): Promise<SkillRecord[]> {
     const snap = await this.skills.where('ownerIds', 'array-contains', ownerId).get();
     return snap.docs.map((d) => {

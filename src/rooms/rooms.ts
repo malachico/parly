@@ -279,6 +279,7 @@ export class Rooms {
     }
     const written = out.doc;
     this.onEvent?.(workspaceId, 'room.document_updated', { version: written.version });
+    await this.registry.syncGraph?.({ roomDoc: { workspaceId, sharedChannelId: room.shared, goal: room.goal, text: written.text } });
     return written;
   }
 

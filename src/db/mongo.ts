@@ -580,6 +580,8 @@ async function ensureIndexes(db: Db): Promise<void> {
     db.collection('messages').createIndex({ files: 1 }),
     // Context graph idempotency: one row per (workspace, conversation, kind, normalized key).
     ...['graph_nodes', 'graph_edges', 'graph_embeddings'].map((c) => db.collection(c).createIndex({ workspaceId: 1, conversationId: 1, kind: 1, key: 1 }, { unique: true })),
+    // Skill nodes by skill (update/delete sync).
+    db.collection('graph_nodes').createIndex({ 'source.skillId': 1 }),
   ]);
 }
 

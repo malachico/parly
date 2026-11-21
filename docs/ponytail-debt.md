@@ -117,6 +117,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - channel scope over-fetches 5x workspace-wide then filters, so a busy workspace can starve a quiet channel; store channelId on embeddings and pre-filter it when that bites.
 - scans the 500 most recent substring candidates in the workspace; add a text index when graphs outgrow that.
 
+## `src/graph/sources.ts`
+
+- unscoped and agent-scoped skills have no workspace to live in, so they get no node; add one when the graph reads skills across workspaces.
+
 ## `src/graph/store.ts`
 
 - soft cap (check, then record after the call), so concurrent extractions can overshoot by one call each; reserve-then-settle if that matters.
@@ -376,4 +380,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**130 markers, 33 with no trigger.**
+**131 markers, 33 with no trigger.**

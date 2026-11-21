@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import type { Database } from '../db/types.js';
+import type { GraphSourceChange } from '../graph/sources.js';
 import { BoundedMap } from '../lib/boundedMap.js';
 import { HubError } from '../lib/errors.js';
 import type { Plan } from '../lib/plans.js';
@@ -185,9 +186,12 @@ interface RegistryOptions {
   /**
    * Drops the context graph of an archived workspace or channel conversation. Must not throw (app.ts logs errors).
    * Archive is the only removal path: workspaces, channels and conversations have no hard delete, and DMs can't be
-   * removed at all. Restoring an archive does not bring the graph back; it fills again as messages are re-extracted.
+   * removed at all. Restoring an archive does not bring messages' nodes back; they fill again as messages are re-extracted.
+   * A restored channel's skills and room doc come back through syncGraph.
    */
   purgeGraph?: (scope: { workspaceId: string; conversationId?: string; channelId?: string }) => Promise<void>;
+  /** Mirrors a room document or skill write into the context graph (the registry logs a failure, never fails the write). */
+  syncGraph?: (change: GraphSourceChange) => Promise<void>;
   /** An agent joined a channel that may already have messages (the chat starts its cursor at the end). */
   onJoinChannel?: (agentId: string, channelId: string) => Promise<void>;
   /** Self-hosted email + password sign-in (PASSWORD_LOGIN=1); the installer's secret creates the first owner. */
@@ -225,6 +229,7 @@ export class Registry {
   onJoinChannel?: (agentId: string, channelId: string) => Promise<void>;
   readonly revokeTokens?: (agentIds: string[]) => Promise<void>;
   readonly purgeGraph?: RegistryOptions['purgeGraph'];
+  readonly syncGraph?: RegistryOptions['syncGraph'];
   readonly agentStore: AgentStore;
   readonly authStore: AuthStore;
   readonly channelStore: ChannelStore;
@@ -255,6 +260,8 @@ export class Registry {
     const purge = options.purgeGraph;
     // A failed purge must not fail the archive that triggered it.
     this.purgeGraph = purge && ((scope) => purge(scope).catch((err) => console.error('context graph purge failed', err)));
+    const sync = options.syncGraph;
+    this.syncGraph = sync && ((change) => sync(change).catch((err) => console.error('context graph sync failed', err)));
     this.onJoinChannel = options.onJoinChannel;
   }
 

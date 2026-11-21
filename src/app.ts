@@ -9,7 +9,9 @@ import { TelegramStore } from './telegram/store.js';
 import { AI_MARKUP, LlmMeter } from './llm/llm.js';
 import { graphExtractor } from './graph/extract.js';
 import { createGraphSearch } from './graph/search.js';
+import { syncGraphSource } from './graph/sources.js';
 import { GraphStore } from './graph/store.js';
+import { RoomStore } from './rooms/store.js';
 import { llmRouter } from './llm/router.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { Database } from './db/types.js';
@@ -115,7 +117,15 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     revokeTokens: (ids) => oauthTokens.revokeAgents(ids),
     // Archiving a workspace or channel drops its context graph (the registry logs a failed purge, never fails the archive).
     purgeGraph: (scope) => graph.purgeGraphFor(scope),
+    syncGraph: (change) => syncGraphSource(graph, graphReaders, change),
   });
+  const roomStore = new RoomStore(db);
+  const graphReaders = {
+    channelDoc: (id: string) => registry.channelDoc(id),
+    workspaceDoc: (id: string) => registry.workspaceDoc(id),
+    channelSkills: (id: string) => registry.skillStore.listSkillsScopedTo('channel', id),
+    roomDocument: (id: string) => roomStore.document(id),
+  };
   // A cloud agent's per-message breaker is in model cost (before AI_MARKUP): the turn cap in credits, converted.
   const turnCapMicros = config.agentTurnCreditCap ? Math.round((config.agentTurnCreditCap * CREDIT_MICROS) / AI_MARKUP) : TASK_BUDGET_MICROS;
   // Cloud agents (no computer) are answered by the hub itself; every other endpoint agent is called over A2A.

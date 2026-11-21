@@ -105,6 +105,8 @@ or obsolete variable names whenever hub source changes.
 
 With `CONTEXT_GRAPH_ENABLED` on and Vertex configured, marking a thread done queues a job on the push queue (`/internal/push`, same auth). The job asks the flash-lite model for the thread's decisions, people and topics, and replaces that thread's graph nodes and edges, so re-running a thread updates rather than duplicates. Each run checks `CONTEXT_GRAPH_DAILY_CAP_USD` first and meters its cost after; at the cap it logs and skips. Model 429s, 5xx and timeouts retry; other failures only log. Extraction never blocks marking a thread done. Search embeddings and the read-permission filter are separate; nothing user-facing reads the graph yet.
 
+The context graph also mirrors room documents (a `doc` node on the room's shared channel) and workspace- or channel-scoped skills (a `skill` node) as metadata only: title, a short excerpt, ids, no LLM call. Each node records a `source` (`conversation`, `room_doc` or `skill`); `canReadGraphSource` checks skill nodes with `canAccessSkill`. A deleted skill drops its node and edges. Archiving a channel drops its room doc and channel-scoped skill nodes; restoring it puts them back. Room side briefs are never added to the graph. Unscoped and agent-scoped skills get no node.
+
 ## Integrations and billing
 
 | Variable | Default | Purpose |
