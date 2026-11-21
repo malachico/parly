@@ -55,14 +55,47 @@ export function sameReaders(a: string, b: string, channel: Pick<ChannelRecord, '
   return !!channel && channel.publicFromSeq === undefined && !channel.publicThreads?.length;
 }
 
+/** The structured answer the extraction model must give. */
+export const GRAPH_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    decisions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { title: { type: 'STRING' }, text: { type: 'STRING' }, people: { type: 'ARRAY', items: { type: 'STRING' } }, topics: { type: 'ARRAY', items: { type: 'STRING' } }, replaces: { type: 'INTEGER' } },
+        required: ['title', 'text', 'people', 'topics'],
+      },
+    },
+  },
+  required: ['decisions'],
+};
+
+/** The extraction prompt for `messages`, offering `replaceable` (numbered from 1) as decisions a new one may replace. */
+export function graphPrompt(messages: Pick<MessageDoc, 'from' | 'parts'>[], replaceable: { title: string }[]): string {
+  return [
+    'Extract the decisions this team conversation reached. For each: a short "title", one sentence of "text" on what was decided and why,',
+    'the "people" (by the names shown) who made or own it, and up to three short lowercase "topics".',
+    'A decision is something the conversation agreed or someone with the say settled. Proposals, open questions, options still being weighed,',
+    'status updates and plans nobody agreed to are not decisions. A decision later reversed in the same conversation counts once, as its final form.',
+    'Only name people who appear as speakers or are named in the messages; never invent one. No decisions: an empty array.',
+    'Write in the conversation\'s language.',
+    ...(replaceable.length
+      ? ['', 'Earlier decisions in this channel, numbered. If a decision here changes or reverses one of them, set its "replaces" to that number. Do not repeat an earlier decision that is only mentioned again:', ...replaceable.map((c, i) => `${i + 1}. ${c.title}`)]
+      : []),
+    '',
+    ...messages.map((m) => `${m.from}: ${truncateMessageText(textOf(m))}`),
+  ].join('\n');
+}
+
 /** How many of the channel's newest decisions a run offers the model as replaceable. */
 const MAX_REPLACEABLE = 20;
 
-/** gemini-3.5-flash-lite, USD per million tokens. ponytail: hardcoded; move to config if the extraction model changes. */
 /** Cap deferrals: requeued up to MAX_DEFERRALS times, landing within DEFER_JITTER_MS after midnight UTC. */
 const MAX_DEFERRALS = 3;
 const DEFER_JITTER_MS = 3 * 3_600_000;
 
+/** gemini-3.5-flash-lite, USD per million tokens. ponytail: hardcoded; move to config if the extraction model changes. */
 const FLASH_LITE_PRICES: LlmPrices = { input: 0.1, output: 0.4 };
 
 /**
@@ -124,36 +157,7 @@ export function graphExtractor(deps: {
     // thread rerun's purge drops other conversations' supersedes edges into it; page candidates or keep those edges if that bites.
     const replaceable = (await graph.recentDecisions(workspaceId, key.channelId, MAX_REPLACEABLE))
       .filter((c) => !(key.kind === 'thread' && c.conversationId === conversationId) && sameReaders(conversationId, c.conversationId, channel));
-    const prompt = [
-      'Extract the decisions this team conversation reached. For each: a short "title", one sentence of "text" on what was decided and why,',
-      'the "people" (by the names shown) who made or own it, and up to three short "topics". No decisions: an empty array.',
-      'Write in the conversation\'s language.',
-      ...(replaceable.length
-        ? ['', 'Earlier decisions in this channel, numbered. If a decision here replaces one of them, set its "replaces" to that number:', ...replaceable.map((c, i) => `${i + 1}. ${c.title}`)]
-        : []),
-      '',
-      ...messages.map((m) => `${m.from}: ${truncateMessageText(textOf(m))}`),
-    ].join('\n');
-    const out = await generate({
-      ...llm,
-      prompt,
-      thinkingLevel: 'low',
-      timeoutMs: 30_000,
-      schema: {
-        type: 'OBJECT',
-        properties: {
-          decisions: {
-            type: 'ARRAY',
-            items: {
-              type: 'OBJECT',
-              properties: { title: { type: 'STRING' }, text: { type: 'STRING' }, people: { type: 'ARRAY', items: { type: 'STRING' } }, topics: { type: 'ARRAY', items: { type: 'STRING' } }, replaces: { type: 'INTEGER' } },
-              required: ['title', 'text', 'people', 'topics'],
-            },
-          },
-        },
-        required: ['decisions'],
-      },
-    });
+    const out = await generate({ ...llm, prompt: graphPrompt(messages, replaceable), thinkingLevel: 'low', timeoutMs: 30_000, schema: GRAPH_SCHEMA });
     if (out.usage) await graph.recordGraphSpend(workspaceId, costMicros(prices, out.usage));
     if (!out.ok) {
       const msg = `graph: ${llm.model} answered HTTP ${out.status} for ${conversationId}`;

@@ -56,6 +56,16 @@ Vertex calls reuse one GoogleAuth instance, which manages token expiry. Credenti
 project discovery is shared across calls; a failed discovery can retry on the next call.
 An explicitly configured project or test token still takes precedence.
 
+## Graph extraction quality
+
+`test/graphQuality.test.ts` scores the decision-extraction prompt against the hand-labelled
+cases in `test/fixtures/graph-quality.json`; the fixture's `_doc` says how a case passes. By
+default it only checks the fixture and the prompt. To call the model, sign in with
+`gcloud auth application-default login` and run
+`GRAPH_QUALITY=1 VERTEX_PROJECT=<project> npx vitest run --project pure test/graphQuality.test.ts`
+(`GRAPH_MODEL` overrides `gemini-3.5-flash-lite`). It fails below 80%. Run it after changing
+the prompt or the model, and add a case for each extraction bug you fix.
+
 ## Ponytail shortcuts
 
 Deliberate simplifications are marked in code with a `ponytail:` comment that names

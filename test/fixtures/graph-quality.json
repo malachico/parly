@@ -1,0 +1,58 @@
+{
+  "_doc": "Hand-labelled extraction cases for test/graphQuality.test.ts. Each expected decision matches a model decision whose title+text contains every word in `words` (any case); `people` must all be among its people; `replaces` is the 1-based earlier decision it must replace. A case passes when every expected decision matches and the model gives at most `expect.length + (extra ?? 0)` decisions.",
+  "cases": [
+    {
+      "name": "plain agreement",
+      "messages": [["Ana", "Should we ship the billing page Monday or wait a week?"], ["Bo", "QA signed off this morning, Monday works."], ["Ana", "Great, Monday it is. Bo owns the release."]],
+      "expect": [{ "words": ["monday"], "people": ["Bo"] }]
+    },
+    {
+      "name": "proposal only, no decision",
+      "messages": [["Ana", "What if we moved the standup to 10?"], ["Bo", "Maybe, let me check with the Berlin folks."], ["Ana", "Sure, no rush."]],
+      "expect": []
+    },
+    {
+      "name": "status update, no decision",
+      "messages": [["Cy", "Deploy finished, all green."], ["Dee", "Thanks! Error rate looks normal."]],
+      "expect": []
+    },
+    {
+      "name": "reversed in thread counts once",
+      "messages": [["Ana", "Let's use Postgres for the ledger."], ["Bo", "Agreed."], ["Cy", "Wait, ops only supports Mongo in prod now."], ["Ana", "Right, switching: the ledger goes in Mongo."], ["Bo", "Fine by me."]],
+      "expect": [{ "words": ["mongo", "ledger"] }]
+    },
+    {
+      "name": "two decisions",
+      "messages": [["Dee", "Two things for the launch: the price and the date."], ["Ana", "I say $12 a month."], ["Bo", "Agreed on $12."], ["Dee", "And the date?"], ["Ana", "December 3rd."], ["Dee", "OK: $12/month, launching December 3rd."]],
+      "expect": [{ "words": ["12"] }, { "words": ["december"] }],
+      "extra": 0
+    },
+    {
+      "name": "replaces an earlier decision",
+      "earlier": ["Release every two weeks", "Use Slack for incident alerts"],
+      "messages": [["Ana", "Biweekly releases keep slipping."], ["Bo", "Let's go weekly, every Tuesday."], ["Ana", "Agreed, weekly on Tuesdays from now on."]],
+      "expect": [{ "words": ["weekly"], "replaces": 1 }]
+    },
+    {
+      "name": "earlier decision only mentioned",
+      "earlier": ["Use Slack for incident alerts"],
+      "messages": [["Cy", "Reminder: incident alerts go to Slack, per our earlier call."], ["Dee", "Yep, thanks."]],
+      "expect": []
+    },
+    {
+      "name": "owner named but not speaking",
+      "messages": [["Ana", "Who takes the SOC 2 audit?"], ["Bo", "Let's give it to Priya, she ran the last one."], ["Ana", "Agreed, Priya owns SOC 2."]],
+      "expect": [{ "words": ["soc"], "people": ["Priya"] }]
+    },
+    {
+      "name": "Hebrew conversation",
+      "messages": [["דנה", "נעבור לגרסה החדשה של ה-API ביום ראשון?"], ["יוסי", "כן, הבדיקות עברו."], ["דנה", "סגור, עוברים ביום ראשון."]],
+      "expect": [{ "words": ["ראשון"] }]
+    },
+    {
+      "name": "noise around one decision",
+      "messages": [["Bo", "Lunch anyone?"], ["Cy", "Sure, 12:30."], ["Ana", "Back to work: we drop IE11 support in the next release."], ["Bo", "Finally. Agreed."], ["Cy", "Agreed."], ["Bo", "Also the coffee machine is broken again."]],
+      "expect": [{ "words": ["ie11"] }]
+    }
+  ]
+}
