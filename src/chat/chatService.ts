@@ -195,6 +195,8 @@ export class ChatService {
   catchup?: CatchupSummarizer;
   /** Per-user rate limiter for "Catch me up" LLM summarizations. */
   catchupLimiter?: RateLimiter;
+  /** Context graph: how long after a channel's last post to extract it; unset, channels are never extracted. */
+  graphChannelDelayMs?: number;
   /** THREAD_DIGEST: folds a thread's older replies into a rolling digest so wakes carry a recap, not the whole history. */
   fold?: ThreadDigestFolder;
 
@@ -309,6 +311,15 @@ export class ChatService {
       if (this.rooms) await this.rooms.afterPost(from, channel, workspace ?? undefined, stored.message);
       this.onPosted?.(stored.message);
       this.logPosted?.(stored.message);
+      // Context graph: each top-level channel post schedules a run after the quiet period; the run skips if a newer post came (debounce).
+      const { kind, workspaceId, id: conversationId } = stored.conversation;
+      const { seq } = stored.message;
+      if (this.graphChannelDelayMs !== undefined && kind === 'channel' && workspaceId) {
+        const job = { kind: 'graph' as const, workspaceId, conversationId, seq }, delay = this.graphChannelDelayMs;
+        void this.queue.enqueue(job, delay)
+          .catch(() => new Promise((ok) => setTimeout(ok, PUSH_RETRY_MS)).then(() => this.queue.enqueue(job, delay)))
+          .catch((err) => console.error(`graph job for ${conversationId}`, err));
+      }
       // THREAD_DIGEST: fold older replies in the background; reads never block on it, a failed fold retries next post.
       if (this.fold && stored.conversation.kind === 'thread' && !stored.conversation.doneAt) {
         void this.foldDigest(stored.conversation).catch((err) => console.error(`digest: fold failed for ${stored.conversation.id}`, err));

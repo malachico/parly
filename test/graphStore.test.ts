@@ -89,6 +89,16 @@ describe('GraphStore', () => {
     quiet.mockRestore();
   });
 
+  it('keeps a per-channel watermark that never rewinds and is purged with the channel', async () => {
+    const { graph } = setup();
+    expect(await graph.channelWatermark('w', 'channel:c')).toBe(0);
+    await graph.setChannelWatermark('w', 'channel:c', 9);
+    await graph.setChannelWatermark('w', 'channel:c', 5);
+    expect(await graph.channelWatermark('w', 'channel:c')).toBe(9);
+    await graph.purgeGraphFor({ workspaceId: 'w', channelId: 'c' });
+    expect(await graph.channelWatermark('w', 'channel:c')).toBe(0);
+  });
+
   it('enforces the daily cap through the meter', async () => {
     const { graph } = setup(1000);
     expect(await graph.canSpendOnGraph('w')).toBe(true);
@@ -109,7 +119,8 @@ describe('GraphStore', () => {
     let answer = answers[0];
     const run = graphExtractor({
       graph,
-      store: { message: async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?'), page: async () => [msg('r', 'Bo', 'agent-bo', 'Yes')] },
+      store: { message: async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?'), page: async () => [msg('r', 'Bo', 'agent-bo', 'Yes')], since: async () => [], conversation: async () => undefined },
+      registry: { channelDoc: async () => ({}), workspaceDoc: async () => ({}) },
       llm: {
         project: 'p',
         location: 'global',

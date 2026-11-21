@@ -1,5 +1,5 @@
 import { MAX_CATCHUP_MESSAGES, normalizeList, truncateMessageText } from '../chat/catchup.js';
-import { parseKey } from '../chat/chat.js';
+import { type MessageDoc, parseKey } from '../chat/chat.js';
 import type { GraphJob } from '../chat/queue.js';
 import type { ChatStore } from '../chat/store.js';
 import { type LlmPrices, costMicros } from '../lib/llmCost.js';
@@ -37,33 +37,57 @@ export function parseGraphExtraction(text: string): ExtractedDecision[] {
 const FLASH_LITE_PRICES: LlmPrices = { input: 0.1, output: 0.4 };
 
 /**
- * Builds the GraphJob runner: reads a done thread, asks the model for its decisions with the people and topics
- * behind them, and upserts them as nodes and edges sourced to the thread. Each run first purges the thread's
- * graph, so a rerun replaces rather than accumulates; ids are deterministic. Skips, with a log line, once the
+ * Builds the GraphJob runner: reads a done thread, or a quiet channel's messages since its watermark, asks the
+ * model for its decisions with the people and topics behind them, and upserts them as nodes and edges sourced to
+ * the conversation. A thread run first purges the thread's graph, so a rerun replaces rather than accumulates; ids
+ * are deterministic. A channel run never purges: it skips when a newer post scheduled a later run, and moves the
+ * channel's watermark only after its writes. Skips, with a log line, once the
  * workspace's daily cap is spent; throws (so the queue retries) only on 429, 5xx or a timeout.
  */
 export function graphExtractor(deps: {
   graph: GraphStore;
-  store: Pick<ChatStore, 'message' | 'page'>;
+  store: Pick<ChatStore, 'message' | 'page' | 'since' | 'conversation'>;
+  /** Channel runs skip archived (or deleted) channels and workspaces. */
+  registry: { channelDoc(id: string): Promise<{ archived?: boolean } | undefined>; workspaceDoc(id: string): Promise<{ archived?: boolean } | undefined> };
   llm: { project: string; location: string; model: string; accessToken?: () => Promise<string>; fetchImpl?: typeof fetch };
   prices?: LlmPrices;
+  /** Re-schedules a channel job the daily cap skipped. */
+  requeue?: (job: GraphJob, delayMs: number) => Promise<void>;
 }): (job: GraphJob) => Promise<void> {
-  const { graph, store, llm, prices = FLASH_LITE_PRICES } = deps;
-  return async ({ workspaceId, conversationId }) => {
+  const { graph, store, registry, llm, prices = FLASH_LITE_PRICES, requeue } = deps;
+  return async (job) => {
+    const { workspaceId, conversationId, seq } = job;
     if (!graph.enabled) return;
     const key = parseKey(conversationId);
-    if (key.kind !== 'thread') return;
+    if (key.kind === 'dm') return;
+    let messages: MessageDoc[] | undefined;
+    if (key.kind === 'channel') {
+      // Debounce: a newer post scheduled its own run, which will cover this one's messages.
+      if (seq !== undefined && ((await store.conversation(conversationId))?.seq ?? 0) > seq) return;
+      const [channel, workspace] = await Promise.all([registry.channelDoc(key.channelId), registry.workspaceDoc(workspaceId)]);
+      if (!channel || channel.archived || !workspace || workspace.archived) return;
+      // ponytail: a burst over the cap keeps only its newest MAX_CATCHUP_MESSAGES; page from the watermark if big bursts lose facts.
+      messages = await store.since(conversationId, await graph.channelWatermark(workspaceId, conversationId), MAX_CATCHUP_MESSAGES);
+      if (!messages.length) return;
+    }
     if (!(await graph.canSpendOnGraph(workspaceId))) {
       console.log(`graph: daily cap reached for workspace ${workspaceId}, skipping ${conversationId}`);
+      // The watermark stays put, so a channel retries the window once the cap resets at the next UTC midnight.
+      if (key.kind === 'channel' && requeue) {
+        const now = new Date();
+        await requeue(job, Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime());
+      }
       return;
     }
-    const root = await store.message(key.post);
-    const messages = [...(root ? [root] : []), ...(await store.page(conversationId, MAX_CATCHUP_MESSAGES))];
-    if (!messages.length) return;
+    if (key.kind === 'thread') {
+      const root = await store.message(key.post);
+      messages = [...(root ? [root] : []), ...(await store.page(conversationId, MAX_CATCHUP_MESSAGES))];
+    }
+    if (!messages?.length) return;
     const prompt = [
-      'Extract the decisions this team thread reached. For each: a short "title", one sentence of "text" on what was decided and why,',
+      'Extract the decisions this team conversation reached. For each: a short "title", one sentence of "text" on what was decided and why,',
       'the "people" (by the names shown) who made or own it, and up to three short "topics". No decisions: an empty array.',
-      'Write in the thread\'s language.',
+      'Write in the conversation\'s language.',
       '',
       ...messages.map((m) => `${m.from}: ${truncateMessageText(textOf(m))}`),
     ].join('\n');
@@ -94,7 +118,7 @@ export function graphExtractor(deps: {
       console.error(`${msg}; not retrying`, out.errorText);
       return;
     }
-    await graph.purgeGraphFor({ workspaceId, conversationId });
+    if (key.kind === 'thread') await graph.purgeGraphFor({ workspaceId, conversationId });
     // A person the thread knows is keyed on their agent id (titled with their thread name), so a rename or a
     // differently-cased mention is one node. ponytail: names the thread never posted as stay keyed by name.
     const authors = new Map(messages.map((m) => [m.from.toLowerCase(), { id: m.fromId, name: m.from }]));
@@ -115,5 +139,6 @@ export function graphExtractor(deps: {
         ...d.topics.map((t) => edge('about', decision, node('topic', t))),
       ]);
     }
+    if (key.kind === 'channel') await graph.setChannelWatermark(workspaceId, conversationId, Math.max(...messages.map((m) => m.seq)));
   };
 }

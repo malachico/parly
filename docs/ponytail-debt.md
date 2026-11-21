@@ -121,6 +121,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - unscoped and agent-scoped skills have no workspace to live in, so they get no node; add one when the graph reads skills across workspaces.
 
+## `src/graph/extract.ts`
+
+- a burst over the cap keeps only its newest MAX_CATCHUP_MESSAGES; page from the watermark if big bursts lose facts.
+
 ## `src/graph/store.ts`
 
 - soft cap (check, then record after the call), so concurrent extractions can overshoot by one call each; reserve-then-settle if that matters.
@@ -380,4 +384,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**131 markers, 33 with no trigger.**
+**132 markers, 33 with no trigger.**

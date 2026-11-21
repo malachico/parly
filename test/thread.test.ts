@@ -1,6 +1,6 @@
 import { COLLECTIONS, FieldValue, type Database } from '../src/db/types.js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { createHub } from '../src/app.js';
+import { createApp, createHub } from '../src/app.js';
 import { threadKey } from '../src/chat/chat.js';
 import type { ForwardResult, Forwarder } from '../src/hub/forward.js';
 import type { HubService } from '../src/hub/hubService.js';
@@ -358,5 +358,31 @@ describe('threads', () => {
       enqueue.mockRestore();
       err.mockRestore();
     }
+  });
+
+  it('queues a delayed graph job for channel posts with their seq, never for thread replies or DMs', async () => {
+    const { owner, channel, members } = await crew(hub.registry, 'graphc', ['graphc-peer']);
+    const queue = (hub as unknown as { queue: { enqueue: (job: unknown, delayMs?: number) => Promise<void> } }).queue;
+    const enqueue = vi.spyOn(queue, 'enqueue').mockResolvedValue();
+    hub.chat.graphChannelDelayMs = 1234;
+    try {
+      const post = (await hub.send(owner, { channel: channel.id }, say('We use Mongo'))).message;
+      await hub.send(owner, { channel: channel.id, thread: post.id }, say('a thread reply'));
+      await hub.send(owner, { to: members[0]!.id }, say('private'));
+      const graphJobs = enqueue.mock.calls.filter(([j]) => (j as { kind?: string }).kind === 'graph');
+      expect(graphJobs).toEqual([[{ kind: 'graph', workspaceId: channel.workspaceId, conversationId: `channel:${channel.id}`, seq: post.seq }, 1234]]);
+    } finally {
+      hub.chat.graphChannelDelayMs = undefined;
+      enqueue.mockRestore();
+    }
+  });
+
+  it('wires channel graph jobs only when CONTEXT_GRAPH_ENABLED is on', () => {
+    const vertex = { model: 'gemini-test', project: 'test-proj', location: 'us-central1', prices: { input: 1, output: 2 } };
+    const app = (contextGraphEnabled: boolean) => createApp({ db: testDb(), config: testConfig({ vertex, contextGraphEnabled }), cloudToken: async () => 't' }).hub;
+    const off = app(false);
+    expect(off.chat.graphChannelDelayMs).toBeUndefined();
+    expect(off.extractGraph).toBeUndefined();
+    expect(app(true).chat.graphChannelDelayMs).toBe(30 * 60_000);
   });
 });

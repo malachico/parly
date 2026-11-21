@@ -1,15 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MessageDoc } from '../src/chat/chat.js';
-import { parsePushJob } from '../src/chat/queue.js';
+import type { ConversationDoc, MessageDoc } from '../src/chat/chat.js';
+import { CloudTasksQueue, InlineQueue, parsePushJob } from '../src/chat/queue.js';
 import { graphExtractor, parseGraphExtraction } from '../src/graph/extract.js';
 import type { GraphStore } from '../src/graph/store.js';
 
-const msg = (id: string, from: string, fromId: string, text: string) => ({ id, from, fromId, parts: [{ kind: 'text', text }] }) as unknown as MessageDoc;
+const msg = (id: string, from: string, fromId: string, text: string, seq = 0) => ({ id, from, fromId, seq, parts: [{ kind: 'text', text }] }) as unknown as MessageDoc;
 const answer = { decisions: [{ title: 'Ship on Monday', text: 'Ship on Monday after QA.', people: ['ana', 'Bo'], topics: ['release'] }] };
 const vertex = (body: unknown = answer) =>
   vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(body) }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10 } })));
 
-function setup(opts: { enabled?: boolean; canSpend?: boolean } = {}) {
+// null = the doc is missing.
+const registry = (channel: { archived?: boolean } | null = {}, workspace: { archived?: boolean } | null = {}) => ({
+  channelDoc: vi.fn(async (_id: string) => channel ?? undefined),
+  workspaceDoc: vi.fn(async (_id: string) => workspace ?? undefined),
+});
+
+function setup(opts: { enabled?: boolean; canSpend?: boolean; latestSeq?: number; since?: MessageDoc[]; registry?: ReturnType<typeof registry> } = {}) {
   const graph = {
     enabled: opts.enabled ?? true,
     canSpendOnGraph: vi.fn(async () => opts.canSpend ?? true),
@@ -17,16 +23,26 @@ function setup(opts: { enabled?: boolean; canSpend?: boolean } = {}) {
     purgeGraphFor: vi.fn(async () => {}),
     upsertNode: vi.fn(async (n: { kind: string; key?: string; title: string }) => `${n.kind}:${n.key ?? n.title}`),
     upsertEdge: vi.fn(async (_e: { kind: string; to: { id: string } }) => 'e'),
+    channelWatermark: vi.fn(async () => 4),
+    setChannelWatermark: vi.fn(async () => {}),
   };
-  const store = { message: vi.fn(async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?')), page: vi.fn(async () => [msg('r1', 'Bo', 'agent-bo', 'Yes, after QA')]) };
+  const store = {
+    message: vi.fn(async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?')),
+    page: vi.fn(async () => [msg('r1', 'Bo', 'agent-bo', 'Yes, after QA')]),
+    conversation: vi.fn(async () => ({ seq: opts.latestSeq ?? 7 }) as ConversationDoc),
+    since: vi.fn(async (_c: string, _s: number, _l: number) => opts.since ?? [msg('m5', 'Ana', 'agent-ana', 'Ship Monday?', 5), msg('m7', 'Bo', 'agent-bo', 'Yes, after QA', 7)]),
+  };
   const fetchImpl = vertex();
+  const requeue = vi.fn(async (_job: unknown, _delayMs: number) => {});
   const run = graphExtractor({
     graph: graph as unknown as GraphStore,
     store,
+    registry: opts.registry ?? registry(),
+    requeue,
     llm: { project: 'p', location: 'global', model: 'flash-lite', accessToken: async () => 't', fetchImpl: fetchImpl as unknown as typeof fetch },
     prices: { input: 1, output: 1 },
   });
-  return { graph, store, fetchImpl, run };
+  return { graph, store, fetchImpl, requeue, run };
 }
 const job = { kind: 'graph' as const, workspaceId: 'w', conversationId: 'thread:c1:p' };
 
@@ -87,7 +103,8 @@ describe('graph extraction (pure)', () => {
     const { graph } = setup();
     const failing = graphExtractor({
       graph: graph as unknown as GraphStore,
-      store: { message: async () => msg('p', 'Ana', 'a', 'x'), page: async () => [] },
+      store: { ...setup().store, message: async () => msg('p', 'Ana', 'a', 'x'), page: async () => [] },
+      registry: registry(),
       llm: { project: 'p', location: 'global', model: 'm', accessToken: async () => 't', fetchImpl: (async () => new Response('busy', { status: 503 })) as typeof fetch },
     });
     await expect(failing(job)).rejects.toThrow('503');
@@ -99,7 +116,8 @@ describe('graph extraction (pure)', () => {
     const { graph } = setup();
     const rejected = graphExtractor({
       graph: graph as unknown as GraphStore,
-      store: { message: async () => msg('p', 'Ana', 'a', 'x'), page: async () => [] },
+      store: { ...setup().store, message: async () => msg('p', 'Ana', 'a', 'x'), page: async () => [] },
+      registry: registry(),
       llm: { project: 'p', location: 'global', model: 'm', accessToken: async () => 't', fetchImpl: (async () => new Response('bad', { status: 400 })) as typeof fetch },
     });
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -112,7 +130,117 @@ describe('graph extraction (pure)', () => {
 
   it('reads a graph job off the queue', () => {
     expect(parsePushJob({ kind: 'graph', workspaceId: 'w', conversationId: 'thread:c:p', extra: 1 })).toEqual({ kind: 'graph', workspaceId: 'w', conversationId: 'thread:c:p' });
+    expect(parsePushJob({ kind: 'graph', workspaceId: 'w', conversationId: 'channel:c', seq: 3 })).toEqual({ kind: 'graph', workspaceId: 'w', conversationId: 'channel:c', seq: 3 });
     expect(() => parsePushJob({ kind: 'graph', workspaceId: 'w' })).toThrow();
     expect(parsePushJob({ agentId: 'a', conversationId: 'c' })).toEqual({ agentId: 'a', conversationId: 'c' });
+  });
+
+  describe('channels', () => {
+    const chan = { kind: 'graph' as const, workspaceId: 'w', conversationId: 'channel:c1', seq: 7 };
+
+    it('extracts the capped window since the watermark without purging, then advances the watermark', async () => {
+      const { graph, store, fetchImpl, run } = setup();
+      await run(chan);
+      expect(store.since).toHaveBeenCalledWith('channel:c1', 4, 80);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(graph.purgeGraphFor).not.toHaveBeenCalled();
+      expect(graph.upsertNode).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'channel:c1', kind: 'decision' }));
+      expect(graph.setChannelWatermark).toHaveBeenCalledWith('w', 'channel:c1', 7);
+      expect(graph.setChannelWatermark.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...graph.upsertEdge.mock.invocationCallOrder));
+    });
+
+    it('skips (debounce) when a newer post arrived after it was scheduled', async () => {
+      const { graph, store, fetchImpl, run } = setup({ latestSeq: 8 });
+      await run(chan);
+      expect(store.since).not.toHaveBeenCalled();
+      expect(graph.canSpendOnGraph).not.toHaveBeenCalled();
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(graph.setChannelWatermark).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when nothing is new since the watermark', async () => {
+      const { graph, fetchImpl, run } = setup({ since: [] });
+      await run(chan);
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(graph.setChannelWatermark).not.toHaveBeenCalled();
+    });
+
+    it('keeps the watermark when the daily cap is spent, so the window is retried later', async () => {
+      const { graph, fetchImpl, requeue, run } = setup({ canSpend: false });
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await run(chan);
+      log.mockRestore();
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(graph.setChannelWatermark).not.toHaveBeenCalled();
+      // Re-enqueued for the next UTC midnight, when the cap resets.
+      expect(requeue).toHaveBeenCalledWith(chan, expect.any(Number));
+      const delay = requeue.mock.calls[0]![1];
+      expect(delay).toBeGreaterThan(0);
+      expect(new Date(Date.now() + delay).toISOString()).toMatch(/T00:00:00/);
+    });
+
+    it.each([
+      ['an archived channel', registry({ archived: true })],
+      ['a missing channel', registry(null)],
+      ['a channel in an archived workspace', registry({}, { archived: true })],
+      ['a channel in a missing workspace', registry({}, null)],
+    ])('skips %s', async (_name, reg) => {
+      const { graph, store, fetchImpl, run } = setup({ registry: reg });
+      await run(chan);
+      expect(reg.channelDoc).toHaveBeenCalledWith('c1');
+      expect(store.since).not.toHaveBeenCalled();
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(graph.setChannelWatermark).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the flag is off', async () => {
+      const { store, fetchImpl, graph, run } = setup({ enabled: false });
+      await run(chan);
+      expect(store.conversation).not.toHaveBeenCalled();
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(graph.setChannelWatermark).not.toHaveBeenCalled();
+    });
+
+    it('never extracts a DM', async () => {
+      const { store, fetchImpl, graph, run } = setup();
+      await run({ kind: 'graph', workspaceId: 'w', conversationId: 'dm:a_b', seq: 1 });
+      expect(store.since).not.toHaveBeenCalled();
+      expect(graph.canSpendOnGraph).not.toHaveBeenCalled();
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('queue dedupe', () => {
+    const chan = { kind: 'graph' as const, workspaceId: 'w', conversationId: 'channel:c1', seq: 7 };
+
+    it('names a channel graph task by conversation and seq, and treats ALREADY_EXISTS as done', async () => {
+      const bodies: any[] = [];
+      let exists = false;
+      const queue = new CloudTasksQueue({ queue: 'projects/p/locations/l/queues/q', serviceAccount: 's', url: 'u' }, async (_url, body) => {
+        if (exists) throw Object.assign(new Error('exists'), { response: { status: 409 } });
+        bodies.push(body);
+        exists = true;
+      });
+      await queue.enqueue(chan, 1000);
+      await expect(queue.enqueue(chan, 1000)).resolves.toBeUndefined();
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0].task.name).toMatch(/^projects\/p\/locations\/l\/queues\/q\/tasks\/graph-channel_c1-7-\d{8}$/);
+    });
+
+    it('runs the same channel graph job once on the inline queue, without holding up idle()', async () => {
+      vi.useFakeTimers();
+      try {
+        const queue = new InlineQueue();
+        const graph = vi.fn(async () => {});
+        queue.setHandler(async () => {}, graph);
+        await queue.enqueue(chan, 60_000);
+        await queue.enqueue(chan, 60_000);
+        await queue.idle();
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(graph).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

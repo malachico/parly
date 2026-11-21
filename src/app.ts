@@ -264,7 +264,8 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     hub.agentRanker = vertexAgentRanker({ ...config.vertex, model: config.searchModel, accessToken: cloudToken, fetchImpl: cloudFetch });
     hub.vertexPrices = config.vertex.prices;
     if (config.contextGraphEnabled) {
-      hub.extractGraph = graphExtractor({ graph, store: hub.chat.store, llm: flashLite });
+      hub.extractGraph = graphExtractor({ graph, store: hub.chat.store, registry, requeue: (j, d) => pushes.enqueue(j, d), llm: flashLite });
+      hub.chat.graphChannelDelayMs = config.graphChannelQuietMinutes * 60_000;
     }
     if (config.channelRouter && !config.channelRouterModel.startsWith('gemini-decision')) hub.chat.route = vertexRouter({ ...config.vertex, model: config.channelRouterModel, accessToken: cloudToken });
   }

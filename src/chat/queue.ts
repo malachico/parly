@@ -13,11 +13,13 @@ export interface PushJob {
   poll?: { taskId: string; messageId: string; until: number; every?: number };
 }
 
-/** Extracting a done thread's decisions, people and topics into the context graph (src/graph/extract.ts). */
+/** Extracting a done thread's, or a quiet channel's, decisions, people and topics into the context graph (src/graph/extract.ts). */
 export interface GraphJob {
   kind: 'graph';
   workspaceId: string;
   conversationId: string;
+  /** Channels: the seq of the post that scheduled it; a newer post means a later job will run instead. */
+  seq?: number;
 }
 
 export type QueueJob = PushJob | GraphJob;
@@ -27,17 +29,30 @@ export interface PushQueue {
   enqueue(job: QueueJob, delayMs?: number): Promise<void>;
 }
 
+/**
+ * One id per channel graph run (conversation, seq and UTC run day), so enqueueing the same run twice makes one task.
+ * The day keeps a cap-skipped run's next-day requeue distinct from the run itself.
+ */
+export function graphTaskId(job: QueueJob, runAt: number): string | undefined {
+  if (!('kind' in job) || job.seq === undefined) return undefined;
+  const day = new Date(runAt).toISOString().slice(0, 10).replaceAll('-', '');
+  return `graph-${job.conversationId.replace(/[^A-Za-z0-9_-]/g, '_')}-${job.seq}-${day}`;
+}
+
 type PushHandler = (job: PushJob) => Promise<void>;
 type GraphHandler = (job: GraphJob) => Promise<void>;
 
 /**
  * Runs jobs in this process (local development and tests). A failed job is logged, not retried: the next
- * message in the conversation pushes again. `idle()` waits for every job, delayed ones included.
+ * message in the conversation pushes again. `idle()` waits for every job, delayed ones included, except delayed
+ * graph jobs: those wait on an unref'd timer and are dropped at shutdown (the next channel post schedules another).
  */
 export class InlineQueue implements PushQueue {
   private handler?: PushHandler;
   private graphHandler?: GraphHandler;
   private readonly running = new Set<Promise<void>>();
+  /** Graph runs scheduled and not yet started, by graphTaskId: the same run enqueued twice runs once. */
+  private readonly pendingGraph = new Set<string>();
 
   /** Graph jobs go to `graph`; without one they are dropped. */
   setHandler(handler: PushHandler, graph?: GraphHandler): void {
@@ -48,11 +63,23 @@ export class InlineQueue implements PushQueue {
   async enqueue(job: QueueJob, delayMs = 0): Promise<void> {
     const handler = this.handler;
     if (!handler) throw new Error('InlineQueue has no handler');
-    const run: Promise<void> = new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-      .then(() => ('kind' in job ? this.graphHandler?.(job) : handler(job)))
+    const id = graphTaskId(job, Date.now() + delayMs);
+    if (id) {
+      if (this.pendingGraph.has(id)) return;
+      this.pendingGraph.add(id);
+    }
+    const background = 'kind' in job && delayMs > 0;
+    const run: Promise<void> = new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, delayMs);
+      if (background) timer.unref();
+    })
+      .then(() => {
+        if (id) this.pendingGraph.delete(id);
+        return 'kind' in job ? this.graphHandler?.(job) : handler(job);
+      })
       .catch((err) => console.error(`${'kind' in job ? 'Graph extraction' : `Push to ${job.agentId}`} in ${job.conversationId} failed`, err))
       .finally(() => this.running.delete(run));
-    this.running.add(run);
+    if (!background) this.running.add(run);
   }
 
   async idle(): Promise<void> {
@@ -91,9 +118,12 @@ export class CloudTasksQueue implements PushQueue {
   }
 
   async enqueue(job: QueueJob, delayMs = 0): Promise<void> {
+    const runAt = Date.now() + delayMs;
+    const id = graphTaskId(job, runAt);
     await this.createTask(`https://cloudtasks.googleapis.com/v2/${this.opts.queue}/tasks`, {
       task: {
-        ...(delayMs > 0 ? { scheduleTime: new Date(Date.now() + delayMs).toISOString() } : {}),
+        ...(id ? { name: `${this.opts.queue}/tasks/${id}` } : {}),
+        ...(delayMs > 0 ? { scheduleTime: new Date(runAt).toISOString() } : {}),
         httpRequest: {
           url: this.opts.url,
           httpMethod: 'POST',
@@ -102,6 +132,10 @@ export class CloudTasksQueue implements PushQueue {
           oidcToken: { serviceAccountEmail: this.opts.serviceAccount, audience: this.opts.url },
         },
       },
+    }).catch((err: { status?: number; response?: { status?: number } }) => {
+      // A named task that already exists is this same run, already scheduled.
+      if (id && (err?.response?.status ?? err?.status) === 409) return;
+      throw err;
     });
   }
 }
@@ -125,7 +159,7 @@ export function parsePushJob(body: unknown): QueueJob {
   const g = body as Partial<GraphJob> | undefined;
   if (g?.kind === 'graph') {
     if (typeof g.workspaceId !== 'string' || typeof g.conversationId !== 'string') throw new HubError('invalid', 'Not a graph job');
-    return { kind: 'graph', workspaceId: g.workspaceId, conversationId: g.conversationId };
+    return { kind: 'graph', workspaceId: g.workspaceId, conversationId: g.conversationId, ...(typeof g.seq === 'number' ? { seq: g.seq } : {}) };
   }
   const b = body as Partial<PushJob> | undefined;
   if (!b || typeof b.agentId !== 'string' || typeof b.conversationId !== 'string') throw new HubError('invalid', 'Not a push job');

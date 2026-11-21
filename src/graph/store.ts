@@ -21,6 +21,8 @@ export const EMBEDDINGS = 'graph_embeddings';
 /** Mongo filter for `conversationId`: a channel plus its threads, one conversation, or undefined (whole workspace). */
 export const conversationFilter = ({ conversationId, channelId }: GraphScope) =>
   channelId !== undefined ? { $regex: `^(channel:${escapeRegex(channelId)}$|thread:${escapeRegex(channelId)}:)` } : conversationId;
+/** Per channel: the highest message seq already extracted. */
+const WATERMARKS = 'graph_watermarks';
 
 /** Case/whitespace-insensitive identity, so "Use  Mongo" and "use mongo" are one node. */
 export const normalizeKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -104,7 +106,7 @@ export class GraphStore {
     const own = conv === undefined ? { workspaceId } : { workspaceId, conversationId: conv };
     const edges = conv === undefined ? { workspaceId } : { workspaceId, $or: [{ fromConversationId: conv }, { toConversationId: conv }] };
     const col = (name: string) => this.db.mongoDb.collection(name);
-    await this.db.execute(() => Promise.all([col(NODES).deleteMany(own), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges)]));
+    await this.db.execute(() => Promise.all([col(NODES).deleteMany(own), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges), col(WATERMARKS).deleteMany(own)]));
     // Channel-scoped skill nodes live under `skill:<id>`, not the channel's conversations.
     if (scope.channelId !== undefined) await this.deleteNodes({ workspaceId, kind: 'skill', 'source.channelId': scope.channelId });
   }
@@ -122,6 +124,23 @@ export class GraphStore {
         col(EDGES).deleteMany({ $or: [{ from: { $in: ids } }, { to: { $in: ids } }] }),
       ]);
     });
+  }
+
+  /** The highest seq of `conversationId` already extracted; 0 when never (or disabled). */
+  async channelWatermark(workspaceId: string, conversationId: string): Promise<number> {
+    if (!this.options.enabled) return 0;
+    const doc = await this.db.execute(() => this.db.mongoDb.collection<{ _id: string; seq: number }>(WATERMARKS).findOne({ _id: idOf(workspaceId, conversationId) }));
+    return doc?.seq ?? 0;
+  }
+
+  /** Moves the watermark up to `seq`; never back, so an overlapping older run can't rewind it. */
+  async setChannelWatermark(workspaceId: string, conversationId: string, seq: number): Promise<void> {
+    if (!this.options.enabled) return;
+    await this.db.execute(() => this.db.mongoDb.collection<{ _id: string }>(WATERMARKS).updateOne(
+      { _id: idOf(workspaceId, conversationId) },
+      { $max: { seq }, $setOnInsert: { workspaceId, conversationId } },
+      { upsert: true },
+    ));
   }
 
   /**
