@@ -33,7 +33,7 @@ export interface GraphSearchResult {
  * Internal only: no permission check. Callers must already know the reader may see `scope` (PR 3 adds that gate).
  * Never throws; a broken search returns no hits.
  */
-export type GraphSearch = (scope: GraphScope, query: string, opts?: { limit?: number }) => Promise<GraphSearchResult>;
+export type GraphSearch = (scope: GraphScope, query: string, opts?: { limit?: number; kind?: GraphNodeKind }) => Promise<GraphSearchResult>;
 
 export type Embedder = (text: string) => Promise<{ ok: boolean; vector: number[]; tokens: number; errorText?: string }>;
 
@@ -67,11 +67,11 @@ export async function ensureVectorIndex(db: Database, dimensions: number): Promi
 
 /** `$vectorSearch` pre-filters on workspace + model (+ conversation); a channel scope is a regex, so over-fetch and `$match` after. */
 // ponytail: channel scope over-fetches 5x workspace-wide then filters, so a busy workspace can starve a quiet channel; store channelId on embeddings and pre-filter it when that bites.
-export function vectorPipeline(scope: GraphScope, vector: number[], model: string, limit: number): object[] {
+export function vectorPipeline(scope: GraphScope, vector: number[], model: string, limit: number, kind?: GraphNodeKind): object[] {
   const conv = conversationFilter(scope);
   const regex = typeof conv === 'object';
   const fetch = regex ? limit * 5 : limit;
-  const filter = { workspaceId: { $eq: scope.workspaceId }, model: { $eq: model }, ...(typeof conv === 'string' ? { conversationId: { $eq: conv } } : {}) };
+  const filter = { workspaceId: { $eq: scope.workspaceId }, model: { $eq: model }, ...(kind ? { kind: { $eq: kind } } : {}), ...(typeof conv === 'string' ? { conversationId: { $eq: conv } } : {}) };
   return [
     { $vectorSearch: { index: VECTOR_INDEX, path: 'vector', queryVector: vector, numCandidates: Math.min(10_000, fetch * 20), limit: fetch, filter } },
     { $project: { nodeId: 1, kind: 1, conversationId: 1, score: { $meta: 'vectorSearchScore' } } },
@@ -90,13 +90,14 @@ const wholeWord = (word: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegex
 // ponytail: scans the 500 most recent substring candidates in the workspace; add a text index when graphs outgrow that.
 const EXACT_CANDIDATES = 500;
 
-async function exactSearch(db: Database, scope: GraphScope, query: string, limit: number): Promise<GraphHit[]> {
+async function exactSearch(db: Database, scope: GraphScope, query: string, limit: number, kind?: GraphNodeKind): Promise<GraphHit[]> {
   const words = queryWords(query);
   if (!words.length) return [];
   const conv = conversationFilter(scope);
   const filter = {
     workspaceId: scope.workspaceId,
     ...(conv !== undefined ? { conversationId: conv } : {}),
+    ...(kind ? { kind } : {}),
     $or: words.flatMap((w) => [{ title: { $regex: escapeRegex(w), $options: 'i' } }, { text: { $regex: escapeRegex(w), $options: 'i' } }]),
   };
   const docs = await db.execute(() => db.mongoDb.collection<{ _id: string; kind: GraphNodeKind; title: string; text?: string; conversationId: string }>(NODES)
@@ -130,13 +131,14 @@ export function createGraphSearch(deps: GraphSearchDeps): GraphSearch {
     return probe.ready;
   };
 
-  async function vectorSearch(scope: GraphScope, query: string, limit: number): Promise<GraphHit[]> {
+  // ponytail: nothing writes embeddings yet (#787), so with Vertex on every search pays one query embed (<=500 chars) for no hits; gate on an embeddings count if that spend shows up.
+  async function vectorSearch(scope: GraphScope, query: string, limit: number, kind?: GraphNodeKind): Promise<GraphHit[]> {
     if (!embedding || !(await vectorReady(embedding.dimensions)) || !(await graph.canSpendOnGraph(scope.workspaceId))) return [];
     const res = await embedding.embed(query);
     if (res.tokens > 0) await graph.recordGraphSpend(scope.workspaceId, Math.ceil(res.tokens * embedding.pricePerMTok));
     if (!res.ok) throw new Error(`embed failed: ${res.errorText ?? ''}`.slice(0, 300));
     try {
-      return await db.execute(() => db.mongoDb.collection(EMBEDDINGS).aggregate<GraphHit>(vectorPipeline(scope, res.vector, embedding.model, limit)).toArray());
+      return await db.execute(() => db.mongoDb.collection(EMBEDDINGS).aggregate<GraphHit>(vectorPipeline(scope, res.vector, embedding.model, limit, kind)).toArray());
     } catch (err) {
       // Index dropped or the wrong size: stop paying for embeds until the next probe says otherwise.
       probe = { at: Date.now(), ready: Promise.resolve(false), ok: false };
@@ -149,13 +151,13 @@ export function createGraphSearch(deps: GraphSearchDeps): GraphSearch {
     const limit = Math.max(1, Math.min(50, Math.trunc(opts?.limit ?? 10)));
     if (!queryWords(query).length) return { mode: 'exact', hits: [] };
     try {
-      const hits = await vectorSearch(scope, query, limit);
+      const hits = await vectorSearch(scope, query, limit, opts?.kind);
       if (hits.length) return { mode: 'vector', hits };
     } catch (err) {
       console.error('graph vector search failed; falling back to exact-word', err);
     }
     try {
-      return { mode: 'exact', hits: await exactSearch(db, scope, query, limit) };
+      return { mode: 'exact', hits: await exactSearch(db, scope, query, limit, opts?.kind) };
     } catch (err) {
       console.error('graph exact-word search failed', err);
       return { mode: 'exact', hits: [] };

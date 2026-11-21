@@ -48,6 +48,7 @@ import { type Waker } from './wake.js';
 import { CanvasService, type CanvasSchedule, type CanvasView, type Presence } from './canvasService.js';
 import { ScheduleService } from './scheduleService.js';
 import type { GraphSearch } from '../graph/search.js';
+import type { GraphStore } from '../graph/store.js';
 import { WakeService, type WakeCheck, type WakeTiming } from './wakeService.js';
 
 export type { CanvasSchedule, CanvasView, Presence, WakeCheck, WakeTiming };
@@ -174,6 +175,8 @@ export class HubService {
   graphSearch?: GraphSearch;
   /** Model prices for charging a search to the app's maker. */
   vertexPrices?: LlmPrices;
+  /** The context graph's nodes and edges for the agent tools (mcp/toolsGraph.ts); set only when CONTEXT_GRAPH_ENABLED. Unchecked: filter through graph/acl.ts. */
+  graph?: Pick<GraphStore, 'nodes' | 'edgesOf'>;
   /** Extracts a done thread into the context graph; set only when CONTEXT_GRAPH_ENABLED and Vertex are. */
   extractGraph?: (job: GraphJob) => Promise<void>;
   /** Room events to the webhooks of the apps that opened the rooms. */

@@ -23,7 +23,7 @@ export { appsOf, compact, hasGitHubToolkit, pick, readFiles, useAppTool } from '
 const RETRY_SAFE_TOOLS = new Set<string>([
   'parly_read_channel', 'web_search', 'fetch_url', 'award_credits', 'find_tools',
   'whoami', 'list_agents', 'list_conversations', 'read_thread', 'get_file', 'room_document', 'list_schedules',
-  'list_skills', 'get_skill', 'find_triggers', 'watching',
+  'list_skills', 'get_skill', 'find_triggers', 'watching', 'find_decisions', 'related',
   ...GITHUB_READ_TOOL_NAMES,
 ]);
 

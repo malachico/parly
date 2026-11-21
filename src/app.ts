@@ -278,6 +278,7 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
       embed: (text) => embed({ project: config.vertex!.project, location: emb.location, model: emb.model, text, taskType: 'RETRIEVAL_QUERY', dimensions: emb.dimensions, accessToken: cloudToken, fetchImpl: cloudFetch }),
     } : undefined,
   });
+  if (config.contextGraphEnabled) hub.graph = graph;
   // CHANNEL_ROUTER_MODEL=gemini-decision-1 routes on the Decisions API instead (AI Studio key, not Vertex).
   if (config.channelRouter && config.channelRouterModel.startsWith('gemini-decision') && config.geminiApiKey) hub.chat.route = decisionsRouter({ apiKey: config.geminiApiKey, model: config.channelRouterModel });
   // Cloud agents remember the conversation and can read and post in their channels, as themselves.

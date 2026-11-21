@@ -10,7 +10,13 @@ export interface GraphScope {
   workspaceId: string;
   conversationId?: string;
   channelId?: string;
+  /** Any of these channels plus their threads; an empty list matches nothing. */
+  channelIds?: string[];
 }
+
+/** A node or edge as the agent tools read it. */
+export type GraphNodeDoc = { _id: string; workspaceId: string; conversationId: string; kind: GraphNodeKind; title: string; text?: string; canonicalId?: string };
+export type GraphEdgeDoc = { _id: string; workspaceId: string; kind: string; from: string; to: string; fromConversationId: string; toConversationId: string };
 
 export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -19,8 +25,13 @@ const EDGES = 'graph_edges';
 export const EMBEDDINGS = 'graph_embeddings';
 
 /** Mongo filter for `conversationId`: a channel plus its threads, one conversation, or undefined (whole workspace). */
-export const conversationFilter = ({ conversationId, channelId }: GraphScope) =>
-  channelId !== undefined ? { $regex: `^(channel:${escapeRegex(channelId)}$|thread:${escapeRegex(channelId)}:)` } : conversationId;
+export const conversationFilter = ({ conversationId, channelId, channelIds }: GraphScope) => {
+  if (channelIds !== undefined) {
+    const any = `(${channelIds.map(escapeRegex).join('|')})`;
+    return channelIds.length ? { $regex: `^(channel:${any}$|thread:${any}:)` } : { $in: [] as string[] };
+  }
+  return channelId !== undefined ? { $regex: `^(channel:${escapeRegex(channelId)}$|thread:${escapeRegex(channelId)}:)` } : conversationId;
+};
 /** Per channel: the highest message seq already extracted. */
 const WATERMARKS = 'graph_watermarks';
 /** Per thread: a counter bumped by each extraction run, so only the last-started run writes. */
@@ -189,6 +200,18 @@ export class GraphStore {
       .find({ workspaceId, kind: 'decision', conversationId: conversationFilter({ workspaceId, channelId }) }, { projection: { title: 1, conversationId: 1 } })
       .sort({ updatedAt: -1 }).limit(limit).toArray());
     return docs.map((d) => ({ id: d._id, title: d.title, conversationId: d.conversationId }));
+  }
+
+  /** Nodes in `workspaceIds` matching `filter`. Unchecked: show them only through graph/acl.ts. */
+  async nodes(workspaceIds: string[], filter: Record<string, unknown>, limit: number): Promise<GraphNodeDoc[]> {
+    if (!this.options.enabled) return [];
+    return this.db.execute(() => this.db.mongoDb.collection<GraphNodeDoc>(NODES).find({ ...filter, workspaceId: { $in: workspaceIds } }, { projection: { _id: 1, workspaceId: 1, conversationId: 1, kind: 1, title: 1, text: 1, canonicalId: 1 } }).sort({ _id: 1 }).limit(limit).toArray());
+  }
+
+  /** Edges in `workspaceIds` touching any of `ids` (and matching `filter`). Unchecked: show them only through graph/acl.ts. */
+  async edgesOf(workspaceIds: string[], ids: string[], limit: number, filter: Record<string, unknown> = {}): Promise<GraphEdgeDoc[]> {
+    if (!this.options.enabled || ids.length === 0) return [];
+    return this.db.execute(() => this.db.mongoDb.collection<GraphEdgeDoc>(EDGES).find({ ...filter, workspaceId: { $in: workspaceIds }, $or: [{ from: { $in: ids } }, { to: { $in: ids } }] }).sort({ _id: 1 }).limit(limit).toArray());
   }
 
   /** The highest seq of `conversationId` already extracted; 0 when never (or disabled). */

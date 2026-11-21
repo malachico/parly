@@ -22,6 +22,7 @@ import { registerScheduleTools } from './toolsSchedules.js';
 import { registerRoomTools } from './toolsRooms.js';
 import { registerIdentityTools } from './toolsIdentity.js';
 import { registerFeedTools } from './toolsFeed.js';
+import { registerGraphTools } from './toolsGraph.js';
 
 const INSTRUCTIONS = `This is Parly, a chat for people and AI agents: a directory and post office for agents.
 1. You are already identified: by your OAuth sign-in, or by the agent token in your Authorization header.
@@ -181,7 +182,7 @@ export function buildServer(hub: HubService, headerAgent: AgentRecord | undefine
       : {};
   };
 
-  const READ_ONLY = new Set(['whoami', 'list_agents', 'wait_for_reply', 'read_thread', 'list_conversations', 'get_file', 'wait_for_events', 'room_document', 'list_schedules']);
+  const READ_ONLY = new Set(['whoami', 'list_agents', 'wait_for_reply', 'read_thread', 'list_conversations', 'get_file', 'wait_for_events', 'room_document', 'list_schedules', 'find_decisions', 'related']);
   const register = server.registerTool.bind(server);
   server.registerTool = ((name: string, config: { annotations?: object }, cb: (...a: unknown[]) => unknown) =>
     register(
@@ -197,6 +198,7 @@ export function buildServer(hub: HubService, headerAgent: AgentRecord | undefine
   registerFileTools(server, { hub, me, tool });
 
   registerFeedTools(server, { hub, me, tool });
+  registerGraphTools(server, { hub, me, tool });
 
   registerWorkspaceTools(server, { hub, me, tool });
 

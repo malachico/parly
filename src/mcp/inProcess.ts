@@ -35,6 +35,9 @@ const CLOUD_MCP_TOOLS = [
   'watch',
   'watching',
   'stop_watching',
+  // Context graph (hidden when it's off).
+  'find_decisions',
+  'related',
 ];
 
 async function connected(hub: HubService, agent: AgentRecord | undefined, turn?: Turn): Promise<Client> {

@@ -116,6 +116,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - channel scope over-fetches 5x workspace-wide then filters, so a busy workspace can starve a quiet channel; store channelId on embeddings and pre-filter it when that bites.
 - scans the 500 most recent substring candidates in the workspace; add a text index when graphs outgrow that.
+- nothing writes embeddings yet (#787), so with Vertex on every search pays one query embed (<=500 chars) for no hits; gate on an embeddings count if that spend shows up.
 
 ## `src/graph/sources.ts`
 
@@ -388,4 +389,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**136 markers, 33 with no trigger.**
+**137 markers, 33 with no trigger.**
