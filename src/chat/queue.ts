@@ -35,7 +35,7 @@ export interface PushQueue {
  * One id per channel graph run (conversation, seq and UTC run day), so enqueueing the same run twice makes one task.
  * The day keeps a cap-skipped run's next-day requeue distinct from the run itself.
  */
-export function graphTaskId(job: QueueJob, runAt: number): string | undefined {
+function graphTaskId(job: QueueJob, runAt: number): string | undefined {
   if (!('kind' in job) || (job.seq === undefined && !job.deferred)) return undefined;
   const day = new Date(runAt).toISOString().slice(0, 10).replaceAll('-', '');
   return `graph-${job.conversationId.replace(/[^A-Za-z0-9_-]/g, '_')}-${job.seq ?? 'thread'}-${day}`;

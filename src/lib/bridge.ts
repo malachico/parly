@@ -113,7 +113,7 @@ export async function claimBridgeEvent<T extends Record<string, unknown>>(db: Da
   });
 }
 
-export async function markBridgeEventDone(db: Database, collection: string, id: string): Promise<void> {
+async function markBridgeEventDone(db: Database, collection: string, id: string): Promise<void> {
   await db.collection(collection).doc(id).update({ done: true });
 }
 
@@ -142,7 +142,7 @@ export async function queueBridgeOut<T extends object>(db: Database, collection:
   }
 }
 
-export async function claimBridgeOut<T>(db: Database, collection: string, key: string, now = Date.now()): Promise<(T & { attempts: number; at: number }) | undefined> {
+async function claimBridgeOut<T>(db: Database, collection: string, key: string, now = Date.now()): Promise<(T & { attempts: number; at: number }) | undefined> {
   const ref = db.collection(collection).doc(key);
   return db.runTransaction(async (tx) => {
     const data = (await tx.get(ref)).data() as (T & { attempts: number; at: number; nextAt: number; claimedAt?: number }) | undefined;
@@ -152,15 +152,15 @@ export async function claimBridgeOut<T>(db: Database, collection: string, key: s
   });
 }
 
-export async function retryBridgeOut(db: Database, collection: string, key: string, nextAt: number, counted: boolean): Promise<void> {
+async function retryBridgeOut(db: Database, collection: string, key: string, nextAt: number, counted: boolean): Promise<void> {
   await db.collection(collection).doc(key).update({ nextAt, claimedAt: FieldValue.delete(), ...(counted ? { attempts: FieldValue.increment(1) } : {}) });
 }
 
-export async function doneBridgeOut(db: Database, collection: string, key: string): Promise<void> {
+async function doneBridgeOut(db: Database, collection: string, key: string): Promise<void> {
   await db.collection(collection).doc(key).delete();
 }
 
-export async function dueBridgeOut(db: Database, collection: string, now = Date.now()): Promise<string[]> {
+async function dueBridgeOut(db: Database, collection: string, now = Date.now()): Promise<string[]> {
   const snap = await db.collection(collection).where('nextAt', '<=', now).limit(100).get();
   return snap.docs.map((d) => d.id);
 }

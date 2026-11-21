@@ -32,7 +32,7 @@ export const BILLING = 'billing';
  * Free's allowance is the hub's default (LLM_MONTHLY_ALLOWANCE_USD). The workspace owner's plan sets the participant cap. Free's maxWorkspaces counts workspaces you're in (owned or joined); paid plans count only those you own.
  * Going over never removes anyone: nobody new can be added until the owner upgrades. An admin can change one person's
  * limits (maxWorkspaces, maxParticipants). Super admins have none, nor does a self-hosted hub (registry/workspaces.ts). */
-export const PLAN_LIMITS: Record<Plan, { allowanceUsd?: number; maxWorkspaces: number; maxParticipants: number }> = {
+const PLAN_LIMITS: Record<Plan, { allowanceUsd?: number; maxWorkspaces: number; maxParticipants: number }> = {
   free: { maxWorkspaces: 2, maxParticipants: 8 },
   pro: { allowanceUsd: 30, maxWorkspaces: 10, maxParticipants: 50 },
   team: { maxWorkspaces: 10, maxParticipants: 50 },
@@ -40,7 +40,7 @@ export const PLAN_LIMITS: Record<Plan, { allowanceUsd?: number; maxWorkspaces: n
 };
 
 /** Team: $25/seat/month buys 1,500 credits ($15) per seat into the company pool; at least 3 seats. */
-export const TEAM_SEAT_USD = 15;
+const TEAM_SEAT_USD = 15;
 export const TEAM_MIN_SEATS = 3;
 
 /** What a person's plan gives them right now: monthly allowance and top-up balance (micro-dollars), and agents. */
