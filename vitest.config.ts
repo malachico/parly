@@ -24,6 +24,7 @@ const pureTests = [
   'test/graphMerge.pure.test.ts',
   'test/graphAclSupersedes.pure.test.ts',
   'test/graphQuality.test.ts',
+  'test/graphLayout.test.ts',
   'test/forward.test.ts',
   'test/ghWrapper.test.ts',
   'test/gke-driver.test.ts',
