@@ -6,6 +6,7 @@ import { HubError } from '../lib/errors.js';
 import { agentView, channelView, messageView, workspaceView } from '../lib/present.js';
 import { seal, unseal } from '../lib/sealing.js';
 import { fileView } from '../files/files.js';
+import { channelDecisions, findDecisions, relatedEntries, webNodeView } from '../graph/queries.js';
 import { json, limitOf, pageView, publicMessageView, publicPeople, scheduleView, seqOf, str, webhookView } from './helpers.js';
 import { type AgentRecord, isOpenChannel, isPublicWorkspace } from '../registry/types.js';
 
@@ -344,6 +345,37 @@ export function conversationsRoutes(router: Router, hub: HubService, stream: { s
     '/search',
     requireAgent,
     json(async (req) => hub.searchView(agentOf(req)!, str(req.query.q) ?? '', Math.min(Number(req.query.limit) || 30, 50))),
+  );
+
+  /**
+   * Decisions from the context graph in conversations you can read: matching `q` (2+ characters), else a `channel`'s most
+   * recent; `channel` limits a search to it and its threads. `limit` ≤ 20. Empty when the graph is off.
+   */
+  router.get(
+    '/decisions',
+    requireAgent,
+    json(async (req) => {
+      const caller = agentOf(req)!;
+      const q = (str(req.query.q) ?? '').trim().slice(0, 500);
+      const channel = str(req.query.channel);
+      const limit = Math.min(Math.max(Math.trunc(Number(req.query.limit)) || 10, 1), 20);
+      if (!hub.graph) return { decisions: [] };
+      const nodes = q.length >= 2 ? await findDecisions(hub, caller, q, { channel, limit }) : channel ? await channelDecisions(hub, caller, channel, limit) : [];
+      return { decisions: nodes.map(webNodeView) };
+    }),
+  );
+
+  /** What the context graph recorded in a thread you can read, and what it links to. Empty when the graph is off. */
+  router.get(
+    '/decisions/related',
+    requireAgent,
+    json(async (req) => {
+      const channel = str(req.query.channel);
+      const thread = str(req.query.thread);
+      if (!channel || !thread) throw new HubError('invalid', 'Give a channel and a thread.');
+      const { nodes } = await relatedEntries(hub, agentOf(req)!, { channel, thread, kinds: ['decision'] });
+      return { decisions: nodes.map(webNodeView) };
+    }),
   );
 
   /** A message you can read, and its first answer if there is one. */

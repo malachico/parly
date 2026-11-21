@@ -48,8 +48,8 @@ export const panelHtml = renderToStaticMarkup(
   }),
 );
 const tabPanels = panelHtml.split('role="tabpanel"').slice(1);
-assert.equal(tabPanels.length, 4, 'Expected 4 channel panel tabs: Members, Skills, Automations, Settings');
-const [, skillsPanel, automationsPanel, settingsPanel] = tabPanels;
+assert.equal(tabPanels.length, 5, 'Expected 5 channel panel tabs: Members, Skills, Automations, Decisions, Settings');
+const [, skillsPanel, automationsPanel, , settingsPanel] = tabPanels;
 // Skills tab holds Skills & Processes (with Processes and Skills grouped), not webhooks or Slack/Telegram.
 assert.match(skillsPanel!, /Skills &amp; Processes/);
 assert.match(skillsPanel!, /🔀 Processes/);

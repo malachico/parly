@@ -176,8 +176,8 @@ export class HubService {
   graphSearch?: GraphSearch;
   /** Model prices for charging a search to the app's maker. */
   vertexPrices?: LlmPrices;
-  /** The context graph's nodes and edges for the agent tools (mcp/toolsGraph.ts); set only when CONTEXT_GRAPH_ENABLED. Unchecked: filter through graph/acl.ts. */
-  graph?: Pick<GraphStore, 'nodes' | 'edgesOf'>;
+  /** The context graph's nodes and edges for graph/queries.ts; set only when CONTEXT_GRAPH_ENABLED. Unchecked: filter through graph/acl.ts. */
+  graph?: Pick<GraphStore, 'nodes' | 'edgesOf' | 'recentDecisions'>;
   /** Extracts a done thread into the context graph; set only when CONTEXT_GRAPH_ENABLED and Vertex are. */
   extractGraph?: (job: GraphJob) => Promise<void>;
   /** Enqueues the last 90 days' graph jobs (see backfillGraph); set with extractGraph. */

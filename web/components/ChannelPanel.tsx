@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Avatar, AvatarStack } from '@/components/Avatar';
 import { PanelTabs } from '@/components/PanelTabs';
 import { CopyButton } from '@/components/CopyButton';
+import { DecisionsPanel } from '@/components/Decisions';
 import { ScheduleList } from '@/components/ScheduleList';
 import { SkillsSection } from '@/components/SkillsSection';
 import { Icon } from '@/components/Icon';
@@ -408,6 +409,8 @@ export function ChannelPanel({ guest = false, initialTab, workspaceId, channel, 
           { id: 'members', label: 'Members', badge: members.length, content: membersTab },
           { id: 'skills', label: 'Skills', badge: customActiveSkills, content: skillsTab },
           { id: 'automations', label: 'Automations', badge: automations, content: automationsTab },
+          // ponytail: PanelTabs mounts every tab, so this fetches when the panel opens even if hidden; fetch on tab show if it costs.
+          { id: 'decisions', label: 'Decisions', content: <DecisionsPanel channelId={id} /> },
           { id: 'settings', label: 'Settings', content: settingsTab },
         ]}
       />

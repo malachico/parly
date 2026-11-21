@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
+import { decisionHref } from '@/components/Decisions';
 import { Dialog } from '@/components/Modal';
-import { channelMemberCounts, searchDirectory, searchMessages, type DirectoryEntry, type MessageHit } from '@/lib/actions';
+import { channelMemberCounts, searchDecisions, searchDirectory, searchMessages, type Decision, type DirectoryEntry, type MessageHit } from '@/lib/actions';
 import { shortTime } from '@/lib/labels';
 import { agentHref, channelHref, chatHref, dmHref } from '@/lib/routes';
 import { plural } from '@/lib/plural';
@@ -47,6 +48,7 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
   const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [hits, setHits] = useState<MessageHit[]>([]);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
   const latest = useRef(0);
 
   // Each time it opens, start from the query in the URL (the rail passes what you typed there).
@@ -64,7 +66,10 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
     if (!open) return;
     const id = ++latest.current;
     const t = setTimeout(async () => {
-      const [res, found] = await Promise.all([searchDirectory(query), searchMessages(query)]);
+      const pending = Promise.all([searchDirectory(query), searchMessages(query)]);
+      // Decisions show only on the message tabs; each search spends embedding budget, so skip it elsewhere.
+      if (show === 'messages' || show === 'everyone') void searchDecisions(query).then((d) => id === latest.current && setDecisions(d));
+      const [res, found] = await pending;
       if (id !== latest.current) return;
       setHits(found);
       if (res.ok) {
@@ -73,7 +78,7 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
       } else setError(res.error);
     }, 200);
     return () => clearTimeout(t);
-  }, [open, query]);
+  }, [open, query, show]);
 
   const close = () => router.replace(href('find', undefined), { scroll: false });
   const q = query.trim().toLowerCase();
@@ -160,6 +165,21 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
                 ))}
               </ul>
             )}
+          </section>
+        )}
+        {(show === 'messages' || show === 'everyone') && q.length >= 2 && decisions.length > 0 && (
+          <section className="pt-3">
+            <h3 className="label pb-1.5">Decisions</h3>
+            <ul className="flex flex-col gap-px">
+              {decisions.map((d) => (
+                <li key={d.id}>
+                  <Link href={decisionHref(d)} className="flex min-w-0 flex-col rounded-lg px-2 py-2 hover:bg-[var(--subtle)]">
+                    <span className="break-words text-sm">{d.title || 'Untitled decision'}</span>
+                    {d.sources[0]?.text && <span className="truncate text-sm text-[var(--muted)]">{d.sources[0].text}</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
       </div>

@@ -303,6 +303,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - installUrl is only set when ACTIVE (Manage on GitHub); Connect mints OAuth state
 
+## `web/components/ChannelPanel.tsx`
+
+- PanelTabs mounts every tab, so this fetches when the panel opens even if hidden; fetch on tab show if it costs.
+
 ## `web/components/ChannelLoader.tsx`
 
 - everyone in the workspace, in one <select>; a search box when workspaces get long
@@ -393,4 +397,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**138 markers, 33 with no trigger.**
+**139 markers, 33 with no trigger.**
