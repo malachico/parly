@@ -106,6 +106,9 @@ describe('graph web routes', () => {
       for (const path of ['/decisions?q=mongo', `/decisions?channel=${w.channel.id}`, `/decisions/related?channel=${w.channel.id}&thread=p1`]) {
         expect(await off.get(token, path)).toEqual({ status: 200, body: { decisions: [] } });
       }
+      // The web app hides Knowledge from this.
+      expect((await off.get(token, '/me')).body.graph).toBeUndefined();
+      expect((await app.get(tokens.member, '/me')).body.graph).toBe(true);
     } finally {
       await new Promise((r) => off.server.close(r));
     }

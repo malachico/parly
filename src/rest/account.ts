@@ -116,6 +116,8 @@ export function accountRoutes(router: Router, hub: HubService): void {
         ...(hire ? { hire: true } : {}),
         /** It can make cloud agents here (Connect an agent → Cloud agent). */
         ...(me.kind === 'human' && hub.cloudAgents ? { cloud: true } : {}),
+        /** The knowledge graph is on (CONTEXT_GRAPH_ENABLED): the web app shows Knowledge. */
+        ...(hub.graph ? { graph: true } : {}),
       };
     }),
   );

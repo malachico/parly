@@ -24,6 +24,8 @@ type Props = {
   slack?: WorkspaceSlackStatus;
   telegram?: WorkspaceTelegramStatus;
   meId: string;
+  /** The hub's knowledge graph is on: show the Knowledge tab. */
+  graph?: boolean;
   members: Agent[];
   /** Workspace members (people and bots) who aren't in the channel yet. */
   candidates: Agent[];
@@ -39,7 +41,7 @@ type Props = {
 };
 
 /** A team's details beside its conversation: who's in it (and adding them), its skills & processes, its automations (schedules and webhooks), and its settings (name, context, visibility, Slack, Telegram, archive/leave). */
-export function ChannelPanel({ guest = false, initialTab, workspaceId, channel, room, slack, telegram, meId, members, candidates, error, closeHref, webhookUrl, schedules, webhooks, skills = [], librarySkills = [] }: Props) {
+export function ChannelPanel({ guest = false, initialTab, workspaceId, channel, room, slack, telegram, meId, graph, members, candidates, error, closeHref, webhookUrl, schedules, webhooks, skills = [], librarySkills = [] }: Props) {
   const id = channel.id;
   const isOwner = (agentId: string) => channel.owners?.includes(agentId) ?? false;
   const people = members.filter((m) => m.kind === 'human').length;
@@ -410,7 +412,7 @@ export function ChannelPanel({ guest = false, initialTab, workspaceId, channel, 
           { id: 'skills', label: 'Skills', badge: customActiveSkills, content: skillsTab },
           { id: 'automations', label: 'Automations', badge: automations, content: automationsTab },
           // ponytail: PanelTabs mounts every tab, so this fetches when the panel opens even if hidden; fetch on tab show if it costs.
-          { id: 'knowledge', label: 'Knowledge', content: <ChannelKnowledge key={id} ws={workspaceId} channelId={id} /> },
+          ...(graph ? [{ id: 'knowledge', label: 'Knowledge', content: <ChannelKnowledge key={id} ws={workspaceId} channelId={id} /> }] : []),
           { id: 'settings', label: 'Settings', content: settingsTab },
         ]}
       />

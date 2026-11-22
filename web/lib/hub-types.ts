@@ -208,6 +208,8 @@ export interface Me extends Omit<Agent, 'workspaces'> {
   hire?: boolean;
   /** May make cloud agents (the hub runs them). */
   cloud?: boolean;
+  /** The hub's knowledge graph is on: show Knowledge. */
+  graph?: boolean;
 }
 export interface Invite {
   email: string;

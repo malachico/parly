@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ChannelLoader } from '@/components/ChannelLoader';
 import { PanelSkeleton } from '@/components/PanelSkeleton';
-import { parseConversationKey } from '@/lib/hub';
+import { meOrLogin, parseConversationKey } from '@/lib/hub';
 
 type Props = {
   params: Promise<{ ws: string; key: string }>;
@@ -21,10 +21,11 @@ export default async function ConversationPage({ params }: Props) {
   if (!parsed) notFound();
   // A webhook URL createWebhook just made, shown once.
   const f = parsed.kind === 'channel' ? await readFlash<{ channelId: string; url: string }>('flash_webhook') : undefined;
+  const { graph } = await meOrLogin(); // cached: the layout already read it
   return (
     <Suspense fallback={<PanelSkeleton />}>
       {/* A new value on every server render (a live refresh, an action's revalidate) re-reads the conversation. */}
-      <ChannelLoader ws={ws} kind={parsed.kind} id={parsed.id} renderedAt={Date.now()} webhookUrl={f?.channelId === parsed.id ? f.url : undefined} />
+      <ChannelLoader ws={ws} kind={parsed.kind} id={parsed.id} renderedAt={Date.now()} webhookUrl={f?.channelId === parsed.id ? f.url : undefined} graph={graph} />
     </Suspense>
   );
 }

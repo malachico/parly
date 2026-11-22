@@ -73,7 +73,7 @@ export function CrewCanvas({
   ws: string;
   workspaceName: string;
   shareUrl?: string;
-  me: { id: string; name: string; avatar?: string; kind?: string; admin?: boolean; hire?: boolean };
+  me: { id: string; name: string; avatar?: string; kind?: string; admin?: boolean; hire?: boolean; graph?: boolean };
   /** Your plan and credits left, always in sight: Free shows Upgrade. */
   billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd: number; used: number };
   workspaces: MenuWorkspace[];

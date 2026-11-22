@@ -52,7 +52,7 @@ export default async function WorkspaceLayout({ children, params }: Props) {
         </div>
       )}
       {/* Opened by ?find=, ?channel=new, ?hire=1 and ?workspace=new. */}
-      <FindDialog workspaceId={workspace.id} channels={(workspace.channels ?? []).map((c) => ({ id: c.id, name: c.name }))} meId={user.id} />
+      <FindDialog workspaceId={workspace.id} channels={(workspace.channels ?? []).map((c) => ({ id: c.id, name: c.name }))} meId={user.id} graph={user.graph} />
       {user.hire && (
         <HireAgentDialog
           workspaceId={workspace.id}

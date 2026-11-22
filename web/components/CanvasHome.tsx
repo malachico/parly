@@ -49,7 +49,7 @@ export async function CanvasHome({ me, workspace }: { me: Me; workspace: Workspa
       ws={ws}
       workspaceName={workspace.name}
       shareUrl={workspace.public || workspace.publicShowcase ? `${origin}/p/w/${ws}` : undefined}
-      me={{ id: me.id, name: me.name, avatar: me.avatar, kind: me.kind, admin: me.admin, hire: me.hire }}
+      me={{ id: me.id, name: me.name, avatar: me.avatar, kind: me.kind, admin: me.admin, hire: me.hire, graph: me.graph }}
       billing={billing && { plan: billing.plan, leftUsd: billing.leftUsd ?? 0, used: billing.used }}
       workspaces={workspaces}
       conversations={recent}

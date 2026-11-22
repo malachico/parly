@@ -65,7 +65,7 @@ async function load(path: string, signal: AbortSignal): Promise<OpenBundle | DmB
  * channel (GET /channels/:id/open) or a DM with an agent (GET /agents/:id/open). `renderedAt` changes each time the
  * server page re-renders (a live refresh, an action's revalidate), and that re-reads it.
  */
-export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl }: { ws: string; kind: 'channel' | 'agent'; id: string; renderedAt: number; webhookUrl?: string }) {
+export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl, graph }: { ws: string; kind: 'channel' | 'agent'; id: string; renderedAt: number; webhookUrl?: string; graph?: boolean }) {
   const router = useRouter();
   const sp = useSearchParams();
   const dm = kind === 'agent';
@@ -177,7 +177,7 @@ export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl 
     const inChannel = new Set(members.map((m) => m.id));
     // ponytail: everyone in the workspace, in one <select>; a search box when workspaces get long
     const candidates = p.inWorkspace.filter((a) => !inChannel.has(a.id) && !a.archived && !a.webhookChannel);
-    aside = <ChannelPanel guest={guest} initialTab={section === 'settings' ? 'settings' : undefined} workspaceId={ws} channel={channel} room={workspace.room} slack={p.slack} telegram={p.telegram} meId={me.id} members={members} candidates={candidates} error={error} closeHref={from === 'canvas' ? wsHref(ws) : closeHref} webhookUrl={webhookUrl} schedules={p.schedules} webhooks={p.webhooks} skills={p.skills} librarySkills={p.librarySkills} />;
+    aside = <ChannelPanel guest={guest} initialTab={section === 'settings' ? 'settings' : undefined} workspaceId={ws} channel={channel} room={workspace.room} slack={p.slack} telegram={p.telegram} meId={me.id} graph={graph} members={members} candidates={candidates} error={error} closeHref={from === 'canvas' ? wsHref(ws) : closeHref} webhookUrl={webhookUrl} schedules={p.schedules} webhooks={p.webhooks} skills={p.skills} librarySkills={p.librarySkills} />;
   }
 
   const open = bundle.thread;

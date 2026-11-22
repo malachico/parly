@@ -4,51 +4,55 @@ import { ChannelPanel } from '../../components/ChannelPanel';
 import { WorkspacePanel } from '../../components/WorkspacePanel';
 import assert from 'node:assert/strict';
 
-// ChannelPanel tabs: Members, Skills (Processes & Skills grouped separately), Automations (schedules + webhooks), Settings (Slack + Telegram + channel settings).
-export const panelHtml = renderToStaticMarkup(
-  createElement(ChannelPanel, {
-    initialTab: 'settings',
+// ChannelPanel tabs: Members, Skills, Automations, Knowledge (when graph is on), Settings.
+const channelPanelProps = {
+  initialTab: 'settings' as const,
+  workspaceId: 'ws1',
+  channel: {
+    id: 'ch1',
     workspaceId: 'ws1',
-    channel: {
-      id: 'ch1',
-      workspaceId: 'ws1',
-      name: 'dev',
-      owner: true,
-      owners: ['me'],
-      open: true,
-      public: true,
-      slack: [{ teamId: 'T1', channelId: 'C1' }],
-      telegram: [{ chatId: '-100123456', topicId: 42 }],
+    name: 'dev',
+    owner: true,
+    owners: ['me'],
+    open: true,
+    public: true,
+    slack: [{ teamId: 'T1', channelId: 'C1' }],
+    telegram: [{ chatId: '-100123456', topicId: 42 }],
+  },
+  slack: {
+    canManage: true,
+    configured: true,
+    install: { teamId: 'T1', teamName: 'Acme', at: '2026-10-08T00:00:00Z' },
+    channels: [{ id: 'C1', name: 'dev', isPrivate: false }],
+  },
+  meId: 'me',
+  members: [{ id: 'me', name: 'Me', description: '', kind: 'human' as const, public: true, skills: [], workspaces: [], channels: [], lastSeen: '2026-10-08T00:00:00Z' }],
+  candidates: [],
+  closeHref: '/w/ws1/c/channel%3Ach1',
+  schedules: [],
+  webhooks: [{ id: 'wh1', channelId: 'ch1', name: 'GitHub', ownerId: 'me', createdAt: '2026-10-08T00:00:00Z' }],
+  skills: [
+    {
+      skill: { id: 'p1', name: 'feature-dev', description: 'Team process', type: 'process' as const },
+      source: 'direct' as const,
+      enabled: true,
     },
-    slack: {
-      canManage: true,
-      configured: true,
-      install: { teamId: 'T1', teamName: 'Acme', at: '2026-10-08T00:00:00Z' },
-      channels: [{ id: 'C1', name: 'dev', isPrivate: false }],
+    {
+      skill: { id: 'builtin:skill-writer', name: 'skill-writer', description: 'Write skills', type: 'skill' as const },
+      source: 'builtin' as const,
+      enabled: true,
     },
-    meId: 'me',
-    members: [{ id: 'me', name: 'Me', description: '', kind: 'human', public: true, skills: [], workspaces: [], channels: [], lastSeen: '2026-10-08T00:00:00Z' }],
-    candidates: [],
-    closeHref: '/w/ws1/c/channel%3Ach1',
-    schedules: [],
-    webhooks: [{ id: 'wh1', channelId: 'ch1', name: 'GitHub', ownerId: 'me', createdAt: '2026-10-08T00:00:00Z' }],
-    skills: [
-      {
-        skill: { id: 'p1', name: 'feature-dev', description: 'Team process', type: 'process' },
-        source: 'direct',
-        enabled: true,
-      },
-      {
-        skill: { id: 'builtin:skill-writer', name: 'skill-writer', description: 'Write skills', type: 'skill' },
-        source: 'builtin',
-        enabled: true,
-      },
-    ],
-    librarySkills: [],
-  }),
-);
+  ],
+  librarySkills: [],
+};
+export const panelHtml = renderToStaticMarkup(createElement(ChannelPanel, { ...channelPanelProps, graph: true }));
 const tabPanels = panelHtml.split('role="tabpanel"').slice(1);
-assert.equal(tabPanels.length, 5, 'Expected 5 channel panel tabs: Members, Skills, Automations, Decisions, Settings');
+assert.equal(tabPanels.length, 5, 'Expected 5 channel panel tabs: Members, Skills, Automations, Knowledge, Settings');
+assert.equal(
+  renderToStaticMarkup(createElement(ChannelPanel, channelPanelProps)).split('role="tabpanel"').slice(1).length,
+  4,
+  'Expected 4 channel panel tabs when graph is off: Members, Skills, Automations, Settings',
+);
 const [, skillsPanel, automationsPanel, , settingsPanel] = tabPanels;
 // Skills tab holds Skills & Processes (with Processes and Skills grouped), not webhooks or Slack/Telegram.
 assert.match(skillsPanel!, /Skills &amp; Processes/);

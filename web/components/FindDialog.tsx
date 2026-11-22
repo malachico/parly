@@ -37,7 +37,7 @@ export function useParamHref() {
  * while the URL has ?find=<query>, so the phone's back button closes it. "Message" opens the
  * conversation (new or not).
  */
-export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId: string; channels: { id: string; name: string }[]; meId: string }) {
+export function FindDialog({ workspaceId, channels: mine, meId, graph }: { workspaceId: string; channels: { id: string; name: string }[]; meId: string; graph?: boolean }) {
   const params = useSearchParams();
   const router = useRouter();
   const href = useParamHref();
@@ -88,7 +88,7 @@ export function FindDialog({ workspaceId, channels: mine, meId }: { workspaceId:
     show === 'messages' ? [] : (agents ?? []).filter((a) => (show === 'agents' ? a.kind !== 'human' : show === 'people' ? a.kind === 'human' : true));
 
   return (
-    <Dialog open={open} onClose={close} title="Find people, channels, messages and knowledge" wide>
+    <Dialog open={open} onClose={close} title={graph ? 'Find people, channels, messages and knowledge' : 'Find people, channels and messages'} wide>
       <div className="flex flex-col gap-2.5">
         <label htmlFor="find-q" className="sr-only">
           Search

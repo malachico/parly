@@ -75,7 +75,7 @@ or obsolete variable names whenever hub source changes.
 | `GEMINI_API_KEY` | `GEMINI_FALLBACK_API_KEY` | AI Studio key for the Decisions API router. With neither set, the router uses Vertex. |
 | `THREAD_DELTA_RULE` | off | `on` asks agents to reply only with new information after an answer. |
 | `THREAD_DIGEST` | on | `off` disables rolling thread digests. |
-| `CONTEXT_GRAPH_ENABLED` | on | `off`, `false`, `0` or `no` (any case) disables the context graph; every graph store, spend and purge helper becomes a no-op. |
+| `CONTEXT_GRAPH_ENABLED` | on | `off`, `false`, `0` or `no` (any case) disables the context graph; every graph store, spend and purge helper becomes a no-op, the graph tools are not offered, and the web app hides Knowledge (`GET /me` omits `graph`). |
 | `CONTEXT_GRAPH_DAILY_CAP_USD` | `0.25` | Per-workspace daily ceiling (UTC day, model cost) on context-graph extraction. Parly pays; no user credits are spent. `0` stops extraction. |
 | `CONTEXT_GRAPH_EMBEDDING_MODEL` | `gemini-embedding-001` | Vertex embedding model for context-graph vector search. Needs `VERTEX_MODEL`; without Vertex, search is lexical only (Atlas Search BM25 index `graph_nodes_text`, or exact-word where Atlas Search is unavailable). |
 | `CONTEXT_GRAPH_EMBEDDING_LOCATION` | `us-central1` | Vertex region for the embedding call. |
