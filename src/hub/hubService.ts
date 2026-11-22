@@ -15,7 +15,7 @@ import { Webhooks, type WebhookRecord } from './webhooks.js';
 import { McpEvents } from '../mcp/events.js';
 import { TriggerService } from './triggerService.js';
 import { CanvasNotes } from './canvasNotes.js';
-import { ToolUsage, type ToolUse } from './toolUsage.js';
+import { ToolUsage } from './toolUsage.js';
 import { TriggerStore } from './triggers.js';
 import { HubStore } from './hubStore.js';
 import type { Database } from '../db/types.js';
@@ -801,15 +801,7 @@ export class HubService {
     }
   }
 
-  async myApps(person: AgentRecord): Promise<{
-    toolkit: string;
-    name: string;
-    logo?: string;
-    native?: boolean;
-    installUrl?: string;
-    account: { id: string; status: string };
-    agents: { id: string; name: string; avatar?: string; enabled: boolean; act: boolean; use?: Omit<ToolUse, 'ownerId' | 'agentId' | 'toolkit'> }[];
-  }[]> {
+  async myApps(person: AgentRecord): ReturnType<typeof listMyApps> {
     return listMyApps(this, person);
   }
 
