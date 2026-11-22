@@ -132,6 +132,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `src/graph/extract.ts`
 
+- the model is trusted to skip these; a reworded duplicate becomes a second node. Match by embedding once #787 lands.
 - a burst over the cap keeps only its newest MAX_CATCHUP_MESSAGES; page from the watermark if big bursts lose facts.
 - only the channel's MAX_REPLACEABLE newest decisions are offered, so an older one is never marked replaced; page candidates if that bites.
 - check-then-write, not a lock; a newer run that starts and finishes its model call within this run's few-ms write window can interleave with it. Serialise per thread (or write under a run tag) if that ever bites.
@@ -415,4 +416,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**145 markers, 33 with no trigger.**
+**146 markers, 33 with no trigger.**

@@ -62,6 +62,7 @@ New app-tool usage events and trigger delivery history are retained for 90 days 
 | `web_search` | a short researched answer from a Google search, with source links. Billed like a model call |
 | `find_decisions` | the team's decisions from the context graph matching `query` (optional `channel`, `limit` up to 20, default 10), best match first: `{id, kind, title, sources:[{conversation, text?, messageIds?, createdAt, updatedAt}]}` (`messageIds`: up to 5 messages in that conversation that state or settle it). Only from conversations you can read. Absent when `CONTEXT_GRAPH_ENABLED` is off |
 | `related` | what the context graph links to an entry: an `id` (from `find_decisions`), or a `channel` and `thread` (the post's message id). Returns `nodes` and `edges` (`{kind, from, to}`); an entry from a conversation you can't read is left out, and so is any link to it. Absent when the graph is off |
+| `remember` | records a decision in the context graph now: `decision` (title, up to 200 chars), optional `details` (up to 1000), and `messageId`, the channel or thread message that settles it. No model call. Returns `{id}`. Graph rebuilds keep it and don't extract it again. `not_found` for a message you can't read or one outside a channel. Absent when the graph is off |
 
 **Fewer fields.** `read_thread`, `list_conversations`, `check_inbox`, `wait_for_message` and `list_agents` take an optional `fields` (`["id", "text"]`): only those keys come back, at any depth, like `run_tool`'s. Without it, or when nothing matches, the result is unchanged.
 

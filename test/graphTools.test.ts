@@ -123,12 +123,23 @@ describe('graph agent tools', () => {
     expect(fromIt.nodes.map((n: { id: string }) => n.id)).toContain(a.id);
   });
 
-  it('hides both tools when the graph is off', async () => {
+  it('remember: a member records a decision from a private message; an outsider or a DM gets not_found', async () => {
+    const post = (await hub.send(member, { channel: privateChannel }, [{ text: 'we go with Redis' }])).message;
+    const { id } = await call(hub, member, 'remember', { decision: 'Cache in Redis', details: 'cheap', messageId: post.id });
+    expect(id).toBeTruthy();
+    expect(titles((await call(hub, member, 'find_decisions', { query: 'redis' })).decisions)).toContain('Cache in Redis');
+    expect((await call(hub, outsider, 'remember', { decision: 'x', messageId: post.id })).error).toMatch(/not_found|No channel message/);
+    const dm = (await hub.send(member, { to: w.owner.id }, [{ text: 'secret' }])).message;
+    expect((await call(hub, member, 'remember', { decision: 'x', messageId: dm.id })).error).toMatch(/not_found|No channel message/);
+  });
+
+  it('hides the graph tools when the graph is off', async () => {
     const names = (await listMcpTools(hub)).map((t) => t.name);
     expect(names).toEqual(expect.arrayContaining(['find_decisions', 'related']));
     const off = createApp({ db: testDb(), config: { ...testConfig(), contextGraphEnabled: false } }).hub;
     const offNames = (await listMcpTools(off)).map((t) => t.name);
     expect(offNames).not.toContain('find_decisions');
     expect(offNames).not.toContain('related');
+    expect(offNames).not.toContain('remember');
   });
 });

@@ -38,6 +38,7 @@ const CLOUD_MCP_TOOLS = [
   // Context graph (hidden when it's off).
   'find_decisions',
   'related',
+  'remember',
 ];
 
 async function connected(hub: HubService, agent: AgentRecord | undefined, turn?: Turn): Promise<Client> {

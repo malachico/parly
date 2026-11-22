@@ -57,6 +57,18 @@ describe('GraphStore', () => {
     for (const name of ['graph_nodes', 'graph_edges', 'graph_embeddings']) expect(await count(name, { workspaceId: 'w2' })).toBe(1);
   });
 
+  it('keeps remembered decisions through a rebuild purge, and lists their titles', async () => {
+    const { graph, count } = setup();
+    await graph.upsertNode({ workspaceId: 'w', conversationId: 't', kind: 'decision', title: 'Use Mongo', remembered: true });
+    await graph.upsertNode({ workspaceId: 'w', conversationId: 't', kind: 'decision', title: 'Extracted one' });
+    await graph.upsertNode({ workspaceId: 'w', conversationId: 't', kind: 'decision', title: 'use mongo' }); // a re-extraction never clears the flag
+    expect(await graph.rememberedTitles('w', 't')).toEqual(['use mongo']);
+    await graph.purgeGraphFor({ workspaceId: 'w', conversationId: 't' }, { keepRemembered: true });
+    expect(await count('graph_nodes', { workspaceId: 'w' })).toBe(1);
+    await graph.purgeGraphFor({ workspaceId: 'w', conversationId: 't' });
+    expect(await count('graph_nodes', { workspaceId: 'w' })).toBe(0);
+  });
+
   it('purges a channel with its threads, edges on either end, and nothing else', async () => {
     const { graph, count } = setup();
     const node = (conversationId: string) => graph.upsertNode({ workspaceId: 'w', conversationId, kind: 'topic', title: conversationId });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConversationDoc, MessageDoc } from '../src/chat/chat.js';
 import { CloudTasksQueue, InlineQueue, parsePushJob } from '../src/chat/queue.js';
-import { graphExtractor, parseGraphExtraction, sameReaders } from '../src/graph/extract.js';
+import { graphExtractor, graphPrompt, parseGraphExtraction, sameReaders } from '../src/graph/extract.js';
 import type { GraphStore } from '../src/graph/store.js';
 
 const msg = (id: string, from: string, fromId: string, text: string, seq = 0) => ({ id, from, fromId, seq, parts: [{ kind: 'text', text }] }) as unknown as MessageDoc;
@@ -26,6 +26,7 @@ function setup(opts: { enabled?: boolean; canSpend?: boolean; cap?: number; late
     recordGraphSpend: vi.fn(async () => {}),
     purgeGraphFor: vi.fn(async () => {}),
     pruneDanglingEdges: vi.fn(async () => {}),
+    rememberedTitles: vi.fn(async () => [] as string[]),
     upsertNode: vi.fn(async (n: { kind: string; key?: string; title: string }) => `${n.kind}:${n.key ?? n.title}`),
     upsertEdge: vi.fn(async (_e: { kind: string; to: { id: string } }) => 'e'),
     channelWatermark: vi.fn(async () => 4),
@@ -69,7 +70,7 @@ describe('graph extraction (pure)', () => {
     await run(job);
     await run(job);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(graph.purgeGraphFor).toHaveBeenCalledWith({ workspaceId: 'w', conversationId: job.conversationId }, { keepIncomingSupersedes: true });
+    expect(graph.purgeGraphFor).toHaveBeenCalledWith({ workspaceId: 'w', conversationId: job.conversationId }, { keepIncomingSupersedes: true, keepRemembered: true });
     expect(graph.purgeGraphFor.mock.invocationCallOrder[0]).toBeLessThan(graph.upsertNode.mock.invocationCallOrder[0] ?? 0);
     expect(graph.recordGraphSpend).toHaveBeenCalledWith('w', 110);
     const nodes = graph.upsertNode.mock.calls.map(([n]) => n);
@@ -181,6 +182,12 @@ describe('graph extraction (pure)', () => {
     err.mockRestore();
     expect(graph.purgeGraphFor).not.toHaveBeenCalled();
     expect(graph.upsertNode).not.toHaveBeenCalled();
+  });
+
+  it('tells the model which remembered decisions are already recorded', () => {
+    const msgs = [{ from: 'a', parts: [{ text: 'hi' }] }] as Parameters<typeof graphPrompt>[0];
+    expect(graphPrompt(msgs, [], ['Use Mongo'])).toContain('do not extract these again:\n- Use Mongo');
+    expect(graphPrompt(msgs, [])).not.toContain('Already recorded');
   });
 
   it('reads a graph job off the queue', () => {

@@ -49,7 +49,7 @@ import { CanvasService, type CanvasSchedule, type CanvasView, type Presence } fr
 import { ScheduleService } from './scheduleService.js';
 import type { BackfillSummary } from '../graph/backfill.js';
 import type { GraphSearch } from '../graph/search.js';
-import type { GraphStore } from '../graph/store.js';
+import { channelOf, type GraphStore } from '../graph/store.js';
 import { WakeService, type WakeCheck, type WakeTiming } from './wakeService.js';
 
 export type { CanvasSchedule, CanvasView, Presence, WakeCheck, WakeTiming };
@@ -177,7 +177,7 @@ export class HubService {
   /** Model prices for charging a search to the app's maker. */
   vertexPrices?: LlmPrices;
   /** The context graph's nodes and edges for graph/queries.ts; set only when CONTEXT_GRAPH_ENABLED. Unchecked: filter through graph/acl.ts. */
-  graph?: Pick<GraphStore, 'nodes' | 'edgesOf' | 'recentDecisions' | 'countByKind'>;
+  graph?: Pick<GraphStore, 'nodes' | 'edgesOf' | 'recentDecisions' | 'countByKind' | 'upsertNode'>;
   /** Extracts a done thread into the context graph; set only when CONTEXT_GRAPH_ENABLED and Vertex are. */
   extractGraph?: (job: GraphJob) => Promise<void>;
   /** Enqueues the last 90 days' graph jobs (see backfillGraph); set with extractGraph. */
@@ -515,6 +515,22 @@ export class HubService {
   }
 
   /** A file anyone may download: attached to what a public channel shows (ChatService.isPublicFile). */
+  /**
+   * Saves a decision to the context graph now, cited to a channel or thread message the caller can read. No model
+   * call; the extractor's rebuilds keep it and are told not to extract it again.
+   */
+  async rememberDecision(caller: AgentRecord, input: { decision: string; details?: string; messageId: string }): Promise<{ id: string }> {
+    const m = await this.chat.store.message(input.messageId).catch(() => undefined);
+    const chId = m && channelOf(m.conversationId);
+    const ch = chId && (await this.chat.canRead(caller, m.conversationId)) ? (await this.registry.channelsById([chId])).get(chId) : undefined;
+    if (!m || !ch || !this.graph) throw new HubError('not_found', `No channel message ${input.messageId} you can read`);
+    const id = await this.graph.upsertNode({
+      workspaceId: ch.workspaceId, conversationId: m.conversationId, kind: 'decision', title: input.decision.trim(),
+      ...(input.details?.trim() ? { text: input.details.trim() } : {}), sourceMessageIds: [m.id], evidenceAt: m.at, remembered: true,
+    });
+    return { id: id! };
+  }
+
   /** Channel or workspace owner: shares one post's thread with anyone (or stops). The post must be this channel's. */
   async setThreadPublic(caller: AgentRecord, channelId: string, post: string, pub: boolean): Promise<ChannelRecord> {
     const m = await this.chat.store.message(post).catch(() => undefined);

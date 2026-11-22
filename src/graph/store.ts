@@ -113,7 +113,7 @@ export class GraphStore {
   }
 
   /** Inserts or refreshes a node (keyed by `key`, default its title) and returns its id; undefined when disabled. `source` defaults to its conversation. */
-  async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[]; source?: GraphSource; evidenceAt?: string }): Promise<string | undefined> {
+  async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[]; source?: GraphSource; evidenceAt?: string; remembered?: boolean }): Promise<string | undefined> {
     if (!this.options.enabled) return undefined;
     const { workspaceId, conversationId, kind, title, text, evidenceAt, source = { kind: 'conversation', conversationId } } = node;
     const key = normalizeKey(node.key ?? title);
@@ -127,7 +127,7 @@ export class GraphStore {
     await this.db.execute(() => this.db.mongoDb.collection<{ _id: string }>(NODES).updateOne(
       { _id: id },
       {
-        $set: { title, ...(text !== undefined ? { text } : {}), ...(evidenceAt ? { evidenceAt } : {}), source, updatedAt: now },
+        $set: { title, ...(text !== undefined ? { text } : {}), ...(evidenceAt ? { evidenceAt } : {}), ...(node.remembered ? { remembered: true } : {}), source, updatedAt: now },
         $setOnInsert: { workspaceId, conversationId, kind, key, ...(canonicalId ? { canonicalId } : {}), createdAt: now },
         $addToSet: { sourceMessageIds: { $each: node.sourceMessageIds ?? [] } },
       },
@@ -174,8 +174,9 @@ export class GraphStore {
   /**
    * Deletes a scope's graph. `keepIncomingSupersedes` (a thread rebuild only) keeps other conversations' supersedes
    * edges into this one; call pruneDanglingEdges after the rebuild to drop those whose target didn't come back.
+   * `keepRemembered` (the extractor's rebuild) keeps nodes saved with the remember tool.
    */
-  async purgeGraphFor(scope: GraphScope, opts: { keepIncomingSupersedes?: boolean } = {}): Promise<void> {
+  async purgeGraphFor(scope: GraphScope, opts: { keepIncomingSupersedes?: boolean; keepRemembered?: boolean } = {}): Promise<void> {
     if (!this.options.enabled) return;
     const { workspaceId } = scope;
     const conv = conversationFilter(scope);
@@ -185,7 +186,8 @@ export class GraphStore {
       : {};
     const edges = conv === undefined ? { workspaceId } : { workspaceId, $or: [{ fromConversationId: conv }, { toConversationId: conv }], ...keep };
     const col = (name: string) => this.db.mongoDb.collection(name);
-    await this.db.execute(() => Promise.all([col(NODES).deleteMany(own), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges), col(WATERMARKS).deleteMany(own)]));
+    const nodes = opts.keepRemembered ? { ...own, remembered: { $ne: true } } : own;
+    await this.db.execute(() => Promise.all([col(NODES).deleteMany(nodes), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges), col(WATERMARKS).deleteMany(own)]));
     // A thread run purges its own graph; its run counter must outlive that, so only wider purges drop counters.
     if (scope.conversationId === undefined) await this.db.execute(() => col(RUNS).deleteMany(own));
     else await this.db.execute(() => col(RUNS).updateOne({ _id: idOf(workspaceId, scope.conversationId!) as never }, { $unset: { extractedSeq: '' } }));
@@ -232,6 +234,13 @@ export class GraphStore {
    * The channel's (and its threads') newest decisions by when their evidence was posted, newest first; none when
    * disabled. Decisions extracted before evidenceAt existed sort by extraction time instead.
    */
+  /** Titles of the decisions saved with the remember tool in this conversation. */
+  async rememberedTitles(workspaceId: string, conversationId: string): Promise<string[]> {
+    if (!this.options.enabled) return [];
+    const docs = await this.db.execute(() => this.db.mongoDb.collection<{ title: string }>(NODES).find({ workspaceId, conversationId, kind: 'decision', remembered: true }, { projection: { title: 1 } }).toArray());
+    return docs.map((d) => d.title);
+  }
+
   async recentDecisions(workspaceId: string, channelId: string, limit: number): Promise<{ id: string; title: string; conversationId: string; evidenceAt?: string }[]> {
     if (!this.options.enabled) return [];
     const docs = await this.db.execute(() => this.db.mongoDb.collection(NODES).aggregate<{ _id: string; title: string; conversationId: string; evidenceAt?: string }>([

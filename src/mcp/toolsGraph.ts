@@ -21,7 +21,7 @@ const nodeView = (n: MergedNode) => ({ id: n.id, kind: n.kind, title: n.title, s
 })) });
 const edgeView = (e: GraphEdgeDoc) => ({ kind: e.kind, from: e.from, to: e.to });
 
-/** Registers find_decisions and related when the context graph is on; hidden otherwise, like web_search. */
+/** Registers find_decisions, related and remember when the context graph is on; hidden otherwise, like web_search. */
 export function registerGraphTools(server: McpServer, { hub, me, tool }: GraphToolDeps): void {
   if (!hub.graph || !hub.graphSearch) return;
 
@@ -61,5 +61,21 @@ export function registerGraphTools(server: McpServer, { hub, me, tool }: GraphTo
         const { nodes, edges } = await relatedEntries(hub, await me(), args);
         return { nodes: nodes.map(nodeView), edges: edges.map(edgeView) };
       }),
+  );
+
+  server.registerTool(
+    'remember',
+    {
+      title: 'Remember a decision',
+      description:
+        'Records a decision your team just made in the context graph right away, so find_decisions finds it without waiting for ' +
+        'the thread to be read. Cite the channel or thread message that settled it.',
+      inputSchema: {
+        decision: z.string().min(1).max(200).describe('A short title for what was decided.'),
+        details: z.string().max(1000).optional().describe('One or two sentences: what was decided and why.'),
+        messageId: z.string().describe('The channel or thread message that states or settles it.'),
+      },
+    },
+    (args) => tool(async () => hub.rememberDecision(await me(), args)),
   );
 }

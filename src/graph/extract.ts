@@ -74,8 +74,11 @@ export const GRAPH_SCHEMA = {
   required: ['decisions'],
 };
 
-/** The extraction prompt for `messages`, offering `replaceable` (numbered from 1) as decisions a new one may replace. */
-export function graphPrompt(messages: Pick<MessageDoc, 'from' | 'parts'>[], replaceable: { title: string }[]): string {
+/**
+ * The extraction prompt for `messages`, offering `replaceable` (numbered from 1) as decisions a new one may replace.
+ * `recorded`: decisions someone already saved here with the remember tool, which survive the rebuild.
+ */
+export function graphPrompt(messages: Pick<MessageDoc, 'from' | 'parts'>[], replaceable: { title: string }[], recorded: string[] = []): string {
   return [
     'Extract the decisions this team conversation reached. For each: a short "title", one sentence of "text" on what was decided and why,',
     'the "people" (by the names shown) who made or own it, and up to three short lowercase "topics".',
@@ -87,6 +90,8 @@ export function graphPrompt(messages: Pick<MessageDoc, 'from' | 'parts'>[], repl
     ...(replaceable.length
       ? ['', 'Earlier decisions in this channel, numbered. If a decision here changes or reverses one of them, set its "replaces" to that number. Do not repeat an earlier decision that is only mentioned again:', ...replaceable.map((c, i) => `${i + 1}. ${c.title}`)]
       : []),
+    // ponytail: the model is trusted to skip these; a reworded duplicate becomes a second node. Match by embedding once #787 lands.
+    ...(recorded.length ? ['', 'Already recorded from this conversation; do not extract these again:', ...recorded.map((t) => `- ${t}`)] : []),
     '',
     ...messages.map((m, i) => `[${i + 1}] ${m.from}: ${truncateMessageText(textOf(m))}`),
   ].join('\n');
@@ -166,7 +171,8 @@ export function graphExtractor(deps: {
     // ponytail: only the channel's MAX_REPLACEABLE newest decisions are offered, so an older one is never marked replaced; page candidates if that bites.
     const replaceable = (await graph.recentDecisions(workspaceId, key.channelId, MAX_REPLACEABLE))
       .filter((c) => !(key.kind === 'thread' && c.conversationId === conversationId) && sameReaders(conversationId, c.conversationId, channel));
-    const out = await generate({ ...llm, prompt: graphPrompt(messages, replaceable), thinkingLevel: 'low', timeoutMs: 30_000, schema: GRAPH_SCHEMA });
+    const recorded = await graph.rememberedTitles(workspaceId, conversationId);
+    const out = await generate({ ...llm, prompt: graphPrompt(messages, replaceable, recorded), thinkingLevel: 'low', timeoutMs: 30_000, schema: GRAPH_SCHEMA });
     if (out.usage) await graph.recordGraphSpend(workspaceId, costMicros(prices, out.usage));
     if (!out.ok) {
       const msg = `graph: ${llm.model} answered HTTP ${out.status} for ${conversationId}`;
@@ -179,7 +185,7 @@ export function graphExtractor(deps: {
       // few-ms write window can interleave with it. Serialise per thread (or write under a run tag) if that ever bites.
       if (!(await graph.isLatestGraphRun(workspaceId, conversationId, run))) return;
       // Keeps other conversations' supersedes edges into this thread; pruned below if the target didn't come back or is now newer.
-      await graph.purgeGraphFor({ workspaceId, conversationId }, { keepIncomingSupersedes: true });
+      await graph.purgeGraphFor({ workspaceId, conversationId }, { keepIncomingSupersedes: true, keepRemembered: true });
     }
     // A person the thread knows is keyed on their agent id (titled with their thread name), so a rename or a
     // differently-cased mention is one node. ponytail: names the thread never posted as stay keyed by name.
