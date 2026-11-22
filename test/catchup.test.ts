@@ -178,7 +178,7 @@ describe('Catch me up (GET /conversations/:key/catchup)', () => {
     expect(res.decisions.some((d) => d.includes('Approved ✅'))).toBe(true);
     expect(res.actionItems.some((a) => a.includes(`@${owner.name}`))).toBe(true);
     expect(res.openQuestions.some((q) => q.includes('Should we enable rate limiting per user?'))).toBe(true);
-  });
+  }, 120_000); // ponytail: 85 sequential sends take ~1s locally but >30s on a loaded CI Mongo (#819 and others); seed via the store directly if this keeps creeping
 
   it('enforces authz over REST, supports threads, validates sinceSeq, and enforces per-user rate limit', async () => {
     const a = await newAgentOverHttp(baseUrl, { name: 'BotA' });

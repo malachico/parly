@@ -46,43 +46,59 @@ function configured(hubUrl: string, agentId = 'a1') {
 
 const cacheFile = (dir: string) => path.join(dir, 'codex.mcp-cache.json');
 
-/** Runs the bridge, sends `msgs`, and returns what it wrote within `ms`, with when each line arrived. */
-function bridge(dir: string, msgs: unknown[], ms: number, env: NodeJS.ProcessEnv = {}) {
-  return new Promise<{ msg: { id?: number; method?: string; result?: { tools?: { name: string }[]; instructions?: string } }; after: number }[]>((resolve) => {
+type Line = { msg: { id?: number; method?: string; result?: { tools?: { name: string }[]; instructions?: string } } };
+
+/**
+ * Runs the bridge, sends `msgs`, and stops it once `done(lines)` holds (checked on every line and every 20ms), with
+ * `ms` only as a ceiling. Waiting on the outcome, not a fixed time, is what keeps this green on slow CI runners.
+ */
+function bridge(dir: string, msgs: unknown[], done: (lines: Line[]) => boolean, env: NodeJS.ProcessEnv = {}, ms = 10_000) {
+  return new Promise<Line[]>((resolve) => {
     const p = spawn('node', [HUB_MCP, '--client', 'codex'], { env: { ...process.env, ...env, A2A_HUB_CONFIG_DIR: dir } });
-    const start = Date.now();
-    const lines: { msg: never; after: number }[] = [];
+    const lines: Line[] = [];
     let buffer = '';
+    const check = () => done(lines) && p.kill();
     p.stdout.on('data', (d) => {
       buffer += d;
       const parts = buffer.split('\n');
       buffer = parts.pop()!;
-      for (const l of parts) lines.push({ msg: JSON.parse(l) as never, after: Date.now() - start });
+      for (const l of parts) lines.push({ msg: JSON.parse(l) });
+      check();
     });
     p.stdin.write(msgs.map((m) => JSON.stringify(m)).join('\n') + '\n');
-    setTimeout(() => p.kill(), ms);
-    p.on('close', () => resolve(lines));
+    const poll = setInterval(check, 20);
+    const ceiling = setTimeout(() => p.kill(), ms);
+    p.on('close', () => {
+      clearInterval(poll);
+      clearTimeout(ceiling);
+      resolve(lines);
+    });
   });
 }
+
+const answered = (id: number) => (lines: Line[]) => lines.some((l) => l.msg.id === id);
+/** The background refresh is over once it has rewritten the cache (an atomic rename, so a new inode); it decides whether to notify in the same step. */
+const refreshed = (dir: string) => {
+  const ino = fs.existsSync(cacheFile(dir)) ? fs.statSync(cacheFile(dir)).ino : -1;
+  return (lines: Line[]) => answered(2)(lines) && fs.existsSync(cacheFile(dir)) && fs.statSync(cacheFile(dir)).ino !== ino;
+};
 
 const handshake = [init, { jsonrpc: '2.0', id: 2, method: 'tools/list' }];
 
 describe('hub-mcp starts without waiting for the hub', () => {
   it('a slow hub cannot delay the tools once they are known', async () => {
-    const hub = await fakeHub(4000);
+    const hub = await fakeHub(60_000); // longer than the bridge's 10s ceiling: only the cache can answer in time, however slow the runner
     const dir = configured(hub.url);
     fs.writeFileSync(cacheFile(dir), JSON.stringify({ hubUrl: hub.url, agentId: 'a1', instructions: 'cached', tools: [tool('check_inbox')] }));
-    const lines = await bridge(dir, handshake, 600);
-    const list = lines.find((l) => l.msg.id === 2)!;
-    expect(list.after).toBeLessThan(500);
-    expect(list.msg.result!.tools!.map((t) => t.name)).toEqual(['check_inbox']);
+    const lines = await bridge(dir, handshake, answered(2));
+    expect(lines.find((l) => l.msg.id === 2)!.msg.result!.tools!.map((t) => t.name)).toEqual(['check_inbox']);
     expect(lines.find((l) => l.msg.id === 1)!.msg.result!.instructions).toBe('cached');
-  }, 15_000);
+  });
 
   it('answers live on the first start, and keeps it private', async () => {
     const hub = await fakeHub(0);
     const dir = configured(hub.url);
-    const lines = await bridge(dir, handshake, 800);
+    const lines = await bridge(dir, handshake, refreshed(dir));
     expect(lines.find((l) => l.msg.id === 2)!.msg.result!.tools!.map((t) => t.name)).toEqual(['check_inbox']);
     expect(hub.asked).toEqual(expect.arrayContaining(['initialize', 'tools/list']));
     expect(JSON.parse(fs.readFileSync(cacheFile(dir), 'utf8'))).toMatchObject({ agentId: 'a1', instructions: 'from the hub' });
@@ -93,7 +109,7 @@ describe('hub-mcp starts without waiting for the hub', () => {
     const hub = await fakeHub(0, [tool('theirs')]);
     const dir = configured(hub.url, 'a2');
     fs.writeFileSync(cacheFile(dir), JSON.stringify({ hubUrl: hub.url, agentId: 'a1', instructions: 'old', tools: [tool('mine')] }));
-    const lines = await bridge(dir, handshake, 800);
+    const lines = await bridge(dir, handshake, answered(2));
     expect(lines.find((l) => l.msg.id === 2)!.msg.result!.tools!.map((t) => t.name)).toEqual(['theirs']);
   });
 
@@ -101,18 +117,18 @@ describe('hub-mcp starts without waiting for the hub', () => {
     const hub = await fakeHub(0, [tool('check_inbox'), tool('new_tool')]);
     const dir = configured(hub.url);
     fs.writeFileSync(cacheFile(dir), JSON.stringify({ hubUrl: hub.url, agentId: 'a1', instructions: 'old', tools: [tool('check_inbox')] }));
-    const changed = await bridge(dir, handshake, 800);
+    const changed = await bridge(dir, handshake, refreshed(dir));
     expect(changed.find((l) => l.msg.id === 2)!.msg.result!.tools!.map((t) => t.name)).toEqual(['check_inbox']);
     expect(changed.some((l) => l.msg.method === 'notifications/tools/list_changed')).toBe(true);
     expect(JSON.parse(fs.readFileSync(cacheFile(dir), 'utf8')).tools).toHaveLength(2);
-    const same = await bridge(dir, handshake, 800);
+    const same = await bridge(dir, handshake, refreshed(dir));
     expect(same.some((l) => l.msg.method === 'notifications/tools/list_changed')).toBe(false);
   });
 
   it('leaves the cached tools alone when the refresh fails', async () => {
     const dir = configured('http://127.0.0.1:9');
     fs.writeFileSync(cacheFile(dir), JSON.stringify({ hubUrl: 'http://127.0.0.1:9', agentId: 'a1', instructions: 'old', tools: [tool('check_inbox')] }));
-    const lines = await bridge(dir, handshake, 500);
+    const lines = await bridge(dir, handshake, answered(2));
     expect(lines.find((l) => l.msg.id === 2)!.msg.result!.tools!.map((t) => t.name)).toEqual(['check_inbox']);
     expect(JSON.parse(fs.readFileSync(cacheFile(dir), 'utf8')).tools).toHaveLength(1);
   });
@@ -121,19 +137,19 @@ describe('hub-mcp starts without waiting for the hub', () => {
     const hub = await fakeHub(0);
     const dir = configured(hub.url);
     const call = (name: string, conversation?: string) => ({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: conversation ? { conversation } : {} } });
-    await bridge(dir, [init, call('whoami', 'dm:a_b')], 1500);
+    await bridge(dir, [init, call('whoami', 'dm:a_b')], answered(3));
     const reads = () => (fs.existsSync(path.join(dir, 'codex.workers')) ? fs.readdirSync(path.join(dir, 'codex.workers')).filter((n) => n.endsWith('.read')) : []);
     expect(reads()).toEqual([]);
-    await bridge(dir, [init, call('check_inbox', 'dm:a_b')], 1500);
+    await bridge(dir, [init, call('check_inbox', 'dm:a_b')], answered(3));
     expect(reads()).toHaveLength(1);
-  }, 15_000); // ponytail: 500ms was too tight on slow CI runners (failed #816, #818)
+  });
 
   it('a worker session tells the hub its conversation, so the hub leaves out the note about the others', async () => {
     const hub = await fakeHub(0);
     const call = { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'check_inbox', arguments: {} } };
-    await bridge(configured(hub.url), [call], 1500, { PARLY_WORKER: 'dm:x' });
+    await bridge(configured(hub.url), [call], answered(3), { PARLY_WORKER: 'dm:x' });
     expect(hub.headers.at(-1)!['x-parly-conversation']).toBe('dm:x');
-  }, 15_000);
+  });
 });
 
 describe('config files', () => {
