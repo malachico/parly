@@ -92,6 +92,8 @@ describe('one session per conversation (plugins/parly/bin/workers.mjs)', () => {
     await turn();
     expect(prompts[0]).toContain('You are Scout');
     expect(prompts[0]).toContain('channel:c1: Bob: "ship it"');
+    expect(prompts[0]).toContain('keep working until it is done or blocked');
+    expect(prompts[0]).not.toContain('Stop once you have answered');
     await turn();
     expect(prompts[1]).toBe('New messages in dm:a_b: call check_inbox with conversation "dm:a_b" and answer as before.');
     enqueue('claude-code', [{ id: 'm3', conversation: 'channel:c1', from: 'Bob', text: 'shipped', at: new Date(Date.now() + 1000).toISOString() }], '/work');
