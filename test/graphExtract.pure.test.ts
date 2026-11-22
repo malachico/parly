@@ -25,6 +25,7 @@ function setup(opts: { enabled?: boolean; canSpend?: boolean; cap?: number; late
     canSpendOnGraph: vi.fn(async () => opts.canSpend ?? true),
     recordGraphSpend: vi.fn(async () => {}),
     purgeGraphFor: vi.fn(async () => {}),
+    pruneDanglingEdges: vi.fn(async () => {}),
     upsertNode: vi.fn(async (n: { kind: string; key?: string; title: string }) => `${n.kind}:${n.key ?? n.title}`),
     upsertEdge: vi.fn(async (_e: { kind: string; to: { id: string } }) => 'e'),
     channelWatermark: vi.fn(async () => 4),
@@ -66,7 +67,7 @@ describe('graph extraction (pure)', () => {
     await run(job);
     await run(job);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(graph.purgeGraphFor).toHaveBeenCalledWith({ workspaceId: 'w', conversationId: job.conversationId });
+    expect(graph.purgeGraphFor).toHaveBeenCalledWith({ workspaceId: 'w', conversationId: job.conversationId }, { keepIncomingSupersedes: true });
     expect(graph.purgeGraphFor.mock.invocationCallOrder[0]).toBeLessThan(graph.upsertNode.mock.invocationCallOrder[0] ?? 0);
     expect(graph.recordGraphSpend).toHaveBeenCalledWith('w', 110);
     const nodes = graph.upsertNode.mock.calls.map(([n]) => n);

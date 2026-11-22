@@ -99,6 +99,8 @@ const MAX_REPLACEABLE = 20;
 const MAX_DEFERRALS = 3;
 const DEFER_JITTER_MS = 3 * 3_600_000;
 
+const latest = (times: string[]): string | undefined => times.reduce<string | undefined>((a, t) => (!a || t > a ? t : a), undefined);
+
 /** gemini-3.5-flash-lite, USD per million tokens. ponytail: hardcoded; move to config if the extraction model changes. */
 const FLASH_LITE_PRICES: LlmPrices = { input: 0.1, output: 0.4 };
 
@@ -156,9 +158,8 @@ export function graphExtractor(deps: {
     if (!messages?.length) return;
     // Decisions this one may replace: only ones with the same readers (Decision 3), and never the thread's own,
     // which the purge below drops.
-    // ponytail: only the channel's MAX_REPLACEABLE newest decisions are offered, so an older one is never marked
-    // replaced; "newer" is extraction order, so a reopened old thread can claim to replace a later decision; and a
-    // thread rerun's purge drops other conversations' supersedes edges into it; page candidates or keep those edges if that bites.
+    // Newest is by when the evidence was posted (evidenceAt), so a reopened old thread can't replace a later decision.
+    // ponytail: only the channel's MAX_REPLACEABLE newest decisions are offered, so an older one is never marked replaced; page candidates if that bites.
     const replaceable = (await graph.recentDecisions(workspaceId, key.channelId, MAX_REPLACEABLE))
       .filter((c) => !(key.kind === 'thread' && c.conversationId === conversationId) && sameReaders(conversationId, c.conversationId, channel));
     const out = await generate({ ...llm, prompt: graphPrompt(messages, replaceable), thinkingLevel: 'low', timeoutMs: 30_000, schema: GRAPH_SCHEMA });
@@ -173,12 +174,13 @@ export function graphExtractor(deps: {
       // ponytail: check-then-write, not a lock; a newer run that starts and finishes its model call within this run's
       // few-ms write window can interleave with it. Serialise per thread (or write under a run tag) if that ever bites.
       if (!(await graph.isLatestGraphRun(workspaceId, conversationId, run))) return;
-      await graph.purgeGraphFor({ workspaceId, conversationId });
+      // Keeps other conversations' supersedes edges into this thread; pruned below if the target didn't come back or is now newer.
+      await graph.purgeGraphFor({ workspaceId, conversationId }, { keepIncomingSupersedes: true });
     }
     // A person the thread knows is keyed on their agent id (titled with their thread name), so a rename or a
     // differently-cased mention is one node. ponytail: names the thread never posted as stay keyed by name.
     const authors = new Map(messages.map((m) => [m.from.toLowerCase(), { id: m.fromId, name: m.from }]));
-    const node = (kind: 'decision' | 'person' | 'topic', title: string, extra: { key?: string; text?: string; sourceMessageIds?: string[] } = {}) =>
+    const node = (kind: 'decision' | 'person' | 'topic', title: string, extra: { key?: string; text?: string; sourceMessageIds?: string[]; evidenceAt?: string } = {}) =>
       graph.upsertNode({ workspaceId, conversationId, kind, title, ...extra });
     const edge = async (kind: string, from: string | undefined, to: Promise<string | undefined>) => {
       const toId = await to;
@@ -187,9 +189,12 @@ export function graphExtractor(deps: {
     for (const d of parseGraphExtraction(out.text)) {
       // Cites only messages from this batch, so never another conversation's: an index the model made up is dropped.
       const cited = [...new Set((d.messages ?? []).map((i) => messages[i - 1]?.id).filter((id): id is string => !!id))];
-      const decision = await node('decision', d.title, { text: d.text, ...(cited.length ? { sourceMessageIds: cited } : {}) });
+      // When the decision was made: its newest cited message, else the batch's newest. ISO strings compare in order.
+      const evidenceAt = latest((cited.length ? messages.filter((m) => cited.includes(m.id)) : messages).map((m) => m.at));
+      const decision = await node('decision', d.title, { text: d.text, evidenceAt, ...(cited.length ? { sourceMessageIds: cited } : {}) });
       const old = d.replaces !== undefined ? replaceable[d.replaces - 1] : undefined;
-      if (decision && old && old.id !== decision) {
+      // A decision replaces only an older one; one without evidenceAt (extracted before it existed) is taken on trust.
+      if (decision && old && old.id !== decision && !(old.evidenceAt && evidenceAt && old.evidenceAt >= evidenceAt)) {
         await graph.upsertEdge({ workspaceId, kind: 'supersedes', from: { id: decision, conversationId }, to: { id: old.id, conversationId: old.conversationId } });
       }
       // TODO(#787): embed the decision nodes once graph embeddings land.
@@ -201,6 +206,7 @@ export function graphExtractor(deps: {
         ...d.topics.map((t) => edge('about', decision, node('topic', t))),
       ]);
     }
+    if (key.kind === 'thread') await graph.pruneDanglingEdges(workspaceId, conversationId);
     if (key.kind === 'channel') await graph.setChannelWatermark(workspaceId, conversationId, Math.max(...messages.map((m) => m.seq)));
   };
 }

@@ -154,4 +154,44 @@ describe('GraphStore', () => {
     expect(await count('graph_edges')).toBe(2);
     expect(await count('graph_nodes', { title: 'Ship Monday' })).toBe(0);
   });
+
+  it('a reopened old thread keeps newer threads\' supersedes edges into it, and cannot replace them', async () => {
+    const { db, graph, count } = setup();
+    const at = { a: '2026-01-01T00:00:00.000Z', b: '2026-02-01T00:00:00.000Z' };
+    const root = (post: string) => ({ id: post, from: 'Ana', fromId: 'agent-ana', at: at[post as 'a' | 'b'], parts: [{ kind: 'text', text: 'x' }] }) as unknown as MessageDoc;
+    let answer: unknown;
+    const run = graphExtractor({
+      graph,
+      store: { message: async (id: string) => root(id), page: async () => [], since: async () => [], conversation: async () => undefined },
+      registry: { channelDoc: async () => ({}), workspaceDoc: async () => ({}) },
+      llm: { project: 'p', location: 'global', model: 'm', accessToken: async () => 't', fetchImpl: (async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }] }))) as typeof fetch },
+    });
+    const thread = (post: string) => ({ kind: 'graph' as const, workspaceId: 'w', conversationId: `thread:c:${post}` });
+    const decision = (title: string, replaces?: number) => ({ decisions: [{ title, text: title, people: [], topics: [], messages: [1], ...(replaces ? { replaces } : {}) }] });
+    const supersedes = () => db.execute(() => db.mongoDb.collection<{ fromConversationId: string; toConversationId: string }>('graph_edges').find({ kind: 'supersedes' }).toArray());
+
+    answer = decision('Use Postgres');
+    await run(thread('a'));
+    answer = decision('Use Mongo', 1);
+    await run(thread('b'));
+    expect((await supersedes()).map((e) => `${e.fromConversationId}>${e.toConversationId}`)).toEqual(['thread:c:b>thread:c:a']);
+
+    // A rebuilds with the same decision, and the model claims it replaces B's (the newest candidate): B's evidence is newer, so no.
+    answer = decision('Use Postgres', 1);
+    await run(thread('a'));
+    expect((await supersedes()).map((e) => `${e.fromConversationId}>${e.toConversationId}`)).toEqual(['thread:c:b>thread:c:a']);
+    expect((await graph.recentDecisions('w', 'c', 5)).map((d) => d.title)).toEqual(['Use Mongo', 'Use Postgres']);
+
+    // A reopens in March and switches back to Postgres, replacing B's: now A's evidence is newer, so A>B, and B>A goes.
+    at.a = '2026-03-01T00:00:00.000Z';
+    answer = decision('Use Postgres', 1);
+    await run(thread('a'));
+    expect((await supersedes()).map((e) => `${e.fromConversationId}>${e.toConversationId}`)).toEqual(['thread:c:a>thread:c:b']);
+
+    // A's decision changes: the edges from and into the old one go with it.
+    answer = decision('Use SQLite');
+    await run(thread('a'));
+    expect(await supersedes()).toEqual([]);
+    expect(await count('graph_edges', { toConversationId: 'thread:c:a' })).toBe(0);
+  });
 });

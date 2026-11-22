@@ -110,9 +110,9 @@ export class GraphStore {
   }
 
   /** Inserts or refreshes a node (keyed by `key`, default its title) and returns its id; undefined when disabled. `source` defaults to its conversation. */
-  async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[]; source?: GraphSource }): Promise<string | undefined> {
+  async upsertNode(node: GraphScope & { conversationId: string; kind: GraphNodeKind; title: string; text?: string; key?: string; sourceMessageIds?: string[]; source?: GraphSource; evidenceAt?: string }): Promise<string | undefined> {
     if (!this.options.enabled) return undefined;
-    const { workspaceId, conversationId, kind, title, text, source = { kind: 'conversation', conversationId } } = node;
+    const { workspaceId, conversationId, kind, title, text, evidenceAt, source = { kind: 'conversation', conversationId } } = node;
     const key = normalizeKey(node.key ?? title);
     const id = idOf(workspaceId, conversationId, kind, key);
     const now = new Date().toISOString();
@@ -124,7 +124,7 @@ export class GraphStore {
     await this.db.execute(() => this.db.mongoDb.collection<{ _id: string }>(NODES).updateOne(
       { _id: id },
       {
-        $set: { title, ...(text !== undefined ? { text } : {}), source, updatedAt: now },
+        $set: { title, ...(text !== undefined ? { text } : {}), ...(evidenceAt ? { evidenceAt } : {}), source, updatedAt: now },
         $setOnInsert: { workspaceId, conversationId, kind, key, ...(canonicalId ? { canonicalId } : {}), createdAt: now },
         $addToSet: { sourceMessageIds: { $each: node.sourceMessageIds ?? [] } },
       },
@@ -168,18 +168,45 @@ export class GraphStore {
   }
 
   /** Deletes the scope's nodes and embeddings, and every edge with either end in it. */
-  async purgeGraphFor(scope: GraphScope): Promise<void> {
+  /**
+   * Deletes a scope's graph. `keepIncomingSupersedes` (a thread rebuild only) keeps other conversations' supersedes
+   * edges into this one; call pruneDanglingEdges after the rebuild to drop those whose target didn't come back.
+   */
+  async purgeGraphFor(scope: GraphScope, opts: { keepIncomingSupersedes?: boolean } = {}): Promise<void> {
     if (!this.options.enabled) return;
     const { workspaceId } = scope;
     const conv = conversationFilter(scope);
     const own = conv === undefined ? { workspaceId } : { workspaceId, conversationId: conv };
-    const edges = conv === undefined ? { workspaceId } : { workspaceId, $or: [{ fromConversationId: conv }, { toConversationId: conv }] };
+    const keep = opts.keepIncomingSupersedes && scope.conversationId !== undefined
+      ? { $nor: [{ kind: 'supersedes', toConversationId: scope.conversationId, fromConversationId: { $ne: scope.conversationId } }] }
+      : {};
+    const edges = conv === undefined ? { workspaceId } : { workspaceId, $or: [{ fromConversationId: conv }, { toConversationId: conv }], ...keep };
     const col = (name: string) => this.db.mongoDb.collection(name);
     await this.db.execute(() => Promise.all([col(NODES).deleteMany(own), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges), col(WATERMARKS).deleteMany(own)]));
     // A thread run purges its own graph; its run counter must outlive that, so only wider purges drop counters.
     if (scope.conversationId === undefined) await this.db.execute(() => col(RUNS).deleteMany(own));
     // Channel-scoped skill nodes live under `skill:<id>`, not the channel's conversations.
     if (scope.channelId !== undefined) await this.deleteNodes({ workspaceId, kind: 'skill', 'source.channelId': scope.channelId });
+  }
+
+  /**
+   * After a thread rebuild that kept incoming edges: deletes those whose target node didn't come back, and other
+   * conversations' supersedes edges whose source's evidence is no newer than the rebuilt target's (it switched back).
+   */
+  async pruneDanglingEdges(workspaceId: string, conversationId: string): Promise<void> {
+    if (!this.options.enabled) return;
+    type N = { _id: string; evidenceAt?: string };
+    await this.db.execute(async () => {
+      const nodes = this.db.mongoDb.collection<N>(NODES);
+      const edges = this.db.mongoDb.collection<{ _id: string; from: string; to: string }>(EDGES);
+      const own = new Map((await nodes.find({ workspaceId, conversationId }, { projection: { evidenceAt: 1 } }).toArray()).map((n) => [n._id, n.evidenceAt]));
+      await edges.deleteMany({ workspaceId, toConversationId: conversationId, to: { $nin: [...own.keys()] } });
+      const incoming = await edges.find({ workspaceId, kind: 'supersedes', toConversationId: conversationId, fromConversationId: { $ne: conversationId } }).toArray();
+      if (!incoming.length) return;
+      const from = new Map((await nodes.find({ _id: { $in: incoming.map((e) => e.from) } }, { projection: { evidenceAt: 1 } }).toArray()).map((n) => [n._id, n.evidenceAt]));
+      const stale = incoming.filter((e) => { const f = from.get(e.from), t = own.get(e.to); return f && t && f <= t; }).map((e) => e._id);
+      if (stale.length) await edges.deleteMany({ _id: { $in: stale } });
+    });
   }
 
   /** Deletes the nodes matching `filter`, their embeddings, and every edge touching them. */
@@ -197,13 +224,20 @@ export class GraphStore {
     });
   }
 
-  /** The channel's (and its threads') most recently extracted decisions, newest first; none when disabled. */
-  async recentDecisions(workspaceId: string, channelId: string, limit: number): Promise<{ id: string; title: string; conversationId: string }[]> {
+  /**
+   * The channel's (and its threads') newest decisions by when their evidence was posted, newest first; none when
+   * disabled. Decisions extracted before evidenceAt existed sort by extraction time instead.
+   */
+  async recentDecisions(workspaceId: string, channelId: string, limit: number): Promise<{ id: string; title: string; conversationId: string; evidenceAt?: string }[]> {
     if (!this.options.enabled) return [];
-    const docs = await this.db.execute(() => this.db.mongoDb.collection<{ _id: string; title: string; conversationId: string }>(NODES)
-      .find({ workspaceId, kind: 'decision', conversationId: conversationFilter({ workspaceId, channelId }) }, { projection: { title: 1, conversationId: 1 } })
-      .sort({ updatedAt: -1 }).limit(limit).toArray());
-    return docs.map((d) => ({ id: d._id, title: d.title, conversationId: d.conversationId }));
+    const docs = await this.db.execute(() => this.db.mongoDb.collection(NODES).aggregate<{ _id: string; title: string; conversationId: string; evidenceAt?: string }>([
+      { $match: { workspaceId, kind: 'decision', conversationId: conversationFilter({ workspaceId, channelId }) } },
+      { $addFields: { t: { $ifNull: ['$evidenceAt', '$updatedAt'] } } },
+      { $sort: { t: -1, _id: 1 } },
+      { $limit: limit },
+      { $project: { title: 1, conversationId: 1, evidenceAt: 1 } },
+    ]).toArray());
+    return docs.map((d) => ({ id: d._id, title: d.title, conversationId: d.conversationId, ...(d.evidenceAt ? { evidenceAt: d.evidenceAt } : {}) }));
   }
 
   /** Nodes in `workspaceIds` matching `filter`. Unchecked: show them only through graph/acl.ts. */
