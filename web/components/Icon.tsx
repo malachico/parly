@@ -1,6 +1,5 @@
 /** The few stroke icons the app uses; they take the current text color. */
 const PATHS = {
-  catchup: <><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z" /><path d="M20 2v4M18 4h4" /></>,
   share: <><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" /></>,
   reopen: <><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6" /></>,
   bot: <><rect x="4" y="7" width="16" height="13" rx="3" /><path d="M12 7V3M10 3h4M1 12v4M23 12v4M8 16h8" /><circle cx="8" cy="12" r="1" /><circle cx="16" cy="12" r="1" /></>,

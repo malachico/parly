@@ -19,7 +19,6 @@ import {
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { ALL_CAUGHT_UP_TLDR, readConversationCatchup } from '../../lib/catchup';
 
 void (async () => {
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -402,111 +401,6 @@ void (async () => {
     '/w/ws1/c/channel%3Ach1',
     'resolveChannelCloseHref strips panel and section when closing side pane',
   );
-
-  // 6. "Catch me up" server-side reader (`readConversationCatchup`): reuses #302 session/membership gate, forwards ?sinceSeq, and handles no-unread + structured summary:
-  const catchupUnauth = await readConversationCatchup(
-    { ws: 'ws1', key: 'channel:ch1' },
-    { getToken: async () => undefined, getMe: async () => undefined, fetchHub: async () => ({}) as never },
-  );
-  assert.equal(catchupUnauth.status, 401, 'Unauthenticated catchup request must return 401');
-
-  const catchupWrongWs = await readConversationCatchup(
-    { ws: 'ws-other', key: 'channel:ch1' },
-    { getToken: async () => 'tok', getMe: async () => mockMe, fetchHub: async () => ({}) as never },
-  );
-  assert.equal(catchupWrongWs.status, 403, 'Non-member workspace catchup request must return 403');
-
-  const catchupWrongChannel = await readConversationCatchup(
-    { ws: 'ws1', key: 'channel:ch-secret' },
-    { getToken: async () => 'tok', getMe: async () => mockMe, fetchHub: async () => ({}) as never },
-  );
-  assert.equal(catchupWrongChannel.status, 403, 'Non-member channel catchup request must return 403');
-
-  const catchupWrongDm = await readConversationCatchup(
-    { ws: 'ws1', key: 'dm:alice_bob' },
-    { getToken: async () => 'tok', getMe: async () => mockMe, fetchHub: async () => ({}) as never },
-  );
-  assert.equal(catchupWrongDm.status, 403, 'Non-participant DM catchup request must return 403');
-
-  const catchupBadSince = await readConversationCatchup(
-    { ws: 'ws1', key: 'channel:ch1', sinceSeq: '-1' },
-    { getToken: async () => 'tok', getMe: async () => mockMe, fetchHub: async () => ({}) as never },
-  );
-  assert.equal(catchupBadSince.status, 400, 'Negative sinceSeq must return 400');
-
-  const catchupWrongThread = await readConversationCatchup(
-    { ws: 'ws1', key: 'channel:ch1', thread: 'post-other' },
-    {
-      getToken: async () => 'tok',
-      getMe: async () => mockMe,
-      fetchHub: async (p) => {
-        if (p === '/messages/post-other') {
-          return {
-            message: { id: 'post-other', conversation: 'channel:ch-other', seq: 1, fromId: 'me', from: 'Malachi', text: 'root', at: '2026-10-27T00:00:00Z' },
-          } as never;
-        }
-        return {} as never;
-      },
-    },
-  );
-  assert.equal(catchupWrongThread.status, 404, 'Thread not belonging to channel must return 404');
-
-  const catchupNoUnread = await readConversationCatchup(
-    { ws: 'ws1', key: 'channel:ch1' },
-    {
-      getToken: async () => 'tok',
-      getMe: async () => mockMe,
-      fetchHub: async (p) => {
-        assert.equal(p, '/conversations/channel%3Ach1/catchup');
-        return {
-          caughtUp: true,
-          messageCount: 0,
-          tldr: ALL_CAUGHT_UP_TLDR,
-          decisions: [],
-          actionItems: [],
-          openQuestions: [],
-        } as never;
-      },
-    },
-  );
-  assert.equal(catchupNoUnread.status, 200);
-  if (catchupNoUnread.status === 200) {
-    assert.equal(catchupNoUnread.body.caughtUp, true);
-    assert.equal(catchupNoUnread.body.tldr, ALL_CAUGHT_UP_TLDR);
-  }
-
-  let requestedHubPath = '';
-  const catchupWithSince = await readConversationCatchup(
-    { ws: 'ws1', key: 'channel:ch1', thread: 'post-done', sinceSeq: 12 },
-    {
-      getToken: async () => 'tok',
-      getMe: async () => mockMe,
-      fetchHub: async (p) => {
-        if (p === '/messages/post-done') {
-          return {
-            message: { id: 'post-done', conversation: 'channel:ch1', seq: 10, fromId: 'me', from: 'Malachi', text: 'root', at: '2026-10-27T00:00:00Z' },
-          } as never;
-        }
-        requestedHubPath = p;
-        return {
-          caughtUp: false,
-          messageCount: 4,
-          capped: false,
-          tldr: 'Reviewed PR #302 and agreed on Catch me up API.',
-          decisions: ['Use ?sinceSeq to avoid MarkRead race'],
-          actionItems: ['@Malachi approve staging'],
-          openQuestions: [],
-        } as never;
-      },
-    },
-  );
-  assert.equal(requestedHubPath, '/conversations/thread%3Ach1%3Apost-done/catchup?sinceSeq=12');
-  assert.equal(catchupWithSince.status, 200);
-  if (catchupWithSince.status === 200) {
-    assert.equal(catchupWithSince.body.caughtUp, false);
-    assert.equal(catchupWithSince.body.messageCount, 4);
-    assert.deepEqual(catchupWithSince.body.decisions, ['Use ?sinceSeq to avoid MarkRead race']);
-  }
 
   navCtrl.dispose();
 

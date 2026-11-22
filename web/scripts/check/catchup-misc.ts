@@ -2,8 +2,6 @@ import { tidyLayout, type Frame } from '../../lib/canvasLayout';
 import { CreateVoucherForm, RedeemVoucherForm } from '../../components/Vouchers';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { buildCatchupUrl, CATCHUP_RATE_LIMIT_ERROR, Catchup, CatchupSummary } from '../../components/Catchup';
 import { CanvasNoteCard, NoteContent, noteFileHref } from '../../components/CanvasNotes';
 import { SelectedAgentCard } from '../../components/CanvasPanels';
 import { Composer } from '../../components/Composer';
@@ -15,39 +13,7 @@ import path from 'node:path';
 import type { MessageView } from '../../lib/hub';
 import { message, people, noop } from './fixtures';
 
-// Catch-up summary states use the shared markdown renderer, omit empty sections, support thread URLs + Mark as read, and keep message text escaped.
-assert.equal(
-  buildCatchupUrl({ ws: 'ws1', conversationKey: 'channel:ch1', sinceSeq: 12 }),
-  '/api/conversations/channel%3Ach1/catchup?ws=ws1&sinceSeq=12',
-);
-assert.equal(
-  buildCatchupUrl({ ws: 'ws1', conversationKey: 'channel:ch1', thread: 'post-42', sinceSeq: 0 }),
-  '/api/conversations/channel%3Ach1/catchup?ws=ws1&thread=post-42&sinceSeq=0',
-);
-assert.equal(CATCHUP_RATE_LIMIT_ERROR, 'Too many summaries, try again shortly');
-const catchupBtnHtml = renderToStaticMarkup(createElement(AppRouterContext.Provider, { value: {} as never }, createElement(Catchup, { ws: 'ws1', conversationKey: 'channel:ch1', thread: 'post-42', initialSinceSeq: 5 })));
-assert.match(catchupBtnHtml, /aria-label="Catch me up"/);
-const catchupEmptyHtml = renderToStaticMarkup(createElement(CatchupSummary, { summary: { caughtUp: true, messageCount: 0, tldr: '', decisions: [], actionItems: [], openQuestions: [] }, onMarkRead: () => {} }));
-assert.match(catchupEmptyHtml, /You&#x27;re all caught up/);
-assert.doesNotMatch(catchupEmptyHtml, /TL;DR|AI summary|Mark as read/);
-const catchupSummaryHtml = renderToStaticMarkup(createElement(CatchupSummary, { summary: { caughtUp: false, messageCount: 80, capped: true, tldr: '**Ship** safely', decisions: ['Use the existing API'], actionItems: ['<script>alert(1)</script>'], openQuestions: [] }, onMarkRead: () => {} }));
-assert.match(catchupSummaryHtml, /Latest 80 messages only/);
-assert.match(catchupSummaryHtml, /<strong>Ship<\/strong>/);
-  assert.match(catchupSummaryHtml, /dir="auto"/, 'Catch-up summary must set dir="auto" so Hebrew (RTL) summaries render right-to-left');
-assert.match(catchupSummaryHtml, /Decisions/);
-assert.match(catchupSummaryHtml, /Action items/);
-assert.doesNotMatch(catchupSummaryHtml, /Open questions|None found/);
-assert.match(catchupSummaryHtml, />Mark as read</);
-assert.doesNotMatch(catchupSummaryHtml, /<script>/);
-const catchupMarkedHtml = renderToStaticMarkup(createElement(CatchupSummary, { summary: { caughtUp: false, messageCount: 2, tldr: 'All set', decisions: [], actionItems: [], openQuestions: ['Deploy today?'] }, markedRead: true, onMarkRead: () => {} }));
-assert.match(catchupMarkedHtml, /Open questions/);
-assert.doesNotMatch(catchupMarkedHtml, /Decisions|Action items/);
-assert.match(catchupMarkedHtml, /Marked as read/);
-
 // List direction must come from the item text, not dir=auto around a nested explicitly-directed Markdown block.
-const mixedCatchupHtml = renderToStaticMarkup(createElement(CatchupSummary, { summary: { caughtUp: false, messageCount: 2, tldr: 'Summary', decisions: ['החלטנו לפרסם אחרי בדיקות', 'PR #311 אושר על ידי גיטית לתיקון כיווניות RTL', 'Review the release'], actionItems: [], openQuestions: [] } }));
-assert.match(mixedCatchupHtml, /<li[^>]*dir="rtl"/);
-assert.match(mixedCatchupHtml, /<li[^>]*dir="ltr"/);
 const mixedMessageHtml = renderToStaticMarkup(createElement(Markdown, { text: '- החלטנו לפרסם אחרי בדיקות\n- PR #311 אושר על ידי גיטית לתיקון כיווניות RTL\n- Review the release' }));
 assert.match(mixedMessageHtml, /<li[^>]*dir="rtl">PR #311/);
 assert.match(mixedMessageHtml, /<li[^>]*dir="ltr">/);

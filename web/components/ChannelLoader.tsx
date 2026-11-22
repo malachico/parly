@@ -276,7 +276,6 @@ export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl 
       error={error}
       replyCount={replyCount}
       initialSearch={initialSearch}
-      initialSinceSeq={page.seen?.[me.id] ?? 0}
       initialThread={initialThread}
       serverPanel={aside && (panel === 'channel' || panel === 'doc') ? panel : undefined}
       panelAside={aside}

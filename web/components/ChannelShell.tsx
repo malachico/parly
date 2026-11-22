@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { People } from '@/components/Avatar';
-import { Catchup } from '@/components/Catchup';
 import { ChannelHeader } from '@/components/ChannelHeader';
 import { Composer } from '@/components/Composer';
 import { EscClose } from '@/components/EscClose';
@@ -49,7 +48,6 @@ type ChannelShellProps = {
   error?: string;
   replyCount: number;
   initialSearch: string;
-  initialSinceSeq: number;
   initialThread?: { threadId: string; data: ThreadPayload };
   serverPanel?: 'channel' | 'doc';
   panelAside?: React.ReactNode;
@@ -100,7 +98,6 @@ async function fetchThreadFromApi({
 export function ChannelShell({
   ws,
   conversationKey,
-  initialSinceSeq,
   channel,
   channelName,
   description,
@@ -139,7 +136,6 @@ export function ChannelShell({
     key: string;
     instance: ThreadNavController;
   } | null>(null);
-  const threadInitialSeenRef = useRef<Map<string, number>>(new Map());
   const markReadKeyRef = useRef<string | undefined>(undefined);
 
   const scopeKey = `${ws}:${conversationKey}`;
@@ -313,11 +309,6 @@ export function ChannelShell({
     const postId = viewState.threadId;
     const open = viewState.data;
     const lastSeq = open.replies.at(-1)?.seq ?? 0;
-    const threadSeenKey = `${ws}:${conversationKey}:${postId}`;
-    if (!threadInitialSeenRef.current.has(threadSeenKey)) {
-      threadInitialSeenRef.current.set(threadSeenKey, open.seen[me.id] ?? 0);
-    }
-    const threadSinceSeq = threadInitialSeenRef.current.get(threadSeenKey) ?? 0;
     // Latched: the optimistic clear below makes this false at once, and unmounting MarkRead then would drop the refresh
     // that brings the sidebar and ⌘K up to date. It stays mounted until a newer reply (a new key) needs marking.
     if (open.unread > 0 || open.seen[me.id] === undefined) markReadKeyRef.current = `${conversationKey}:${postId}:${lastSeq}`;
@@ -337,7 +328,7 @@ export function ChannelShell({
         <ThreadHeader
           channelName={channelName}
           backHref={liveCloseHref}
-          catchup={<Catchup key={threadSeenKey} ws={ws} conversationKey={conversationKey} thread={postId} initialSinceSeq={threadSinceSeq} />}
+          related={<ThreadRelatedKnowledge key={postId} ws={ws} channelId={channel.id} thread={postId} />}
           done={isThreadDone}
           doneAction={
             canToggleThreadDone
@@ -399,7 +390,6 @@ export function ChannelShell({
               )
             }
           />
-          <ThreadRelatedKnowledge key={postId} ws={ws} channelId={channel.id} thread={postId} />
           <div id="outbox-thread" />
           <JumpToLatest target="thread-pane-scroll" />
         </div>
@@ -489,7 +479,6 @@ export function ChannelShell({
             panel={activePanel}
             document={hasDocument}
             tabs={roomTabs}
-            catchup={<Catchup key={`${ws}:${conversationKey}`} ws={ws} conversationKey={conversationKey} initialSinceSeq={initialSinceSeq} />}
           />
         </header>
         <div id="thread-scroll" className="placing min-h-0 flex-1 overflow-y-auto px-3.5 py-6 sm:px-7">

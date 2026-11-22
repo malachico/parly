@@ -240,28 +240,6 @@ export function conversationsRoutes(router: Router, hub: HubService, stream: { s
     }),
   );
 
-  /**
-   * AI "Catch me up" summary of unread messages in a conversation ("channel:<id>", "thread:<channelId>:<postId>",
-   * "dm:<a_b>" or "agent:<id>") since the caller's read cursor (or optional `?sinceSeq=<number>`). Does not advance
-   * the read cursor.
-   */
-  router.get(
-    '/conversations/:key/catchup',
-    requireAgent,
-    json(async (req) => {
-      const rawSince = req.query.sinceSeq;
-      let sinceSeq: number | undefined;
-      if (rawSince !== undefined && String(rawSince).trim() !== '') {
-        const parsed = Number(rawSince);
-        if (!Number.isInteger(parsed) || parsed < 0) {
-          throw new HubError('invalid', 'sinceSeq must be a non-negative integer');
-        }
-        sinceSeq = parsed;
-      }
-      return hub.chat.summarizeCatchup(agentOf(req)!, String(req.params.key), { sinceSeq });
-    }),
-  );
-
   /** Say something in a conversation: `{text?, data?, files?}`. Returns the message. */
   router.post(
     '/conversations/:key/messages',

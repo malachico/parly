@@ -54,7 +54,7 @@ import { v1Router } from './rest/v1.js';
 import { restRouter } from './rest/routes.js';
 import { CloudTasksQueue, InlineQueue, pushRequestVerifier, type PushQueue, type PushVerifier } from './chat/queue.js';
 import { Files } from './files/files.js';
-import { vertexCatchupSummarizer, vertexThreadDigestFolder } from './chat/catchup.js';
+import { vertexThreadDigestFolder } from './chat/catchup.js';
 import { decisionsRouter, vertexRouter } from './chat/router.js';
 import { GcsFileStore, type FileStore } from './files/store.js';
 
@@ -256,10 +256,8 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
   // Local dev and tests post webhooks to private addresses; a deployed hub only to public https ones.
   if (config.allowPrivateAgentUrls) hub.appEvents.fetchImpl = fetch;
   hub.chat.logPosted = (m) => void hub.logPosted(m).catch((err) => console.error(`log of ${m.id}`, err));
-  hub.chat.catchupLimiter = new RateLimiter(30, 60 * 60 * 1000, 'catch-up summaries');
   if (config.vertex?.project) {
     const flashLite = { ...config.vertex, model: 'gemini-3.5-flash-lite', location: 'global', accessToken: cloudToken, fetchImpl: cloudFetch };
-    hub.chat.catchup = vertexCatchupSummarizer(flashLite);
     // THREAD_DIGEST: fold older thread replies into a rolling digest so wakes carry a recap, not the whole history.
     if (config.threadDigest) hub.chat.fold = vertexThreadDigestFolder(flashLite);
     hub.agentRanker = vertexAgentRanker({ ...config.vertex, model: config.searchModel, accessToken: cloudToken, fetchImpl: cloudFetch });

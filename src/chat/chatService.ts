@@ -21,13 +21,7 @@ import {
   type ConversationDoc,
   type MessageDoc,
 } from './chat.js';
-import {
-  foldDigest,
-  summarizeCatchup,
-  type CatchupResponse,
-  type CatchupSummarizer,
-  type ThreadDigestFolder,
-} from './catchup.js';
+import { foldDigest, type ThreadDigestFolder } from './catchup.js';
 import type { PushQueue } from './queue.js';
 import type { Route } from './router.js';
 import type { ChatStore, NewConversation } from './store.js';
@@ -191,10 +185,6 @@ export class ChatService {
   logPosted?: (message: MessageDoc) => void;
   /** Picks who a person's channel post that names no agent is for (a cheap model), so not every agent spends a call to pass. */
   route?: Route;
-  /** Summarizes unread messages in a conversation for "Catch me up" (Vertex Flash model, with heuristic fallback). */
-  catchup?: CatchupSummarizer;
-  /** Per-user rate limiter for "Catch me up" LLM summarizations. */
-  catchupLimiter?: RateLimiter;
   /** Context graph: how long after a channel's last post to extract it; unset, channels are never extracted. */
   graphChannelDelayMs?: number;
   /** Quiet period before a thread reply's graph run; a later reply supersedes it. Unset: threads run on done/reopen only. */
@@ -967,11 +957,6 @@ export class ChatService {
     const first = await this.store.message(post).catch(() => undefined);
     if (!first || first.conversationId !== channelKey(record.id)) throw new HubError('not_found', `No thread ${post} in this channel`);
     return [first, ...(await this.store.page(threadKey(record.id, post), Math.min(limit, THREAD_READ_MAX)))];
-  }
-
-  /** "Catch me up" for `key`: see summarizeCatchup in catchup.ts. */
-  summarizeCatchup(viewer: AgentRecord, key: string, opts?: { sinceSeq?: number }): Promise<CatchupResponse> {
-    return summarizeCatchup(this, viewer, key, opts);
   }
 
   /** `viewer` has read the conversation to its end (for a channel, its threads without an unseen @mention too). */

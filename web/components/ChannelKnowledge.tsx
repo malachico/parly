@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/Icon';
+import { Tip } from '@/components/Tip';
 import { ErrorNote } from '@/components/ui';
 import { type GraphEntries, listGraphEntries, threadGraphSummary } from '@/lib/actions/graph';
 import { appendPage } from '@/lib/knowledge';
@@ -69,5 +71,6 @@ export function ThreadRelatedKnowledge({ ws, channelId, thread }: { ws: string; 
     return () => { live = false; };
   }, [ws, channelId, thread]);
   if (!summary?.count || !summary.entry) return null;
-  return <Link href={knowledgeHref(ws, { entry: summary.entry })} scroll={false} className="chip mt-2 inline-flex min-h-9 items-center hover:bg-[var(--subtle)]" aria-label={`${summary.count} related knowledge entries`}>Related ({summary.count})</Link>;
+  const label = `Related knowledge (${summary.count})`;
+  return <Tip label={label} align="end"><Link href={knowledgeHref(ws, { entry: summary.entry })} scroll={false} aria-label={label} title={label} className="inline-flex h-11 min-w-9 shrink-0 items-center justify-center rounded-[9px] px-1.5 text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)] sm:h-9 sm:px-2"><Icon name="graph" size={18} /></Link></Tip>;
 }

@@ -431,7 +431,7 @@ export function createThreadNavController(options: ThreadNavControllerOptions): 
   };
 }
 
-/** What the session-gated conversation readers (`readChannelThread`, `readConversationCatchup`) need from the request. */
+/** What the session-gated conversation readers (`readChannelThread`) need from the request. */
 export type SessionReadDeps = {
   getToken: () => Promise<string | undefined>;
   getMe: () => Promise<Me | undefined>;

@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { Avatar, type People } from '@/components/Avatar';
-import { Catchup } from '@/components/Catchup';
 import { Composer } from '@/components/Composer';
 import { Icon } from '@/components/Icon';
 import { LiveTimeline } from '@/components/LiveTimeline';
@@ -112,7 +111,6 @@ export function DmConversation({ ws, conversationKey: key, bundle, postCount, pa
           <Icon name="back" size={22} />
         </Link>
         {header}
-        <Catchup key={`${ws}:${key}`} ws={ws} conversationKey={key} initialSinceSeq={page.seen?.[me.id] ?? 0} />
       </header>
       <div id="thread-scroll" className="placing min-h-0 flex-1 overflow-y-auto px-3.5 py-6 sm:px-7">
         <div className="mx-auto max-w-4xl">
