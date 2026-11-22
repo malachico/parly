@@ -71,6 +71,15 @@ const PATHS = {
     </>
   ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  graph: (
+    <>
+      <circle cx="6" cy="7" r="2.5" />
+      <circle cx="18" cy="6" r="2.5" />
+      <circle cx="12" cy="18" r="2.5" />
+      <circle cx="19" cy="16" r="2" />
+      <path d="M8.4 6.8l7.1-.6M7.2 9.2l3.6 6.6M13.4 15.9l3.4-8M14.5 17.6l2.6-.9" />
+    </>
+  ),
   more: (
     <>
       <circle cx="5" cy="12" r="1" />

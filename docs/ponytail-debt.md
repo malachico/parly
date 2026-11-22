@@ -390,6 +390,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `web/lib/graphLayout.ts`
 
 - O(n²) per step; fine for a few hundred entries, use a quadtree (Barnes-Hut) past that.
+- O(n²) overlap scan, fine for a page of entries; a grid index if pages grow to thousands.
 
 ## `web/lib/hub.ts`
 
@@ -413,4 +414,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**143 markers, 33 with no trigger.**
+**144 markers, 33 with no trigger.**

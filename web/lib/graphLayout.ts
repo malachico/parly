@@ -174,11 +174,21 @@ export type GraphPoint = MapEntry & { x: number; y: number };
  * and run a fixed number of steps, so the same entries always draw the same picture.
  */
 // ponytail: O(n²) per step; fine for a few hundred entries, use a quadtree (Barnes-Hut) past that.
-export function workspaceLayout(entries: MapEntry[], edges: { from: string; to: string }[], steps = 150): { nodes: GraphPoint[]; size: number } {
+export function workspaceLayout(entries: MapEntry[], edges: { from: string; to: string }[], steps = 150): { nodes: GraphPoint[] } {
   const sorted = [...entries].sort(byKindTitle);
   const index = new Map(sorted.map((n, i) => [n.id, i]));
   const k = 60; // ideal edge length
-  const pts = sorted.map((_, i) => ({ x: Math.cos(i * 2.39996) * k * Math.sqrt(i + 0.5), y: Math.sin(i * 2.39996) * k * Math.sqrt(i + 0.5) }));
+  // Server and browser must agree to the bit or hydration fails, and the steps amplify any difference. Math.cos, sin
+  // and hypot differ in the last bit between Node and Chrome, so the spiral turns by literal constants and only sqrt
+  // and arithmetic (both exact) run here.
+  const len = (x: number, y: number) => Math.sqrt(x * x + y * y);
+  let c = 1;
+  let sn = 0;
+  const pts = sorted.map((_, i) => {
+    const p = { x: c * k * Math.sqrt(i + 0.5), y: sn * k * Math.sqrt(i + 0.5) };
+    [c, sn] = [c * -0.7373666964241157 - sn * 0.6754926757593941, c * 0.6754926757593941 + sn * -0.7373666964241157]; // turn by the golden angle
+    return p;
+  });
   const links = edges.flatMap((e) => {
     const a = index.get(e.from);
     const b = index.get(e.to);
@@ -201,7 +211,7 @@ export function workspaceLayout(entries: MapEntry[], edges: { from: string; to: 
     for (const [a, b] of links) {
       const dx = pts[a]!.x - pts[b]!.x;
       const dy = pts[a]!.y - pts[b]!.y;
-      const f = Math.hypot(dx, dy) / k;
+      const f = len(dx, dy) / k;
       d[a]!.x -= dx * f;
       d[a]!.y -= dy * f;
       d[b]!.x += dx * f;
@@ -211,14 +221,93 @@ export function workspaceLayout(entries: MapEntry[], edges: { from: string; to: 
       const p = pts[i]!;
       d[i]!.x -= p.x * 0.02;
       d[i]!.y -= p.y * 0.02;
-      const len = Math.hypot(d[i]!.x, d[i]!.y) || 1;
-      const move = Math.min(len, temp);
-      p.x += (d[i]!.x / len) * move;
-      p.y += (d[i]!.y / len) * move;
+      const l = len(d[i]!.x, d[i]!.y) || 1;
+      const move = Math.min(l, temp);
+      p.x += (d[i]!.x / l) * move;
+      p.y += (d[i]!.y / l) * move;
     }
     temp = Math.max(temp * 0.97, 1);
   }
-  const nodes = sorted.map((n, i) => ({ ...n, ...at(Math.atan2(pts[i]!.y, pts[i]!.x), Math.hypot(pts[i]!.x, pts[i]!.y)) }));
-  const size = Math.max(k, ...nodes.map((n) => Math.max(Math.abs(n.x), Math.abs(n.y))));
-  return { nodes, size };
+  // Repulsion flings unlinked entries far out, which shrinks the fit; they sit on a ring just outside the linked ones instead.
+  const linked = new Set(links.flat());
+  const reach = Math.max(k, ...pts.filter((_, i) => linked.has(i)).map((p) => len(p.x, p.y))) + k;
+  const round = (v: number) => Math.round(v * 100) / 100;
+  const nodes = sorted.map((n, i) => {
+    const { x, y } = pts[i]!;
+    const scale = linked.has(i) || !linked.size ? 1 : Math.min(1, reach / (len(x, y) || 1));
+    return { ...n, x: round(x * scale), y: round(y * scale) };
+  });
+  return { nodes };
+}
+
+/** How many lines touch each entry (pairs counted once, self-loops and unknown ends ignored). */
+export function degrees(nodes: { id: string }[], edges: { from: string; to: string }[]): Map<string, number> {
+  const deg = new Map(nodes.map((n) => [n.id, 0]));
+  const seen = new Set<string>();
+  for (const e of edges) {
+    const key = e.from < e.to ? `${e.from} ${e.to}` : `${e.to} ${e.from}`;
+    if (e.from === e.to || seen.has(key) || !deg.has(e.from) || !deg.has(e.to)) continue;
+    seen.add(key);
+    deg.set(e.from, deg.get(e.from)! + 1);
+    deg.set(e.to, deg.get(e.to)! + 1);
+  }
+  return deg;
+}
+
+/**
+ * Which titles to draw: `keep` first, then best connected (ties by id, so stable), skipping any whose
+ * box (`x` centred, `y` top) overlaps one already drawn. Kept titles always draw.
+ */
+export function labelled<T extends { id: string; x: number; y: number; w: number; h: number }>(boxes: T[], deg: Map<string, number>, keep: Iterable<string> = []): Set<string> {
+  const must = new Set(keep);
+  const order = [...boxes].sort((a, b) => Number(must.has(b.id)) - Number(must.has(a.id)) || (deg.get(b.id) ?? 0) - (deg.get(a.id) ?? 0) || (a.id < b.id ? -1 : 1));
+  const placed: T[] = [];
+  for (const b of order) {
+    // ponytail: O(n²) overlap scan, fine for a page of entries; a grid index if pages grow to thousands.
+    if (!must.has(b.id) && placed.some((p) => Math.abs(p.x - b.x) * 2 < p.w + b.w && Math.abs(p.y - b.y) * 2 < p.h + b.h)) continue;
+    placed.push(b);
+  }
+  return new Set(placed.map((b) => b.id));
+}
+
+/**
+ * Arrow-key focus on a free-form graph: the nearest node within 60° of the arrow's direction
+ * (distance, with sideways drift costing double). Stays put when nothing lies that way.
+ */
+export function nearestInDirection(nodes: { x: number; y: number }[], index: number, key: string): number {
+  const dir = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[key];
+  const cur = nodes[index];
+  if (!dir || !cur) return index;
+  let best = index;
+  let score = Infinity;
+  nodes.forEach((n, i) => {
+    const dx = n.x - cur.x;
+    const dy = n.y - cur.y;
+    const along = dx * dir[0]! + dy * dir[1]!;
+    const side = Math.abs(dx * dir[1]! - dy * dir[0]!);
+    if (i === index || along <= 0 || side > along * Math.tan(Math.PI / 3)) return;
+    const s = along + 2 * side;
+    if (s < score) [best, score] = [i, s];
+  });
+  return best;
+}
+
+/** After a filter: keep the active node if it's still drawn, else the nearest one to where it was, else none. */
+export function reconcileActive(prev: { id: string; x: number; y: number } | null, nodes: { id: string; x: number; y: number }[]): string | null {
+  if (!prev || nodes.some((n) => n.id === prev.id)) return prev && prev.id;
+  let best: string | null = null;
+  let d = Infinity;
+  for (const n of nodes) {
+    const nd = (n.x - prev.x) ** 2 + (n.y - prev.y) ** 2;
+    if (nd < d) [best, d] = [n.id, nd];
+  }
+  return best;
+}
+
+/** `view` panned just enough that `node` (under translate(x,y) scale(k)) sits `margin` inside `viewport`; the same object when it already does. */
+export function ensureVisible<V extends { k: number; x: number; y: number }>(view: V, node: { x: number; y: number }, viewport: { x: number; y: number; w: number; h: number }, margin: number): V {
+  const shift = (s: number, lo: number, hi: number) => (s < lo ? lo - s : s > hi ? hi - s : 0);
+  const dx = shift(view.k * node.x + view.x, viewport.x + margin, viewport.x + viewport.w - margin);
+  const dy = shift(view.k * node.y + view.y, viewport.y + margin, viewport.y + viewport.h - margin);
+  return dx || dy ? { ...view, x: view.x + dx, y: view.y + dy } : view;
 }

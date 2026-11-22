@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_MAP_NODES, type MapInput, neighbourLayout, nextFocus, workspaceLayout } from '../web/lib/graphLayout.js';
+import { degrees, ensureVisible, labelled, MAX_MAP_NODES, type MapInput, nearestInDirection, neighbourLayout, nextFocus, reconcileActive, workspaceLayout } from '../web/lib/graphLayout.js';
 
 const entry = (id: string, kind = 'decision') => ({ id, kind, title: `Entry ${id}` });
 
@@ -80,5 +80,84 @@ describe('workspaceLayout', () => {
     const dist = (x: string, y: string) => Math.hypot(p.get(x)!.x - p.get(y)!.x, p.get(x)!.y - p.get(y)!.y);
     const avg = a.nodes.reduce((s, n) => s + dist('e0', n.id), 0) / (a.nodes.length - 1);
     expect(dist('e0', 'e1')).toBeLessThan(avg);
+  });
+
+  it('keeps unlinked entries just outside the linked ones instead of flung far out', () => {
+    const entries = Array.from({ length: 13 }, (_, i) => entry(`e${i}`, 'topic'));
+    const edges = Array.from({ length: 9 }, (_, i) => ({ from: `e${i}`, to: `e${i + 1}` }));
+    const { nodes } = workspaceLayout(entries, edges);
+    const r = (n: { x: number; y: number }) => Math.hypot(n.x, n.y);
+    const linkedMax = Math.max(...nodes.filter((n) => Number(n.id.slice(1)) < 10).map(r));
+    for (const n of nodes.filter((n) => Number(n.id.slice(1)) >= 10)) expect(r(n)).toBeLessThanOrEqual(linkedMax + 61);
+    expect(minGap(nodes)).toBeGreaterThan(15);
+  });
+});
+
+describe('degrees, labelled, nearestInDirection', () => {
+  const nodes = [
+    { id: 'a', x: 0, y: 0 },
+    { id: 'b', x: 100, y: 10 },
+    { id: 'c', x: 0, y: 100 },
+    { id: 'd', x: -100, y: -100 },
+  ];
+  const edges = [
+    { from: 'a', to: 'b' },
+    { from: 'b', to: 'a' },
+    { from: 'a', to: 'c' },
+    { from: 'a', to: 'a' },
+    { from: 'a', to: 'zz' },
+  ];
+
+  it('counts each pair once and skips loops and unknown ends', () => {
+    expect(Object.fromEntries(degrees(nodes, edges))).toEqual({ a: 2, b: 1, c: 1, d: 0 });
+  });
+
+  it('labels the best connected first, skips overlaps, but always draws kept ones', () => {
+    const deg = degrees(nodes, edges);
+    const box = (id: string, x: number) => ({ id, x, y: 0, w: 40, h: 10 });
+    expect([...labelled([box('a', 0), box('b', 100), box('c', 10)], deg)].sort()).toEqual(['a', 'b']);
+    expect([...labelled([box('a', 0), box('c', 10), box('d', 10)], deg, ['c', 'd'])].sort()).toEqual(['c', 'd']);
+    expect([...labelled([box('c', 0), box('d', 10)], deg)]).toEqual(['c']);
+  });
+
+  it('moves to the nearest node in the arrow direction, or stays', () => {
+    expect(nearestInDirection(nodes, 0, 'ArrowRight')).toBe(1);
+    expect(nearestInDirection(nodes, 0, 'ArrowDown')).toBe(2);
+    expect(nearestInDirection(nodes, 0, 'ArrowUp')).toBe(3);
+    expect(nearestInDirection(nodes, 1, 'ArrowRight')).toBe(1);
+    expect(nearestInDirection(nodes, 0, 'Tab')).toBe(0);
+  });
+});
+
+describe('reconcileActive', () => {
+  const nodes = [
+    { id: 'a', x: 0, y: 0 },
+    { id: 'b', x: 50, y: 0 },
+  ];
+  it('keeps a node still drawn, else the nearest, else none', () => {
+    expect(reconcileActive({ id: 'a', x: 99, y: 99 }, nodes)).toBe('a');
+    expect(reconcileActive({ id: 'gone', x: 40, y: 0 }, nodes)).toBe('b');
+    expect(reconcileActive({ id: 'gone', x: 0, y: 0 }, [])).toBeNull();
+    expect(reconcileActive(null, nodes)).toBeNull();
+  });
+});
+
+describe('ensureVisible', () => {
+  const vp = { x: 0, y: 0, w: 100, h: 100 };
+  it('keeps the same view when the node is already inside the margin', () => {
+    const v = { k: 2, x: -50, y: -50, smooth: false };
+    expect(ensureVisible(v, { x: 50, y: 50 }, vp, 10)).toBe(v);
+  });
+  it('pans an offscreen node to just inside the margin, on each side', () => {
+    const v = { k: 2, x: 0, y: 0 };
+    const at = (n: { x: number; y: number }) => {
+      const w = ensureVisible(v, n, vp, 10);
+      return [w.k * n.x + w.x, w.k * n.y + w.y];
+    };
+    expect(at({ x: -20, y: 20 })).toEqual([10, 40]);
+    expect(at({ x: 80, y: 20 })).toEqual([90, 40]);
+    expect(at({ x: 20, y: -5 })).toEqual([40, 10]);
+    expect(at({ x: 20, y: 60 })).toEqual([40, 90]);
+    expect(ensureVisible(v, { x: 80, y: 20 }, vp, 10).k).toBe(2);
   });
 });

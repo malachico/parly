@@ -103,7 +103,7 @@ export function NeighbourMap({ details, onSelect, depth, onDepthChange }: Neighb
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth="10" />
                   <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--border-strong)" strokeWidth="1.25" />
                   {edges.length <= MAX_EDGE_LABELS && (
-                    <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 3} textAnchor="middle" fontSize="9" fill="var(--muted)" className="select-none">
+                    <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 3} textAnchor="middle" fontSize="9" fill="var(--muted)" stroke="var(--surface)" strokeWidth="3" strokeLinejoin="round" paintOrder="stroke" className="select-none">
                       {truncate(rel, 18)}
                     </text>
                   )}
@@ -132,8 +132,8 @@ export function NeighbourMap({ details, onSelect, depth, onDepthChange }: Neighb
               >
                 <title>{n.title}</title>
                 <circle cx={n.x} cy={n.y} r={r + 5} fill="none" stroke="var(--accent)" strokeWidth="2.5" className="opacity-0 group-focus-visible:opacity-100" />
-                <circle cx={n.x} cy={n.y} r={r} fill={st.fill} stroke={st.stroke} strokeWidth={n.ring === 0 ? 2.5 : 1.5} className="transition-[stroke-width] group-hover:[stroke-width:3]" />
-                <text {...labelProps(n, r)} fontSize={n.ring === 0 ? 13 : 11} fontWeight={n.ring === 0 ? 600 : 400} fill={n.ring === 2 ? 'var(--fg-soft)' : 'var(--fg)'} className="select-none">
+                <circle cx={n.x} cy={n.y} r={r} fill={st.fill} stroke={st.stroke} strokeWidth={n.ring === 0 ? 2.5 : 1.5} className="motion-safe:transition-[stroke-width] group-hover:[stroke-width:3]" />
+                <text {...labelProps(n, r)} fontSize={n.ring === 0 ? 13 : 11} fontWeight={n.ring === 0 ? 600 : 400} fill={n.ring === 2 ? 'var(--fg-soft)' : 'var(--fg)'} stroke="var(--surface)" strokeWidth="3" strokeLinejoin="round" paintOrder="stroke" className="select-none">
                   {truncate(n.title, n.ring === 0 ? 30 : 18)}
                 </text>
               </g>

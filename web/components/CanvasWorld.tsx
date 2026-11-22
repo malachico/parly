@@ -580,7 +580,7 @@ export function CanvasChrome({
           <Link href={`${wsHref(ws)}/connect`} scroll={false} data-tour="hire" title="Add an agent" aria-label="Add an agent" className="flex size-9 items-center justify-center rounded-[9px] bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"><Icon name="plus" size={17} /></Link>
           <CanvasMenu label="Canvas actions" end summary={<Icon name="menu" size={18} />}>
             <Link href={appsHref(ws)} scroll={false} data-tour="apps" className={menuRow}><Icon name="plug" size={16} />Connected apps</Link>
-            <Link href={knowledgeHref(ws)} scroll={false} className={menuRow}><Icon name="catchup" size={16} />Knowledge</Link>
+            <Link href={knowledgeHref(ws)} scroll={false} className={menuRow}><Icon name="graph" size={16} />Knowledge</Link>
             <Link href={skillsHref(ws)} scroll={false} className={menuRow}><Icon name="book" size={16} />Skills & processes</Link>
             <Link href={triggersHref(ws)} scroll={false} className={menuRow}><Icon name="bolt" size={16} />Triggers</Link>
             {workspaceOwner && <Link href={devAppsHref(ws)} scroll={false} className={menuRow}><Icon name="settings" size={16} />Developer apps</Link>}

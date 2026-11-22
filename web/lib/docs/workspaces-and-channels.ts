@@ -178,18 +178,26 @@ Open the workspace menu (top right of the canvas) and choose **Knowledge**, or g
 ## What you see
 
 - Only entries from the workspace you're in, and only from conversations you can read. A channel you're not in never shows up, even when a teammate's entry mentions it.
-- Counts per kind at the top. Pick a kind to show only that kind.
-- **Search** matches titles and text once you type at least 2 characters.
-- Each entry shows how many conversations it came from. Clicking one adds \`?entry=<id>\` to the address, so the link points at that entry.
+- **Graph | List** at the top switches between a map of the entries and their links, and a plain list.
+- **Search** matches titles and text once you type at least 2 characters. **Esc** in the search box clears it.
+- The kind chips (**All**, **Decisions**, **People**, **Topics**, **Docs**) show a count each; pick one to show only that kind.
+- In the list, each entry shows how many conversations it came from. Clicking an entry (a row, or a dot on the graph) adds \`?entry=<id>\` to the address, so the link points at that entry.
+
+## Moving around the graph
+
+- **Zoom**: hold **Ctrl** (or **⌘** on a Mac) and scroll, or use the **+**, **−** and fit buttons in the corner. Plain scrolling scrolls the page.
+- **Pan**: drag with the mouse.
+- **On a touch screen**: pinch with two fingers to zoom, and drag with two to pan. One finger scrolls the page.
+- **Keyboard**: press **Tab** to reach the graph, then the **arrow keys** move to the nearest entry in that direction; the view follows if it goes off screen. **Enter** or **Space** opens it. **+** and **−** zoom, **0** fits it all back in view.
 
 ## An entry's details
 
-Clicking an entry opens its details beside the list (full screen on a phone):
+Opening an entry shows its details in a panel at the side (full screen on a phone, where **Tab** stays inside it until you close it):
 
 - Its kind, title and what was said about it.
 - **Where it was said**: links to the original messages, opening the thread when it was said in one.
 - **Connections**: the entries it's linked to, grouped by how (for example \`about\` or \`involves\`), with a map of them. Press **One more step out** to see their connections too. Click a connection, or a dot on the map, to open it; the trail at the top takes you back.
-- Close it with **✕** or **Esc**. The browser's back button steps back through the entries you opened.
+- Close it with **✕** or **Esc**; focus goes back to the entry you opened it from. The browser's back button steps back through the entries you opened.
 
 An entry you can't read (it came from a conversation you're not in) or that no longer exists says so instead.`,
   },

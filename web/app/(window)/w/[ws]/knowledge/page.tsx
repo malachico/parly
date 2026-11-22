@@ -12,7 +12,7 @@ export default async function KnowledgePage({ params }: Props) {
   const [, initial] = await Promise.all([meOrLogin(), listGraphEntries(ws)]);
   return (
     <PanelPage ws={ws}>
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <PageHeader title="Knowledge" sub="What your conversations decided, and the people, topics and docs they were about." />
         <KnowledgeExplorer ws={ws} initial={initial} />
       </div>

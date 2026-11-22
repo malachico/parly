@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { EscClose } from '@/components/EscClose';
+import { Icon } from '@/components/Icon';
 import { NeighbourMap } from '@/components/graph/NeighbourMap';
 import { type GraphNodeDetails, graphNode } from '@/lib/actions/graph';
 import { connectionGroups, entryUrl, KIND_NAME, sourceLinks, trailTo } from '@/lib/knowledge';
@@ -25,6 +26,28 @@ export function KnowledgeDrawer({ ws, id }: { ws: string; id: string }) {
   const titles = useRef(new Map<string, string>());
   const latest = useRef(0);
   const box = useRef<HTMLElement>(null);
+  const titleId = useId();
+  // Full screen below md (Tailwind's 768px) it is a modal dialog; as a side panel the page stays reachable.
+  const [modal, setModal] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const on = () => setModal(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+
+  // Modal: everything outside the drawer is inert, so screen readers can't wander into the covered page.
+  useEffect(() => {
+    if (!modal) return;
+    const off: Element[] = [];
+    for (let el = box.current; el && el !== document.body; el = el.parentElement)
+      for (const s of el.parentElement?.children ?? []) if (s !== el && !s.hasAttribute('inert')) off.push(s);
+    for (const s of off) s.setAttribute('inert', '');
+    return () => {
+      for (const s of off) s.removeAttribute('inert');
+    };
+  }, [modal]);
 
   // Focus moves into the drawer on open and back where it was on close.
   useEffect(() => {
@@ -65,7 +88,22 @@ export function KnowledgeDrawer({ ws, id }: { ws: string; id: string }) {
     <aside
       ref={box}
       tabIndex={-1}
-      aria-label={node ? node.title : 'Knowledge entry'}
+      {...(modal ? { role: 'dialog', 'aria-modal': true, 'aria-labelledby': titleId } : { 'aria-label': node ? node.title : 'Knowledge entry' })}
+      onKeyDown={(e) => {
+        // Modal: Tab and Shift+Tab cycle inside.
+        if (e.key !== 'Tab' || !modal) return;
+        const f = [...e.currentTarget.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')];
+        const [first, last] = [f[0], f[f.length - 1]];
+        if (!first || !last) return e.preventDefault();
+        const at = document.activeElement;
+        if (e.shiftKey && (at === first || at === e.currentTarget)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && at === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }}
       className="canvas-pop outline-none fixed inset-0 z-[70] flex flex-col overflow-hidden bg-[var(--surface)] md:inset-auto md:top-4 md:right-4 md:bottom-4 md:w-[min(560px,calc(100vw-32px))] md:rounded-[22px] md:border md:border-[var(--border)] md:shadow-[0_18px_40px_rgba(23,22,28,0.12)]"
     >
       <EscClose href={entryUrl(ws, '', null)} onClose={close} />
@@ -92,10 +130,10 @@ export function KnowledgeDrawer({ ws, id }: { ws: string; id: string }) {
             </nav>
           )}
           {node && <span className="label">{KIND_NAME[node.kind]}</span>}
-          <h2 className="break-words text-[19px] font-bold">{node ? node.title : load.state === 'loading' ? 'Loading…' : 'Knowledge entry'}</h2>
+          <h2 id={titleId} className="break-words text-[19px] font-bold">{node ? node.title : load.state === 'loading' ? 'Loading…' : 'Knowledge entry'}</h2>
         </div>
-        <button type="button" aria-label="Close" onClick={close} className="inline-flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--subtle)] hover:bg-[var(--border)]">
-          ✕
+        <button type="button" aria-label="Close" onClick={close} className="inline-flex size-10 shrink-0 items-center justify-center rounded-[10px] text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)]">
+          <Icon name="close" size={18} />
         </button>
       </div>
 
