@@ -128,7 +128,11 @@ export function graphExtractor(deps: {
     if (!graph.enabled) return;
     const key = parseKey(conversationId);
     if (key.kind === 'dm') return;
-    if (key.kind === 'channel' && seq !== undefined && ((await store.conversation(conversationId))?.seq ?? 0) > seq) return; // debounce: a newer post scheduled its own run
+    const latestSeq = (await store.conversation(conversationId))?.seq ?? 0;
+    if (seq !== undefined && latestSeq > seq) return; // debounce: a newer post scheduled its own run
+    // Nothing new since the last finished run (a done after the quiet-period run, a duplicate job): no model call.
+    // ponytail: an edit doesn't bump seq, so re-marking an edited thread done won't re-extract it; key on an edit counter if that bites.
+    if (key.kind === 'thread' && (await graph.graphExtractedSeq(workspaceId, conversationId)) === latestSeq) return;
     const [channel, workspace] = await Promise.all([registry.channelDoc(key.channelId), registry.workspaceDoc(workspaceId)]);
     if (!channel || channel.archived || !workspace || workspace.archived) return;
     let messages: MessageDoc[] | undefined;
@@ -206,7 +210,10 @@ export function graphExtractor(deps: {
         ...d.topics.map((t) => edge('about', decision, node('topic', t))),
       ]);
     }
-    if (key.kind === 'thread') await graph.pruneDanglingEdges(workspaceId, conversationId);
+    if (key.kind === 'thread') {
+      await graph.pruneDanglingEdges(workspaceId, conversationId);
+      await graph.setGraphExtractedSeq(workspaceId, conversationId, latestSeq);
+    }
     if (key.kind === 'channel') await graph.setChannelWatermark(workspaceId, conversationId, Math.max(...messages.map((m) => m.seq)));
   };
 }

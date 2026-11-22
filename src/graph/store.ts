@@ -188,6 +188,7 @@ export class GraphStore {
     await this.db.execute(() => Promise.all([col(NODES).deleteMany(own), col(EMBEDDINGS).deleteMany(own), col(EDGES).deleteMany(edges), col(WATERMARKS).deleteMany(own)]));
     // A thread run purges its own graph; its run counter must outlive that, so only wider purges drop counters.
     if (scope.conversationId === undefined) await this.db.execute(() => col(RUNS).deleteMany(own));
+    else await this.db.execute(() => col(RUNS).updateOne({ _id: idOf(workspaceId, scope.conversationId!) as never }, { $unset: { extractedSeq: '' } }));
     // Channel-scoped skill nodes live under `skill:<id>`, not the channel's conversations.
     if (scope.channelId !== undefined) await this.deleteNodes({ workspaceId, kind: 'skill', 'source.channelId': scope.channelId });
   }
@@ -293,6 +294,18 @@ export class GraphStore {
       { upsert: true, returnDocument: 'after' },
     ));
     return doc?.run ?? 0;
+  }
+
+  /** The thread seq the last finished run extracted (undefined until one finishes, or after a purge). */
+  async graphExtractedSeq(workspaceId: string, conversationId: string): Promise<number | undefined> {
+    if (!this.options.enabled) return undefined;
+    const doc = await this.db.execute(() => this.db.mongoDb.collection<{ _id: string; extractedSeq?: number }>(RUNS).findOne({ _id: idOf(workspaceId, conversationId) }, { projection: { extractedSeq: 1 } }));
+    return doc?.extractedSeq;
+  }
+
+  async setGraphExtractedSeq(workspaceId: string, conversationId: string, seq: number): Promise<void> {
+    if (!this.options.enabled) return;
+    await this.db.execute(() => this.db.mongoDb.collection<{ _id: string }>(RUNS).updateOne({ _id: idOf(workspaceId, conversationId) }, { $set: { extractedSeq: seq } }));
   }
 
   /** Whether `run` is still the newest run started for `conversationId` (always true when disabled). */

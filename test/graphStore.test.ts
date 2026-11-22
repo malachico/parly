@@ -130,9 +130,10 @@ describe('GraphStore', () => {
       { decisions: [{ title: 'Release on Monday', text: 'Once QA passes.', people: ['ana'], topics: ['launch'] }] },
     ];
     let answer = answers[0];
+    let seq = 0; // each rerun stands for a new post (a reopen)
     const run = graphExtractor({
       graph,
-      store: { message: async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?'), page: async () => [msg('r', 'Bo', 'agent-bo', 'Yes')], since: async () => [], conversation: async () => undefined },
+      store: { message: async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?'), page: async () => [msg('r', 'Bo', 'agent-bo', 'Yes')], since: async () => [], conversation: async () => ({ seq: ++seq }) as never },
       registry: { channelDoc: async () => ({}), workspaceDoc: async () => ({}) },
       llm: {
         project: 'p',
@@ -160,9 +161,10 @@ describe('GraphStore', () => {
     const at = { a: '2026-01-01T00:00:00.000Z', b: '2026-02-01T00:00:00.000Z' };
     const root = (post: string) => ({ id: post, from: 'Ana', fromId: 'agent-ana', at: at[post as 'a' | 'b'], parts: [{ kind: 'text', text: 'x' }] }) as unknown as MessageDoc;
     let answer: unknown;
+    let seq = 0;
     const run = graphExtractor({
       graph,
-      store: { message: async (id: string) => root(id), page: async () => [], since: async () => [], conversation: async () => undefined },
+      store: { message: async (id: string) => root(id), page: async () => [], since: async () => [], conversation: async () => ({ seq: ++seq }) as never },
       registry: { channelDoc: async () => ({}), workspaceDoc: async () => ({}) },
       llm: { project: 'p', location: 'global', model: 'm', accessToken: async () => 't', fetchImpl: (async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }] }))) as typeof fetch },
     });

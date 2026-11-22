@@ -197,6 +197,8 @@ export class ChatService {
   catchupLimiter?: RateLimiter;
   /** Context graph: how long after a channel's last post to extract it; unset, channels are never extracted. */
   graphChannelDelayMs?: number;
+  /** Quiet period before a thread reply's graph run; a later reply supersedes it. Unset: threads run on done/reopen only. */
+  graphThreadDelayMs?: number;
   /** THREAD_DIGEST: folds a thread's older replies into a rolling digest so wakes carry a recap, not the whole history. */
   fold?: ThreadDigestFolder;
 
@@ -313,12 +315,15 @@ export class ChatService {
       if (this.rooms) await this.rooms.afterPost(from, channel, workspace ?? undefined, stored.message);
       this.onPosted?.(stored.message);
       this.logPosted?.(stored.message);
-      // Context graph: each top-level channel post schedules a run after the quiet period; the run skips if a newer post came (debounce).
+      // Context graph: each top-level channel post (and, with graphThreadDelayMs, each thread reply) schedules a run after
+      // the quiet period; the run skips if a newer post came (debounce).
       const { kind, workspaceId, id: conversationId } = stored.conversation;
       const { seq } = stored.message;
+      const threadReply = kind === 'thread' && !reopened && this.graphThreadDelayMs !== undefined;
       // A reopened done thread is re-extracted now (the same job as marking it done; a thread run replaces its graph).
-      if (this.graphChannelDelayMs !== undefined && (kind === 'channel' || reopened) && workspaceId) {
-        const job = { kind: 'graph' as const, workspaceId, conversationId, ...(reopened ? {} : { seq }) }, delay = reopened ? 0 : this.graphChannelDelayMs;
+      if (this.graphChannelDelayMs !== undefined && (kind === 'channel' || reopened || threadReply) && workspaceId) {
+        const job = { kind: 'graph' as const, workspaceId, conversationId, ...(reopened ? {} : { seq }) };
+        const delay = reopened ? 0 : threadReply ? this.graphThreadDelayMs! : this.graphChannelDelayMs;
         void this.queue.enqueue(job, delay)
           .catch(() => new Promise((ok) => setTimeout(ok, PUSH_RETRY_MS)).then(() => this.queue.enqueue(job, delay)))
           .catch((err) => console.error(`graph job for ${conversationId}`, err));

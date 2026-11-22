@@ -18,7 +18,7 @@ export interface GraphJob {
   kind: 'graph';
   workspaceId: string;
   conversationId: string;
-  /** Channels: the seq of the post that scheduled it; a newer post means a later job will run instead. */
+  /** Channels and thread replies: the seq of the post that scheduled it; a newer post means a later job will run instead. */
   seq?: number;
   /** How many times the daily cap has pushed this job to a later day. */
   deferred?: number;

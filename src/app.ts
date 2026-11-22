@@ -268,6 +268,7 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
       hub.extractGraph = graphExtractor({ graph, store: hub.chat.store, registry, requeue: (j, d) => pushes.enqueue(j, d), llm: flashLite });
       hub.backfillGraph = (options) => backfillGraph({ db, graph, registry, queue: pushes }, options);
       hub.chat.graphChannelDelayMs = config.graphChannelQuietMinutes * 60_000;
+      if (config.graphThreadQuietMinutes > 0) hub.chat.graphThreadDelayMs = config.graphThreadQuietMinutes * 60_000;
     }
     if (config.channelRouter && !config.channelRouterModel.startsWith('gemini-decision')) hub.chat.route = vertexRouter({ ...config.vertex, model: config.channelRouterModel, accessToken: cloudToken });
   }

@@ -360,6 +360,24 @@ describe('threads', () => {
     }
   });
 
+  it('queues a thread reply graph job after the thread quiet period, superseded by later replies', async () => {
+    const { owner, channel } = await crew(hub.registry, 'grapht', []);
+    const root = (await hub.send(owner, { channel: channel.id }, say('Pick a DB'))).message;
+    const queue = (hub as unknown as { queue: { enqueue: (job: unknown, delayMs?: number) => Promise<void> } }).queue;
+    const enqueue = vi.spyOn(queue, 'enqueue').mockResolvedValue();
+    hub.chat.graphChannelDelayMs = 1234;
+    hub.chat.graphThreadDelayMs = 99;
+    try {
+      const reply = (await hub.send(owner, { channel: channel.id, thread: root.id }, say('Mongo'))).message;
+      const graphJobs = enqueue.mock.calls.filter(([j]) => (j as { kind?: string }).kind === 'graph');
+      expect(graphJobs).toEqual([[{ kind: 'graph', workspaceId: channel.workspaceId, conversationId: threadKey(channel.id, root.id), seq: reply.seq }, 99]]);
+    } finally {
+      hub.chat.graphChannelDelayMs = undefined;
+      hub.chat.graphThreadDelayMs = undefined;
+      enqueue.mockRestore();
+    }
+  });
+
   it('queues a delayed graph job for channel posts with their seq, never for thread replies or DMs', async () => {
     const { owner, channel, members } = await crew(hub.registry, 'graphc', ['graphc-peer']);
     const queue = (hub as unknown as { queue: { enqueue: (job: unknown, delayMs?: number) => Promise<void> } }).queue;
@@ -403,6 +421,10 @@ describe('threads', () => {
     const off = app(false);
     expect(off.chat.graphChannelDelayMs).toBeUndefined();
     expect(off.extractGraph).toBeUndefined();
+    expect(off.chat.graphThreadDelayMs).toBeUndefined();
     expect(app(true).chat.graphChannelDelayMs).toBe(30 * 60_000);
+    expect(app(true).chat.graphThreadDelayMs).toBe(5 * 60_000);
+    const vertexOn = { db: testDb(), config: testConfig({ vertex, contextGraphEnabled: true, graphThreadQuietMinutes: 0 }), cloudToken: async () => 't' };
+    expect(createApp(vertexOn).hub.chat.graphThreadDelayMs).toBeUndefined();
   });
 });

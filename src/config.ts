@@ -64,6 +64,8 @@ export interface HubConfig {
   contextGraphEmbedding: { model: string; location: string; dimensions: number; pricePerMTok: number };
   /** Minutes a channel must stay quiet before its new messages are extracted into the graph (GRAPH_CHANNEL_QUIET_MINUTES, default 30). */
   graphChannelQuietMinutes: number;
+  /** Minutes a thread must stay quiet before its graph re-extracts (GRAPH_THREAD_QUIET_MINUTES); 0 = only on done/reopen. */
+  graphThreadQuietMinutes: number;
   /** Free's monthly credits, in USD at 1 credit = 1¢ (LLM_MONTHLY_ALLOWANCE_USD; 3 = 300 credits). */
   llmMonthlyAllowanceUsd: number;
   /**
@@ -247,6 +249,7 @@ export function loadConfig(): HubConfig {
       pricePerMTok: num('CONTEXT_GRAPH_EMBEDDING_PRICE_PER_MTOK', 0.15, true),
     },
     graphChannelQuietMinutes: num('GRAPH_CHANNEL_QUIET_MINUTES', 30),
+    graphThreadQuietMinutes: num('GRAPH_THREAD_QUIET_MINUTES', 5),
     llmMonthlyAllowanceUsd: num('LLM_MONTHLY_ALLOWANCE_USD', 3),
     agentTurnCreditCap: num('AGENT_TURN_CREDIT_CAP', 500, true),
     publicTurnLimitPerHour: num('PUBLIC_TURN_LIMIT_PER_HOUR', 20),

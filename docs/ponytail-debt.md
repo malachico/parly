@@ -135,6 +135,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - a burst over the cap keeps only its newest MAX_CATCHUP_MESSAGES; page from the watermark if big bursts lose facts.
 - only the channel's MAX_REPLACEABLE newest decisions are offered, so an older one is never marked replaced; page candidates if that bites.
 - check-then-write, not a lock; a newer run that starts and finishes its model call within this run's few-ms write window can interleave with it. Serialise per thread (or write under a run tag) if that ever bites.
+- an edit doesn't bump seq, so re-marking an edited thread done won't re-extract it; key on an edit counter if that bites.
 
 ## `src/graph/store.ts`
 
@@ -414,4 +415,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**144 markers, 33 with no trigger.**
+**145 markers, 33 with no trigger.**

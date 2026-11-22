@@ -15,7 +15,7 @@ const registry = (channel: { archived?: boolean; publicFromSeq?: number; publicT
   workspaceDoc: vi.fn(async (_id: string) => workspace ?? undefined),
 });
 
-function setup(opts: { enabled?: boolean; canSpend?: boolean; cap?: number; latestSeq?: number; since?: MessageDoc[]; registry?: ReturnType<typeof registry>; decisions?: { id: string; title: string; conversationId: string }[]; body?: unknown } = {}) {
+function setup(opts: { enabled?: boolean; canSpend?: boolean; cap?: number; latestSeq?: number; since?: MessageDoc[]; registry?: ReturnType<typeof registry>; decisions?: { id: string; title: string; conversationId: string }[]; body?: unknown; extractedSeq?: number } = {}) {
   let runs = 0;
   const graph = {
     enabled: opts.enabled ?? true,
@@ -31,6 +31,8 @@ function setup(opts: { enabled?: boolean; canSpend?: boolean; cap?: number; late
     channelWatermark: vi.fn(async () => 4),
     setChannelWatermark: vi.fn(async () => {}),
     recentDecisions: vi.fn(async (_w: string, _c: string, _l: number) => opts.decisions ?? []),
+    graphExtractedSeq: vi.fn(async () => opts.extractedSeq),
+    setGraphExtractedSeq: vi.fn(async () => {}),
   };
   const store = {
     message: vi.fn(async () => msg('p', 'Ana', 'agent-ana', 'Ship Monday?')),
@@ -186,6 +188,41 @@ describe('graph extraction (pure)', () => {
     expect(parsePushJob({ kind: 'graph', workspaceId: 'w', conversationId: 'channel:c', seq: 3 })).toEqual({ kind: 'graph', workspaceId: 'w', conversationId: 'channel:c', seq: 3 });
     expect(() => parsePushJob({ kind: 'graph', workspaceId: 'w' })).toThrow();
     expect(parsePushJob({ agentId: 'a', conversationId: 'c' })).toEqual({ agentId: 'a', conversationId: 'c' });
+  });
+
+  describe('thread quiet period', () => {
+    const reply = { ...job, seq: 7 };
+
+    it('skips a reply job when a newer reply came, before any spend check or run', async () => {
+      const { graph, fetchImpl, run } = setup({ latestSeq: 8 });
+      await run(reply);
+      expect(graph.canSpendOnGraph).not.toHaveBeenCalled();
+      expect(graph.startGraphRun).not.toHaveBeenCalled();
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('runs the newest reply job and records the seq it extracted after the writes', async () => {
+      const { graph, fetchImpl, run } = setup({ latestSeq: 7 });
+      await run(reply);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(graph.setGraphExtractedSeq).toHaveBeenCalledWith('w', 'thread:c1:p', 7);
+      expect(graph.setGraphExtractedSeq.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...graph.upsertNode.mock.invocationCallOrder));
+    });
+
+    it('skips a done job when nothing is new since the last run, without starting one', async () => {
+      const { graph, fetchImpl, run } = setup({ latestSeq: 7, extractedSeq: 7 });
+      await run(job);
+      expect(graph.startGraphRun).not.toHaveBeenCalled();
+      expect(graph.canSpendOnGraph).not.toHaveBeenCalled();
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('runs a done job when the thread moved on since the last run', async () => {
+      const { fetchImpl, graph, run } = setup({ latestSeq: 9, extractedSeq: 7 });
+      await run(job);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(graph.setGraphExtractedSeq).toHaveBeenCalledWith('w', 'thread:c1:p', 9);
+    });
   });
 
   describe('channels', () => {
