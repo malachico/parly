@@ -119,7 +119,6 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `src/graph/search.ts`
 
-- nothing writes embeddings yet (#787), so with Vertex on every search pays one query embed (<=500 chars) for no hits; gate on an embeddings count if that spend shows up.
 - the no-Atlas-Search fallback scans the 500 most recent substring candidates in the workspace; fine for self-hosters' graph sizes.
 
 ## `src/graph/sources.ts`
@@ -416,4 +415,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**146 markers, 33 with no trigger.**
+**145 markers, 33 with no trigger.**

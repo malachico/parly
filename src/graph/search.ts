@@ -217,9 +217,12 @@ export function createGraphSearch(deps: GraphSearchDeps): GraphSearch {
   const vectorIndex = embedding ? prober(() => ensureVectorIndex(db, embedding.dimensions)) : undefined;
   const textIndex = prober(() => ensureTextIndex(db));
 
-  // ponytail: nothing writes embeddings yet (#787), so with Vertex on every search pays one query embed (<=500 chars) for no hits; gate on an embeddings count if that spend shows up.
+  /** A workspace with no stored embeddings can't get vector hits, so don't pay for the query embed (nothing writes them until #787). */
+  const hasEmbeddings = async (workspaceId: string) =>
+    (await db.execute(() => db.mongoDb.collection(EMBEDDINGS).countDocuments({ workspaceId }, { limit: 1 }))) > 0;
+
   async function vectorSearch(scope: GraphScope, query: string, limit: number, kind?: GraphNodeKind): Promise<GraphHit[]> {
-    if (!embedding || !vectorIndex || scopeChannels(scope)?.length === 0 || !(await vectorIndex.ready()) || !(await graph.canSpendOnGraph(scope.workspaceId))) return [];
+    if (!embedding || !vectorIndex || scopeChannels(scope)?.length === 0 || !(await vectorIndex.ready()) || !(await hasEmbeddings(scope.workspaceId)) || !(await graph.canSpendOnGraph(scope.workspaceId))) return [];
     const res = await embedding.embed(query);
     if (res.tokens > 0) await graph.recordGraphSpend(scope.workspaceId, Math.ceil(res.tokens * embedding.pricePerMTok));
     if (!res.ok) throw new Error(`embed failed: ${res.errorText ?? ''}`.slice(0, 300));

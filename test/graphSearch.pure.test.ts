@@ -11,7 +11,7 @@ const hit = { nodeId: 'n1', kind: 'decision', title: 'Use Mongo', conversationId
  * Atlas stand-in: a queryable vector index answering `$vectorSearch` with `vectorHits`; a queryable text index answering
  * `$search` with `bm25Hits` only when they're given (else no Atlas Search); `find` answers the regex fallback with n2.
  */
-function atlasDb(vectorHits: object[] | Error, bm25Hits?: object[]) {
+function atlasDb(vectorHits: object[] | Error, bm25Hits?: object[], embeddings = 1) {
   const aggregate = vi.fn((pipeline: Record<string, unknown>[]) => ({
     toArray: async () => {
       if (pipeline[0]?.$search) return bm25Hits ?? [];
@@ -22,14 +22,14 @@ function atlasDb(vectorHits: object[] | Error, bm25Hits?: object[]) {
   const node = { _id: 'n2', kind: 'decision', title: 'mongo fallback', conversationId: 'c' };
   const find = vi.fn(() => ({ toArray: async () => [], sort: () => ({ limit: () => ({ toArray: async () => [node] }) }) }));
   const indexes = (name: string) => name === 'graph_nodes' ? (bm25Hits ? [{ queryable: true }] : []) : [{ queryable: true, latestDefinition: { fields: [{ path: 'channelId' }] } }];
-  const collection = (name: string) => ({ listSearchIndexes: () => ({ toArray: async () => indexes(name) }), createSearchIndex: async () => 'x', aggregate, find });
+  const collection = (name: string) => ({ listSearchIndexes: () => ({ toArray: async () => indexes(name) }), createSearchIndex: async () => 'x', aggregate, find, countDocuments: async () => embeddings });
   return { db: { execute: (f: () => unknown) => f(), mongoDb: { collection } } as unknown as Database, aggregate, find };
 }
 
-function setup(opts: { canSpend?: boolean; embed?: Embedder; vectorHits?: object[] | Error; bm25Hits?: object[] } = {}) {
+function setup(opts: { canSpend?: boolean; embed?: Embedder; vectorHits?: object[] | Error; bm25Hits?: object[]; embeddings?: number } = {}) {
   const graph = { canSpendOnGraph: vi.fn(async () => opts.canSpend ?? true), recordGraphSpend: vi.fn(async () => {}) };
   const embedFn = opts.embed ?? vi.fn(async () => ({ ok: true, vector: [0.1, 0.2], tokens: 10 }));
-  const { db, aggregate, find } = atlasDb(opts.vectorHits ?? [hit], opts.bm25Hits);
+  const { db, aggregate, find } = atlasDb(opts.vectorHits ?? [hit], opts.bm25Hits, opts.embeddings);
   const search = createGraphSearch({ db, graph, enabled: true, embedding: { embed: embedFn, model: 'm', dimensions: 2, pricePerMTok: 0.15 } });
   return { search, graph, embedFn, aggregate, find };
 }
@@ -73,6 +73,14 @@ describe('graphSearch (pure)', () => {
     expect(fused.map((x) => x.nodeId)).toEqual(['b', 'a']);
     expect(fused[0]!.score).toBeCloseTo(2 / 62);
     expect(fuseHits([[h('a')], [h('z')]], 5).map((x) => x.nodeId)).toEqual(['a', 'z']);
+  });
+
+  it('a workspace with no embeddings pays for no embed, exact-word instead', async () => {
+    const { search, graph, embedFn, find } = setup({ embeddings: 0 });
+    expect(await search({ workspaceId: 'w' }, 'mongo')).toMatchObject({ mode: 'exact', hits: [{ nodeId: 'n2' }] });
+    expect(embedFn).not.toHaveBeenCalled();
+    expect(graph.recordGraphSpend).not.toHaveBeenCalled();
+    expect(find).toHaveBeenCalled();
   });
 
   it('cap exhausted: no embed call, exact-word instead', async () => {
