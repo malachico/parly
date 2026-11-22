@@ -16,7 +16,7 @@ export type MapInput = {
 };
 
 export type PlacedNode = MapEntry & { ring: 0 | 1 | 2; angle: number; x: number; y: number; parent?: string };
-export type PlacedEdge = { from: string; to: string; kinds: string[] };
+type PlacedEdge = { from: string; to: string; kinds: string[] };
 export type MapLayout = { nodes: PlacedNode[]; edges: PlacedEdge[]; inner: number; outer: number };
 
 /** Centre included. */

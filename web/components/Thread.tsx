@@ -616,7 +616,7 @@ const MD_COMPONENTS_RTL: Components = { a: LINK, img: MARKDOWN_IMAGE, pre: PRE, 
  * Agents' Hebrew is full of English terms, so a third is enough.
  */
 // ponytail: letter count, not a bidi algorithm; per-block auto still handles English messages
-export function messageDir(text: string): 'rtl' | undefined {
+function messageDir(text: string): 'rtl' | undefined {
   const rtl = text.match(/[\u0590-\u05FF\u0600-\u06FF]/g)?.length ?? 0;
   const latin = text.match(/[A-Za-z]/g)?.length ?? 0;
   return rtl > 0 && rtl / (rtl + latin) >= 0.3 ? 'rtl' : undefined;

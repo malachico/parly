@@ -11,7 +11,7 @@ export type NeighbourMapProps = {
   onDepthChange: (d: 1 | 2) => void;
 };
 
-export const KIND_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
+const KIND_STYLE: Record<string, { fill: string; stroke: string; label: string }> = {
   decision: { fill: 'var(--info-bg)', stroke: 'var(--info-fg)', label: 'Decision' },
   topic: { fill: 'var(--warn-bg)', stroke: 'var(--warn-fg)', label: 'Topic' },
   person: { fill: 'var(--ok-bg)', stroke: 'var(--ok-fg)', label: 'Person' },

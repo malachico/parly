@@ -440,7 +440,7 @@ export type SessionReadDeps = {
 };
 
 /** The signed-in user and their workspace `ws`, or the 401/403 answer when there is no session or no membership. */
-export async function sessionWorkspace(
+async function sessionWorkspace(
   ws: string,
   deps: Pick<SessionReadDeps, 'getToken' | 'getMe'>,
 ): Promise<{ user: Me; workspace: Me['workspaces'][number] } | { status: 401 | 403; body: { error: string } }> {
