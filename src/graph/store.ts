@@ -32,6 +32,9 @@ export const conversationFilter = ({ conversationId, channelId, channelIds }: Gr
   }
   return channelId !== undefined ? { $regex: `^(channel:${escapeRegex(channelId)}$|thread:${escapeRegex(channelId)}:)` } : conversationId;
 };
+
+/** The channel `conversationFilter` would place this conversation in (`channel:X`, `thread:X:...`); null for DMs, skills etc. */
+export const channelOf = (conversationId: string): string | null => /^(?:channel:([^:]+)$|thread:([^:]+):)/.exec(conversationId)?.slice(1).find(Boolean) ?? null;
 /** Per channel: the highest message seq already extracted. */
 const WATERMARKS = 'graph_watermarks';
 /** Per thread: a counter bumped by each extraction run, so only the last-started run writes. */
@@ -155,14 +158,14 @@ export class GraphStore {
     return id;
   }
 
-  /** Stores (or replaces) a node's embedding; one per node. */
+  /** Stores (or replaces) a node's embedding; one per node. `channelId` lets `$vectorSearch` pre-filter a channel scope. */
   async upsertEmbedding(embedding: { workspaceId: string; conversationId: string; nodeId: string; kind: GraphNodeKind; model: string; vector: number[] }): Promise<void> {
     if (!this.options.enabled) return;
     const { workspaceId, conversationId, nodeId, kind, model, vector } = embedding;
     const now = new Date().toISOString();
     await this.db.execute(() => this.db.mongoDb.collection<{ _id: string }>(EMBEDDINGS).updateOne(
       { _id: idOf(workspaceId, conversationId, kind, nodeId) },
-      { $set: { model, vector, updatedAt: now }, $setOnInsert: { workspaceId, conversationId, kind, key: nodeId, nodeId, createdAt: now } },
+      { $set: { model, vector, channelId: channelOf(conversationId), updatedAt: now }, $setOnInsert: { workspaceId, conversationId, kind, key: nodeId, nodeId, createdAt: now } },
       { upsert: true },
     ));
   }

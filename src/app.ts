@@ -271,7 +271,7 @@ export function createHub({ db, config, forwarder, waker, fetchCard, verifyGoogl
     }
     if (config.channelRouter && !config.channelRouterModel.startsWith('gemini-decision')) hub.chat.route = vertexRouter({ ...config.vertex, model: config.channelRouterModel, accessToken: cloudToken });
   }
-  // Internal context-graph search: vector when Vertex and an Atlas vector index are there, exact-word otherwise.
+  // Internal context-graph search: BM25 with Atlas Search (exact-word without), fused with vector hits when Vertex and an Atlas vector index are there.
   const emb = config.contextGraphEmbedding;
   hub.graphSearch = createGraphSearch({
     db, graph, enabled: config.contextGraphEnabled,

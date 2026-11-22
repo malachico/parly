@@ -119,9 +119,8 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `src/graph/search.ts`
 
-- channel scope over-fetches 5x workspace-wide then filters, so a busy workspace can starve a quiet channel; store channelId on embeddings and pre-filter it when that bites.
-- scans the 500 most recent substring candidates in the workspace; add a text index when graphs outgrow that.
 - nothing writes embeddings yet (#787), so with Vertex on every search pays one query embed (<=500 chars) for no hits; gate on an embeddings count if that spend shows up.
+- the no-Atlas-Search fallback scans the 500 most recent substring candidates in the workspace; fine for self-hosters' graph sizes.
 
 ## `src/graph/sources.ts`
 
@@ -414,4 +413,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**144 markers, 33 with no trigger.**
+**143 markers, 33 with no trigger.**

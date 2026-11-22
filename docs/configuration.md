@@ -77,7 +77,7 @@ or obsolete variable names whenever hub source changes.
 | `THREAD_DIGEST` | on | `off` disables rolling thread digests. |
 | `CONTEXT_GRAPH_ENABLED` | on | `off`, `false`, `0` or `no` (any case) disables the context graph; every graph store, spend and purge helper becomes a no-op. |
 | `CONTEXT_GRAPH_DAILY_CAP_USD` | `0.25` | Per-workspace daily ceiling (UTC day, model cost) on context-graph extraction. Parly pays; no user credits are spent. `0` stops extraction. |
-| `CONTEXT_GRAPH_EMBEDDING_MODEL` | `gemini-embedding-001` | Vertex embedding model for context-graph vector search. Needs `VERTEX_MODEL`; without Vertex, search is exact-word only. |
+| `CONTEXT_GRAPH_EMBEDDING_MODEL` | `gemini-embedding-001` | Vertex embedding model for context-graph vector search. Needs `VERTEX_MODEL`; without Vertex, search is lexical only (Atlas Search BM25 index `graph_nodes_text`, or exact-word where Atlas Search is unavailable). |
 | `CONTEXT_GRAPH_EMBEDDING_LOCATION` | `us-central1` | Vertex region for the embedding call. |
 | `CONTEXT_GRAPH_EMBEDDING_DIMENSIONS` | `768` | Embedding size. Must match the Atlas Vector Search index `graph_embeddings_vector`; to change it, drop that index and the stored embeddings. |
 | `CONTEXT_GRAPH_EMBEDDING_PRICE_PER_MTOK` | `0.15` | USD per million input tokens, charged to the per-workspace graph cap for each search embedding. |

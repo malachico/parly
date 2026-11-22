@@ -121,12 +121,12 @@ describe('hub-mcp starts without waiting for the hub', () => {
     const hub = await fakeHub(0);
     const dir = configured(hub.url);
     const call = (name: string, conversation?: string) => ({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: conversation ? { conversation } : {} } });
-    await bridge(dir, [init, call('whoami', 'dm:a_b')], 500);
+    await bridge(dir, [init, call('whoami', 'dm:a_b')], 1500);
     const reads = () => (fs.existsSync(path.join(dir, 'codex.workers')) ? fs.readdirSync(path.join(dir, 'codex.workers')).filter((n) => n.endsWith('.read')) : []);
     expect(reads()).toEqual([]);
-    await bridge(dir, [init, call('check_inbox', 'dm:a_b')], 500);
+    await bridge(dir, [init, call('check_inbox', 'dm:a_b')], 1500);
     expect(reads()).toHaveLength(1);
-  });
+  }, 15_000); // ponytail: 500ms was too tight on slow CI runners (failed #816, #818)
 
   it('a worker session tells the hub its conversation, so the hub leaves out the note about the others', async () => {
     const hub = await fakeHub(0);

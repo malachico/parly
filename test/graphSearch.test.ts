@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createGraphSearch, ensureVectorIndex } from '../src/graph/search.js';
-import { GraphStore } from '../src/graph/store.js';
+import { backfillEmbeddingChannels, createGraphSearch, ensureTextIndex, ensureVectorIndex } from '../src/graph/search.js';
+import { EMBEDDINGS, GraphStore } from '../src/graph/store.js';
 import { LlmMeter } from '../src/llm/llm.js';
 import { testDb } from './helpers.js';
 
@@ -21,6 +21,15 @@ describe('graphSearch on a plain replica set (no Atlas)', () => {
   it('has no vector index and says so without throwing', async () => {
     const { db } = await setup();
     expect(await ensureVectorIndex(db, 768)).toBe(false);
+    expect(await ensureTextIndex(db)).toBe(false);
+  });
+
+  it('backfills channelId onto embeddings stored before it existed', async () => {
+    const { db } = await setup();
+    const col = db.mongoDb.collection<{ _id: string; conversationId: string; channelId?: string | null }>(EMBEDDINGS);
+    await col.insertMany([{ _id: 'e1', conversationId: 'thread:eng:p1' }, { _id: 'e2', conversationId: 'dm:a_b' }]);
+    await backfillEmbeddingChannels(db);
+    expect((await col.find({ _id: { $in: ['e1', 'e2'] } }).sort({ _id: 1 }).toArray()).map((d) => d.channelId)).toEqual(['eng', null]);
   });
 
   it('falls back to whole-word exact search, scoped to the workspace', async () => {
