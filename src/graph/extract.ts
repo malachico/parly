@@ -15,6 +15,8 @@ export interface ExtractedDecision {
   topics: string[];
   /** 1-based index into the earlier decisions offered in the prompt that this one replaces. */
   replaces?: number;
+  /** 1-based indexes into the prompt's messages that state or settle this decision. */
+  messages?: number[];
 }
 
 /** The model's answer as decisions with trimmed, de-duplicated people and topics; malformed answers yield none. */
@@ -34,6 +36,7 @@ export function parseGraphExtraction(text: string): ExtractedDecision[] {
     out.push({
       title, text: typeof d.text === 'string' ? d.text.trim() : '', people: normalizeList(d.people), topics: normalizeList(d.topics),
       ...(Number.isInteger(d.replaces) && (d.replaces as number) > 0 ? { replaces: d.replaces as number } : {}),
+      ...(Array.isArray(d.messages) ? { messages: d.messages.filter((i): i is number => Number.isInteger(i) && i > 0) } : {}),
     });
   }
   return out;
@@ -63,7 +66,7 @@ export const GRAPH_SCHEMA = {
       type: 'ARRAY',
       items: {
         type: 'OBJECT',
-        properties: { title: { type: 'STRING' }, text: { type: 'STRING' }, people: { type: 'ARRAY', items: { type: 'STRING' } }, topics: { type: 'ARRAY', items: { type: 'STRING' } }, replaces: { type: 'INTEGER' } },
+        properties: { title: { type: 'STRING' }, text: { type: 'STRING' }, people: { type: 'ARRAY', items: { type: 'STRING' } }, topics: { type: 'ARRAY', items: { type: 'STRING' } }, replaces: { type: 'INTEGER' }, messages: { type: 'ARRAY', items: { type: 'INTEGER' } } },
         required: ['title', 'text', 'people', 'topics'],
       },
     },
@@ -79,12 +82,13 @@ export function graphPrompt(messages: Pick<MessageDoc, 'from' | 'parts'>[], repl
     'A decision is something the conversation agreed or someone with the say settled. Proposals, open questions, options still being weighed,',
     'status updates and plans nobody agreed to are not decisions. A decision later reversed in the same conversation counts once, as its final form.',
     'Only name people who appear as speakers or are named in the messages; never invent one. No decisions: an empty array.',
+    'Set "messages" to the numbers of the messages that state or settle it.',
     'Write in the conversation\'s language.',
     ...(replaceable.length
       ? ['', 'Earlier decisions in this channel, numbered. If a decision here changes or reverses one of them, set its "replaces" to that number. Do not repeat an earlier decision that is only mentioned again:', ...replaceable.map((c, i) => `${i + 1}. ${c.title}`)]
       : []),
     '',
-    ...messages.map((m) => `${m.from}: ${truncateMessageText(textOf(m))}`),
+    ...messages.map((m, i) => `[${i + 1}] ${m.from}: ${truncateMessageText(textOf(m))}`),
   ].join('\n');
 }
 
@@ -174,14 +178,16 @@ export function graphExtractor(deps: {
     // A person the thread knows is keyed on their agent id (titled with their thread name), so a rename or a
     // differently-cased mention is one node. ponytail: names the thread never posted as stay keyed by name.
     const authors = new Map(messages.map((m) => [m.from.toLowerCase(), { id: m.fromId, name: m.from }]));
-    const node = (kind: 'decision' | 'person' | 'topic', title: string, extra: { key?: string; text?: string } = {}) =>
+    const node = (kind: 'decision' | 'person' | 'topic', title: string, extra: { key?: string; text?: string; sourceMessageIds?: string[] } = {}) =>
       graph.upsertNode({ workspaceId, conversationId, kind, title, ...extra });
     const edge = async (kind: string, from: string | undefined, to: Promise<string | undefined>) => {
       const toId = await to;
       if (from && toId) await graph.upsertEdge({ workspaceId, kind, from: { id: from, conversationId }, to: { id: toId, conversationId } });
     };
     for (const d of parseGraphExtraction(out.text)) {
-      const decision = await node('decision', d.title, { text: d.text });
+      // Cites only messages from this batch, so never another conversation's: an index the model made up is dropped.
+      const cited = [...new Set((d.messages ?? []).map((i) => messages[i - 1]?.id).filter((id): id is string => !!id))];
+      const decision = await node('decision', d.title, { text: d.text, ...(cited.length ? { sourceMessageIds: cited } : {}) });
       const old = d.replaces !== undefined ? replaceable[d.replaces - 1] : undefined;
       if (decision && old && old.id !== decision) {
         await graph.upsertEdge({ workspaceId, kind: 'supersedes', from: { id: decision, conversationId }, to: { id: old.id, conversationId: old.conversationId } });

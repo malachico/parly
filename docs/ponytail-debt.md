@@ -223,6 +223,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - per-instance cache of the post-tool pending count, dropped when a post here touches the agent; a post on another Cloud Run instance shows up within PENDING_TTL_MS. A shared unread counter if that lag matters.
 - `no-trigger` whoami stays read-only though its `routine` code attaches a Routine to the caller: a one-time, owner-checked write, and asking first would stall the woken session.
 
+## `src/mcp/toolsGraph.ts`
+
+- the first 5 cited messages; page them if agents need the rest.
+
 ## `src/mcp/toolsMessaging.ts`
 
 - per-instance memory of which conversations an agent was already shown the channel context, skills and processes in (by check_inbox, wait_for_message or read_thread); another Cloud Run instance, an eviction or SEEN_TTL_MS just sends them again, a skills change alone does not within SEEN_TTL_MS, and any fresh session of the agent (a restarted worker, a memoryless `claude -p` loop) goes up to SEEN_TTL_MS without them. A per-session key if that matters (the MCP transport is stateless, so there is no session id yet).
@@ -410,4 +414,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**143 markers, 33 with no trigger.**
+**144 markers, 33 with no trigger.**

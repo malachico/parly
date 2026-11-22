@@ -85,6 +85,13 @@ describe('graph extraction (pure)', () => {
     ]);
   });
 
+  it('cites the numbered messages of this batch, dropping any number the model made up', async () => {
+    const { graph, fetchImpl, run } = setup({ body: { decisions: [{ ...answer.decisions[0], messages: [2, 1, 2, 99, 0, -1, 1.5] }] } });
+    await run(job);
+    expect(JSON.stringify((fetchImpl.mock.calls as unknown as [string, RequestInit][])[0]?.[1]?.body)).toContain('[2] Bo: Yes, after QA');
+    expect(graph.upsertNode.mock.calls[0]?.[0]).toMatchObject({ kind: 'decision', sourceMessageIds: ['r1', 'p'] });
+  });
+
   it('lets the last-started of two overlapping thread runs write, so an older run finishing last never wins', async () => {
     const { graph, store } = setup();
     let releaseA!: () => void;

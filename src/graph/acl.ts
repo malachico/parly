@@ -43,7 +43,7 @@ export interface MergedNode {
   workspaceId: string;
   kind?: string;
   title?: string;
-  sources: { nodeId: string; conversationId: string; title?: string; text?: string; messageIds?: string[] }[];
+  sources: { nodeId: string; conversationId: string; title?: string; text?: string; messageIds?: string[]; createdAt?: string; updatedAt?: string }[];
 }
 
 /**
@@ -52,7 +52,7 @@ export interface MergedNode {
  * readable conversations alone: a source the reader can't read adds nothing, not even its existence. Edges move to
  * their ends' entries, one per (kind, from, to).
  */
-export async function mergedReadableGraph<N extends GraphNodeAcl & { canonicalId?: string; kind?: string; title?: string; text?: string; sourceMessageIds?: string[] }, E extends GraphEdgeAcl & { kind?: string }>(
+export async function mergedReadableGraph<N extends GraphNodeAcl & { canonicalId?: string; kind?: string; title?: string; text?: string; sourceMessageIds?: string[]; createdAt?: string; updatedAt?: string }, E extends GraphEdgeAcl & { kind?: string }>(
   reader: AgentRecord,
   chat: Pick<ChatService, 'readableConversations'>,
   graph: { nodes: N[]; edges: E[] },
@@ -71,7 +71,7 @@ export async function mergedReadableGraph<N extends GraphNodeAcl & { canonicalId
     const entry = merged.get(id) ?? merged.set(id, { id, workspaceId: n.workspaceId, kind: n.kind, title: n.title, sources: [] }).get(id)!;
     // The longest visible name is the fullest ("Dana Levi" over "Dana").
     if ((n.title?.length ?? 0) > (entry.title?.length ?? 0)) entry.title = n.title;
-    entry.sources.push({ nodeId: n._id, conversationId: n.conversationId, title: n.title, text: n.text, ...(n.sourceMessageIds?.length ? { messageIds: n.sourceMessageIds } : {}) });
+    entry.sources.push({ nodeId: n._id, conversationId: n.conversationId, title: n.title, text: n.text, ...(n.sourceMessageIds?.length ? { messageIds: n.sourceMessageIds } : {}), createdAt: n.createdAt, updatedAt: n.updatedAt });
   }
   const seen = new Set<string>();
   return {

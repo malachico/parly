@@ -15,7 +15,7 @@ export interface GraphScope {
 }
 
 /** A node or edge as the agent tools read it. */
-export type GraphNodeDoc = { _id: string; workspaceId: string; conversationId: string; kind: GraphNodeKind; title: string; text?: string; canonicalId?: string; sourceMessageIds?: string[] };
+export type GraphNodeDoc = { _id: string; workspaceId: string; conversationId: string; kind: GraphNodeKind; title: string; text?: string; canonicalId?: string; sourceMessageIds?: string[]; createdAt?: string; updatedAt?: string };
 export type GraphEdgeDoc = { _id: string; workspaceId: string; kind: string; from: string; to: string; fromConversationId: string; toConversationId: string };
 
 export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -209,7 +209,7 @@ export class GraphStore {
   /** Nodes in `workspaceIds` matching `filter`. Unchecked: show them only through graph/acl.ts. */
   async nodes(workspaceIds: string[], filter: Record<string, unknown>, limit: number, page: { newestFirst?: boolean; skip?: number } = {}): Promise<GraphNodeDoc[]> {
     if (!this.options.enabled) return [];
-    return this.db.execute(() => this.db.mongoDb.collection<GraphNodeDoc>(NODES).find({ ...filter, workspaceId: { $in: workspaceIds } }, { projection: { _id: 1, workspaceId: 1, conversationId: 1, kind: 1, title: 1, text: 1, canonicalId: 1, sourceMessageIds: 1 } })
+    return this.db.execute(() => this.db.mongoDb.collection<GraphNodeDoc>(NODES).find({ ...filter, workspaceId: { $in: workspaceIds } }, { projection: { _id: 1, workspaceId: 1, conversationId: 1, kind: 1, title: 1, text: 1, canonicalId: 1, sourceMessageIds: 1, createdAt: 1, updatedAt: 1 } })
       .sort(page.newestFirst ? { updatedAt: -1, _id: 1 } : { _id: 1 }).skip(page.skip ?? 0).limit(limit).toArray());
   }
 

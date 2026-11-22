@@ -14,7 +14,11 @@ type GraphToolDeps = {
 };
 
 // One entry per entity (duplicates merged), each readable source's text kept apart under it.
-const nodeView = (n: MergedNode) => ({ id: n.id, kind: n.kind, title: n.title, sources: n.sources.map((s) => ({ conversation: s.conversationId, ...(s.text ? { text: s.text } : {}) })) });
+const nodeView = (n: MergedNode) => ({ id: n.id, kind: n.kind, title: n.title, sources: n.sources.map((s) => ({
+  conversation: s.conversationId, ...(s.text ? { text: s.text } : {}),
+  // ponytail: the first 5 cited messages; page them if agents need the rest.
+  ...(s.messageIds?.length ? { messageIds: s.messageIds.slice(0, 5) } : {}), createdAt: s.createdAt, updatedAt: s.updatedAt,
+})) });
 const edgeView = (e: GraphEdgeDoc) => ({ kind: e.kind, from: e.from, to: e.to });
 
 /** Registers find_decisions and related when the context graph is on; hidden otherwise, like web_search. */

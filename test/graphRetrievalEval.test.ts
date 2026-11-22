@@ -9,7 +9,7 @@ import { crew, testConfig, testDb } from './helpers.js';
 
 /**
  * Baseline retrieval eval for find_decisions. It measures and changes nothing. It seeds decision nodes shaped the way
- * extraction writes them (title, text, no sourceMessageIds, a `supersedes` edge from new to old) and asks questions
+ * extraction writes them (title, text, the cited sourceMessageIds, a `supersedes` edge from new to old) and asks questions
  * through the real MCP tool as an agent who can't read the private channel.
  *
  * Mode: regex fallback (not BM25). A plain replica set has no Atlas vector index and tests have no embedder, so
@@ -32,8 +32,8 @@ import { crew, testConfig, testDb } from './helpers.js';
  *   or private conversation.
  *
  * Known gaps (measured here, not fixed):
- * - Extraction (src/graph/extract.ts) never passes sourceMessageIds, and the MCP nodeView (src/mcp/toolsGraph.ts)
- *   drops sources[].messageIds, so tool results carry no citations. The propagation test pins that second gap.
+ * - Citations are seeded, so this measures that the tool returns them, not that the model cites the right messages
+ *   (unmeasured: test/graphQuality.test.ts checks titles, people and replaces, not which messages are cited).
  * - Ranking ignores `supersedes` edges, so a stale decision can outrank its replacement.
  * - No stemming or synonyms ("deployment cadence" finds nothing), and stopwords count toward the score.
  */
@@ -76,7 +76,7 @@ const QUESTIONS: { q: string; expect: string }[] = [
 ];
 
 /** Today's exact numbers. Change them deliberately when retrieval changes; a drop is a regression. */
-const BASELINE = { recallAt5: 10, citationsCorrect: 0, citationsMissing: 10, citationsIncorrect: 0, supersedeOrder: 0, noAnswerCorrect: 3, noAnswerFalsePositives: 2 };
+const BASELINE = { recallAt5: 10, citationsCorrect: 10, citationsMissing: 0, citationsIncorrect: 0, supersedeOrder: 0, noAnswerCorrect: 3, noAnswerFalsePositives: 2 };
 /** ponytail: one fixed cut-off; tune it once a real ranker produces comparable scores. */
 const NO_ANSWER_SCORE = 0.5;
 
@@ -107,11 +107,11 @@ describe('find_decisions retrieval eval (baseline, regex fallback (not BM25))', 
     const convs = { pub: channelKey(w.channel.id), release: threadKey(w.channel.id, 'release'), docs: threadKey(w.channel.id, 'docs'), priv: threadKey(priv, 'board') };
     privConv = convs.priv;
     const now = new Date().toISOString();
-    // Same fields upsertNode writes, with fixed ids. No sourceMessageIds, as extraction writes today.
+    // Same fields upsertNode writes, with fixed ids, citing each decision's messages as extraction now does.
     const doc = (_id: string, conversationId: string, title: string, text: string, sourceMessageIds: string[]) =>
       ({ _id, workspaceId: ws, conversationId, kind: 'decision', key: normalizeKey(title), title, text, source: { kind: 'conversation', conversationId }, sourceMessageIds, createdAt: now, updatedAt: now });
     await db.mongoDb.collection<{ _id: string }>(NODES).insertMany([
-      ...DECISIONS.map((d) => doc(idOf.get(d.key)!, convs[d.conv], d.title, d.text, [])),
+      ...DECISIONS.map((d) => doc(idOf.get(d.key)!, convs[d.conv], d.title, d.text, d.msgs)),
       doc(PROBE.id, convs.pub, PROBE.title, 'Seeded with message ids to check the tool forwards them.', PROBE.msgs),
     ]);
     const graph = hub.graph as GraphStore;
@@ -181,7 +181,6 @@ describe('find_decisions retrieval eval (baseline, regex fallback (not BM25))', 
     const hit = (await call(hub, outsider, 'citation probe quokka')).find((d) => d.id === PROBE.id);
     expect(hit).toBeDefined();
     const forwarded = PROBE.msgs.every((m) => hit!.sources.some((s) => s.messageIds?.includes(m)));
-    // Baseline: nodeView in src/mcp/toolsGraph.ts drops messageIds. Flip to true when it forwards them.
-    expect(forwarded).toBe(false);
+    expect(forwarded).toBe(true);
   });
 });

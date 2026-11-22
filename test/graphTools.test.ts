@@ -80,7 +80,7 @@ describe('graph agent tools', () => {
     const sources = async (who: AgentRecord) => (await call(hub, who, 'related', { id: ids.topic })).nodes.find((n: { title: string }) => n.title === 'Mongo topic').sources;
     expect(await sources(member)).toHaveLength(2);
     const out = await sources(outsider);
-    expect(out).toEqual([{ conversation: channelKey(w.channel.id), text: 'not a decision' }]);
+    expect(out).toEqual([{ conversation: channelKey(w.channel.id), text: 'not a decision', createdAt: expect.any(String), updatedAt: expect.any(String) }]);
     expect(JSON.stringify(await call(hub, outsider, 'related', { id: ids.topic }))).not.toContain('private topic notes');
   });
 
