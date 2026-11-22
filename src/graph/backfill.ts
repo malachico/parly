@@ -5,7 +5,7 @@ import type { GraphStore } from './store.js';
 
 /** Per workspace: the highest conversation id the backfill has enqueued (or skipped). */
 const CURSORS = 'graph_backfill';
-export const BACKFILL_DAYS = 90;
+const BACKFILL_DAYS = 90;
 const MAX_BATCH = 50;
 
 export interface BackfillSummary {

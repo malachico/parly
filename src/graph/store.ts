@@ -47,7 +47,7 @@ export const normalizeKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g
 const idOf = (...parts: string[]) => createHash('sha256').update(parts.join('\u0000')).digest('hex').slice(0, 32);
 
 /** Topic word-set overlap (Jaccard) at or above which two topics are one entry: "Mongo migrations" ~ "migration to Mongo", not "Q3 launch" ~ "Q4 launch". */
-export const TOPIC_MERGE_THRESHOLD = 0.6;
+const TOPIC_MERGE_THRESHOLD = 0.6;
 
 /** Lowercased words with a plain plural `s` dropped, so case, order, punctuation and plurals don't split an entry. */
 const words = (s: string) => new Set((s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)));

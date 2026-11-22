@@ -125,7 +125,7 @@ interface ChatOptions {
 /** Waits wake at once for a post on this instance; this slow re-read catches the others' (Cloud Run runs several). */
 const WAIT_POLL_MS = 10_000;
 const EVENTS_LIMIT = 50;
-export const SCAN = 50;
+const SCAN = 50;
 /** Pause before the one retry of a push enqueue that failed. */
 const PUSH_RETRY_MS = 500;
 

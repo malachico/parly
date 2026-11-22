@@ -1,11 +1,11 @@
 import type { Database } from '../db/types.js';
 import { channelOf, conversationFilter, EMBEDDINGS, escapeRegex, NODES, type GraphNodeKind, type GraphScope, type GraphStore } from './store.js';
 
-export const VECTOR_INDEX = 'graph_embeddings_vector';
-export const TEXT_INDEX = 'graph_nodes_text';
+const VECTOR_INDEX = 'graph_embeddings_vector';
+const TEXT_INDEX = 'graph_nodes_text';
 
 /** Atlas Vector Search index on graph_embeddings. `numDimensions` must match the embedding call's output size. */
-export const vectorIndexDefinition = (dimensions: number) => ({
+const vectorIndexDefinition = (dimensions: number) => ({
   fields: [
     { type: 'vector', path: 'vector', numDimensions: dimensions, similarity: 'cosine' },
     { type: 'filter', path: 'workspaceId' },
@@ -17,7 +17,7 @@ export const vectorIndexDefinition = (dimensions: number) => ({
 });
 
 /** Atlas Search (BM25) index on graph_nodes: title + text analyzed, scope fields as tokens for `equals`. */
-export const textIndexDefinition = {
+const textIndexDefinition = {
   mappings: {
     dynamic: false,
     fields: { title: { type: 'string' }, text: { type: 'string' }, workspaceId: { type: 'token' }, conversationId: { type: 'token' }, kind: { type: 'token' } },
@@ -37,7 +37,7 @@ export interface GraphHit {
  * `off`: graph disabled. The lexical leg always runs: `bm25` is Atlas Search, `exact` the whole-word regex fallback where
  * Atlas Search isn't available. `vector+…`: Atlas Vector Search found hits too, merged with the lexical ones (RRF).
  */
-export interface GraphSearchResult {
+interface GraphSearchResult {
   mode: 'off' | 'bm25' | 'exact' | 'vector+bm25' | 'vector+exact';
   hits: GraphHit[];
 }

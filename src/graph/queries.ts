@@ -31,7 +31,7 @@ export const findDecisions = (hub: HubService, caller: AgentRecord, query: strin
   searchEntries(hub, caller, query, { ...opts, kind: 'decision' });
 
 /** Entries (of `kind`, or any) matching `query` in the conversations the caller can read (or one channel of theirs), best match first. */
-export async function searchEntries(hub: HubService, caller: AgentRecord, query: string, opts: { channel?: string; thread?: string; workspaceId?: string; limit?: number; kind?: GraphNodeKind } = {}): Promise<MergedNode[]> {
+async function searchEntries(hub: HubService, caller: AgentRecord, query: string, opts: { channel?: string; thread?: string; workspaceId?: string; limit?: number; kind?: GraphNodeKind } = {}): Promise<MergedNode[]> {
   const { graph, graphSearch: search } = hub;
   if (!graph || !search) return [];
   const ch = opts.channel ? await hub.registry.resolveMemberChannel(caller, opts.channel) : undefined;
@@ -116,7 +116,7 @@ async function edgesAmong(hub: HubService, caller: AgentRecord, entries: MergedN
 }
 
 /** An entry as the explorer shows it: each source as the channel, thread and messages the web deep-links to. */
-export const explorerNodeView = (n: MergedNode) => ({
+const explorerNodeView = (n: MergedNode) => ({
   id: n.id,
   workspaceId: n.workspaceId,
   kind: n.kind as GraphNodeKind,
@@ -127,7 +127,6 @@ export const explorerNodeView = (n: MergedNode) => ({
     return { channelId: k.kind === 'dm' ? '' : k.channelId, ...(k.kind === 'thread' ? { thread: k.post } : {}), messageIds: s.messageIds ?? [] };
   }),
 });
-export type ExplorerNode = ReturnType<typeof explorerNodeView>;
 
 /**
  * The caller's readable entries (of `kind`, in `channel` or one `workspace` of theirs), newest first, or best match first with `q`, and how many of each kind there are, with the edges between the entries returned.
