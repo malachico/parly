@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { verifyPaddleSignature, limitsOf } from '../src/billing/billing.js';
-import { testConfig, testDb, testPerson } from './helpers.js';
+import { httpCaller, testConfig, testDb, testPerson } from './helpers.js';
 
 const SECRET = 'pdl_ntfset_test';
 const PADDLE = { apiKey: 'pdl_sdbx_key', webhookSecret: SECRET, clientToken: 'test_tok', environment: 'sandbox' as const, prices: { pro: 'pri_pro', topups: { '10': 'pri_t10' } } };
@@ -482,6 +482,39 @@ describe('Enterprise leads', () => {
       expect(sent[1]).toMatchObject({ subject: `Parly Pro yearly ($200/year) request: ${person.name}`, text: expect.stringContaining(person.email!) });
     } finally {
       process.env.SUPER_ADMIN_EMAILS = before;
+    }
+  });
+});
+
+describe('workspace budget', () => {
+  it('owners and co-owners set it, members and outsiders cannot, bad values are refused, and it shows in billing', async () => {
+    const { app, hub } = createApp({ db: testDb(), config: testConfig({ cloudAgents: CLOUD }) });
+    const server = app.listen(0);
+    const call = httpCaller(() => `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    const signIn = async (name: string) => (await call(undefined, 'POST', '/auth/google', { idToken: `dev:${name}-${Date.now()}@people.test` })).json as { token: string; agent: { id: string; email: string } };
+    try {
+      const [owner, co, member, outsider] = [await signIn('own'), await signIn('co'), await signIn('mem'), await signIn('out')];
+      const ownerRec = (await hub.registry.get(owner.agent.id))!;
+      const ws = await hub.registry.createWorkspace(ownerRec, 'Acme', { unchecked: true });
+      for (const p of [co, member]) expect((await call(owner.token, 'POST', `/workspaces/${ws.id}/invites`, { email: p.agent.email })).status).toBe(200);
+      await hub.registry.addWorkspaceOwner(ownerRec, ws.id, co.agent.id);
+      const put = (token: string, body: unknown) => call(token, 'PUT', `/workspaces/${ws.id}/budget`, body);
+
+      expect((await put(owner.token, { credits: 5 })).json).toEqual({ workspaceId: ws.id, budgetCredits: 5 });
+      expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: 5, spentCredits: 0 });
+      expect((await put(co.token, { credits: 7.5 })).json).toMatchObject({ budgetCredits: 7.5 });
+      expect((await put(member.token, { credits: 100 })).status).toBe(403);
+      expect((await call(member.token, 'GET', `/workspaces/${ws.id}/billing`)).status).toBe(403);
+      expect((await put(outsider.token, { credits: 100 })).status).toBe(404);
+      for (const credits of [-1, '5', Number.MAX_VALUE, undefined]) expect((await put(owner.token, { credits })).status).toBe(400);
+      expect((await call(co.token, 'GET', `/workspaces/${ws.id}/billing`)).json.budgetCredits).toBe(7.5);
+
+      await put(owner.token, { credits: 0 });
+      expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json.blockedBy).toBe('budget');
+      expect((await put(owner.token, { credits: null })).json.budgetCredits).toBeNull();
+      expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: null });
+    } finally {
+      server.close();
     }
   });
 });

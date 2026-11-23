@@ -154,6 +154,8 @@ export function accountRoutes(router: Router, hub: HubService): void {
       const pool = me.billingAccountId ? await hub.registry.workspaceDoc(me.billingAccountId) : undefined;
       // Linked to a pool: the pool's credit is what runs out, so `used` is its ratio (never its dollars).
       const used = me.billingAccountId ? await usedByPayer(hub.llm, me) : capMicros > 0 ? spentMicros / capMicros : 1;
+      // Why work stops, if it does: the payer's credits ran out, or its owners' monthly budget was reached (no amounts).
+      const blockedBy = await hub.llm.blockedBy(await hub.llm.payerOf(me));
       const p = hub.billing.paddle;
       return {
         plan: limits.plan,
@@ -169,6 +171,7 @@ export function accountRoutes(router: Router, hub: HubService): void {
         maxConnected: MAX_LIVE_BOTS,
         referrals: rec?.referrals ?? 0,
         ...(pool ? { billedTo: { workspaceId: pool.id, name: pool.name } } : {}),
+        ...(blockedBy ? { blockedBy } : {}),
         ...(rec?.periodEnd ? { periodEnd: rec.periodEnd } : {}),
         ...(rec?.cancelAtPeriodEnd ? { cancelAtPeriodEnd: true } : {}),
         canManage: !!(p && rec?.paddleCustomerId),

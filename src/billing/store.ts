@@ -66,6 +66,11 @@ export class BillingStore {
     return (await this.getBilling(ownerId))!;
   }
 
+  /** A company pool's monthly budget in micros; null removes it. */
+  async setBudget(ownerId: string, micros: number | null): Promise<void> {
+    await this.col().doc(ownerId).set({ ownerId, budgetMicros: micros === null ? FieldValue.delete() : micros, updatedAt: new Date().toISOString() }, { merge: true });
+  }
+
   async ownerOfSubscription(subscriptionId: string): Promise<string | undefined> {
     const snap = await this.col().where('paddleSubscriptionId', '==', subscriptionId).limit(1).get();
     return snap.docs[0]?.id;

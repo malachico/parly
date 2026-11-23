@@ -80,6 +80,14 @@ export class Billing {
     return this.store.getBilling(ownerId);
   }
 
+  /** Set (`credits`, a non-negative number) or remove (`null`) a company pool's monthly budget. The caller checks it may. */
+  async setBudget(workspaceId: string, credits: unknown): Promise<void> {
+    if (credits !== null && (typeof credits !== 'number' || !Number.isFinite(credits) || credits < 0 || !Number.isSafeInteger(Math.round(credits * CREDIT_MICROS)))) {
+      throw new HubError('invalid', 'Budget must be a number of credits, 0 or more, or null to remove it');
+    }
+    await this.store.setBudget(workspaceId, credits === null ? null : Math.round(credits * CREDIT_MICROS));
+  }
+
   async createVoucher(adminId: string, input: { code?: unknown; credits?: unknown; maxUses?: unknown; validUntil?: unknown }): Promise<CreditVoucher> {
     const code = voucherCode(input.code);
     const { credits, maxUses, validUntil } = input;

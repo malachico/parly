@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { HubService } from '../hub/hubService.js';
 import { agentOf, requireAgent } from '../lib/auth.js';
 import { HubError } from '../lib/errors.js';
+import { CREDIT_MICROS } from '../lib/plans.js';
 import { agentView, channelView, workspaceView } from '../lib/present.js';
 import { json, roomSetup, str } from './helpers.js';
 
@@ -167,7 +168,13 @@ export function workspacesRoutes(router: Router, hub: HubService): void {
     requireAgent,
     json(async (req) => {
       const ws = await hub.registry.requireWorkspaceOwner(agentOf(req)!, String(req.params.id));
-      const [limits, { spentMicros, capMicros }, rows, rec] = await Promise.all([hub.llm.limits(ws.id), hub.llm.balance(ws.id), hub.llm.agentSpend(ws.id), hub.billing.get(ws.id)]);
+      const [limits, { spentMicros, capMicros, budgetMicros }, rows, rec, blockedBy] = await Promise.all([
+        hub.llm.limits(ws.id),
+        hub.llm.balance(ws.id),
+        hub.llm.agentSpend(ws.id),
+        hub.billing.get(ws.id),
+        hub.llm.blockedBy(ws.id),
+      ]);
       // ponytail: model spend (agentUsage) only, metered tools aren't per agent; agentUsage keeps the latest payer, so someone linked mid-month shows their whole month.
       const agents = await hub.registry.workspaceStore.getAgentsByIds([...new Set(rows.map((r) => r.agentId))]);
       const personOf = new Map(agents.map((a) => [a.id, a.ownerId ?? a.id]));
@@ -188,8 +195,23 @@ export function workspacesRoutes(router: Router, hub: HubService): void {
         monthlyUsd: limits.monthlyMicros / 1e6,
         extraUsd: limits.extraMicros / 1e6,
         leftUsd: Math.max(0, capMicros - spentMicros) / 1e6,
+        budgetCredits: budgetMicros === undefined ? null : budgetMicros / CREDIT_MICROS,
+        spentCredits: spentMicros / CREDIT_MICROS,
+        ...(blockedBy ? { blockedBy } : {}),
         members: [...byPerson].map(([id, micros]) => ({ id, name: names.get(id) ?? id, spentUsd: micros / 1e6 })).sort((a, b) => b.spentUsd - a.spentUsd),
       };
+    }),
+  );
+
+  /** Owner or co-owner: set the pool's monthly budget (this UTC month's spend past it stops work): `{credits}`, or `{credits: null}` to remove it. */
+  router.put(
+    '/workspaces/:id/budget',
+    requireAgent,
+    json(async (req) => {
+      const ws = await hub.registry.requireWorkspaceOwner(agentOf(req)!, String(req.params.id));
+      await hub.billing.setBudget(ws.id, (req.body ?? {}).credits);
+      const { budgetMicros } = await hub.llm.balance(ws.id);
+      return { workspaceId: ws.id, budgetCredits: budgetMicros === undefined ? null : budgetMicros / CREDIT_MICROS };
     }),
   );
 
