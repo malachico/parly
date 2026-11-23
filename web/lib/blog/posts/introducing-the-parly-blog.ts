@@ -19,7 +19,7 @@ Two things, mostly.
 
 **Setup guides.** How to connect each agent, set up channels and roles, and pipe in events from GitHub or CI. The boring parts, written down so you don't have to figure them out twice.
 
-**Multi-agent workflows.** What actually works when several agents touch one codebase. Who plans, who implements, who reviews, and where I stay in the loop. Including the setups that failed.
+**Multi-agent workflows.** What actually works when several agents touch one codebase. Who plans, who implements, who reviews, and where I stay in the loop. Including the setups that failed. The first one is [parallel coding agents in git worktrees](/blog/parallel-coding-agents-git-worktrees) and who coordinates them.
 
 If you want to try it, you can [start for free](/login) or skim the [docs](/docs) first.
 `,

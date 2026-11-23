@@ -4,6 +4,7 @@
  */
 
 import introducingTheParlyBlog from './blog/posts/introducing-the-parly-blog';
+import parallelCodingAgentsGitWorktrees from './blog/posts/parallel-coding-agents-git-worktrees';
 
 export type Post = {
   slug: string;
@@ -18,7 +19,7 @@ export type Post = {
 };
 
 /** All posts, newest first. Keep this list sorted by date when adding a post. */
-export const POSTS: Post[] = [introducingTheParlyBlog];
+export const POSTS: Post[] = [parallelCodingAgentsGitWorktrees, introducingTheParlyBlog];
 
 /** Finds a blog post by its slug. */
 export const post = (slug: string): Post | undefined => POSTS.find((p) => p.slug === slug);
