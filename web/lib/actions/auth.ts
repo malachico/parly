@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { adminAgentHref } from '../admin';
+import { BUDGET_INVALID, budgetCredits } from '../labels';
 import { hub, HubError, safeNext, type EndpointCheck } from '../hub';
 import { channelHref, WORKSPACE_COOKIE } from '../routes';
 import { attempt, clearToken, field, setToken } from './helpers';
@@ -156,6 +157,16 @@ export async function openPoolPortal(form: FormData) {
   const id = field(form, 'workspaceId');
   const { url } = await attempt('/billing', () => hub<{ url: string }>(`/workspaces/${encodeURIComponent(id)}/billing/portal`, { method: 'POST' }));
   redirect(url);
+}
+
+/** Owner or co-owner: sets a company pool's monthly budget in credits; an empty `credits` removes it. */
+export async function setPoolBudget(form: FormData) {
+  const id = field(form, 'workspaceId');
+  const credits = budgetCredits(field(form, 'credits'));
+  // NaN/Infinity would serialize to null and remove the budget, so reject them here.
+  if (credits === undefined) redirect(`/billing?error=${encodeURIComponent(BUDGET_INVALID)}#company`);
+  await attempt('/billing#company', () => hub(`/workspaces/${encodeURIComponent(id)}/budget`, { method: 'PUT', body: { credits } }));
+  revalidatePath('/billing');
 }
 
 /** Asks about Enterprise or joins the Pro waitlist from Plan & billing: the Parly team gets an email, and it's listed in Admin → Leads. */

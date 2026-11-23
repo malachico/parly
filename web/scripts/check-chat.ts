@@ -13,3 +13,4 @@ import './check/thread-nav';
 import './check/catchup-misc';
 import './check/site';
 import './check/knowledge';
+import './check/budget';

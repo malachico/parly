@@ -18,6 +18,20 @@ export function credits(usd: number): string {
   return Math.max(0, Math.floor(usd * 100)).toLocaleString('en-US');
 }
 
+/** A usage bar's fill: red at 100%, amber from 80%. */
+export function meterColor(pct: number): string {
+  return pct >= 100 ? 'bg-[var(--bad-fg)]' : pct >= 80 ? 'bg-amber-500' : 'bg-[var(--accent)]';
+}
+
+export const BUDGET_INVALID = 'Budget must be a number of credits, 0 or more, or null to remove it';
+
+/** The budget form's value for the hub: null removes it (only an empty field), undefined is invalid. Same check as the hub's setBudget. */
+export function budgetCredits(raw: string): number | null | undefined {
+  if (raw === '') return null;
+  const c = Number(raw);
+  return Number.isFinite(c) && c >= 0 && Number.isSafeInteger(Math.round(c * 10_000)) ? c : undefined;
+}
+
 /** "just now", "3m ago", "2d ago", or "never": when something last happened. */
 export function ago(iso?: string, now = Date.now()): string {
   if (!iso) return 'never';

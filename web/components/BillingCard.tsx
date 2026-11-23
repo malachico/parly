@@ -1,9 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { credits } from '@/lib/labels';
+import { credits, meterColor } from '@/lib/labels';
 import { useEffect, useState } from 'react';
-import { askEnterprise, openBillingPortal, openPoolPortal } from '@/lib/actions';
+import { askEnterprise, openBillingPortal, openPoolPortal, setPoolBudget } from '@/lib/actions';
 import type { BillingView, PoolView } from '@/lib/hub';
 import { PendingButton } from '@/components/PendingButton';
 
@@ -108,7 +108,7 @@ export function BillingCard({
         </div>
       </div>
       <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Credits used this month" className="h-2 w-full overflow-hidden rounded-full bg-[var(--subtle)]">
-        <div className={`h-full rounded-full ${pct >= 100 ? 'bg-[var(--bad-fg)]' : pct >= 80 ? 'bg-amber-500' : 'bg-[var(--accent)]'}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full ${meterColor(pct)}`} style={{ width: `${pct}%` }} />
       </div>
 
       {billing.plan === 'free' && prices.pro && (
@@ -234,6 +234,8 @@ export function PoolCard({
           <p className="muted text-[13px]">credits left{pool.monthlyUsd ? ` · ${credits(pool.monthlyUsd)} a month` : ''}{pool.extraUsd > 0 ? ` · ${credits(pool.extraUsd)} from top-ups` : ''}</p>
         </div>
       </div>
+      {/* Remounts when the saved budget changes, closing the form. */}
+      <PoolBudget key={String(pool.budgetCredits)} pool={pool} />
       {pool.members.length > 0 && (
         <ul className="divide-y divide-[var(--border)] text-sm">
           {pool.members.map((m) => (
@@ -290,6 +292,58 @@ export function PoolCard({
         </div>
       )}
     </section>
+  );
+}
+
+/** The owners' monthly budget for a pool: spent against it this month, and set, edit or remove it. Only owners get a PoolView. */
+function PoolBudget({ pool }: { pool: PoolView }) {
+  const budget = pool.budgetCredits ?? null;
+  const spent = pool.spentCredits ?? 0;
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState(budget === null ? '' : String(budget));
+  const pct = budget === null ? 0 : budget === 0 ? 100 : Math.min(100, Math.round((spent / budget) * 100));
+  const n = (c: number) => credits(c / 100);
+  const below = input !== '' && Number(input) < spent;
+  return (
+    <div className="space-y-2 rounded-xl bg-[var(--subtle)] p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="label">Monthly budget</p>
+        <p className="text-sm">
+          {budget === null ? <span className="muted">None: work stops only when credits run out · {n(spent)} spent this month</span> : `${n(spent)} of ${n(budget)} credits spent this month`}
+        </p>
+      </div>
+      {budget !== null && (
+        <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Budget used this month" className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg)]">
+          <div className={`h-full rounded-full ${meterColor(pct)}`} style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      {pool.blockedBy === 'budget' && <p className="text-[13px] font-medium text-[var(--bad-fg)]">The budget is reached: agents on this pool stop until next month or until you raise it.</p>}
+      {editing ? (
+        <form action={setPoolBudget} className="space-y-2">
+          <input type="hidden" name="workspaceId" value={pool.workspaceId} />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-sm">
+              Credits a month{' '}
+              <input name="credits" type="number" min={0} step={1} required value={input} onChange={(e) => setInput(e.target.value)} className="input w-28" />
+            </label>
+            <PendingButton className="btn-primary">Save</PendingButton>
+            <button type="button" onClick={() => { setEditing(false); setInput(budget === null ? '' : String(budget)); }} className="btn">Cancel</button>
+          </div>
+          {below && <p role="status" className="rounded-lg bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">That's below the {n(spent)} credits already spent this month: work stops as soon as you save.</p>}
+        </form>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setEditing(true)} className="btn">{budget === null ? 'Set budget' : 'Edit budget'}</button>
+          {budget !== null && (
+            <form action={setPoolBudget}>
+              <input type="hidden" name="workspaceId" value={pool.workspaceId} />
+              <input type="hidden" name="credits" value="" />
+              <PendingButton className="btn">Remove budget</PendingButton>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

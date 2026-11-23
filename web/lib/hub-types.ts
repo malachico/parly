@@ -529,6 +529,10 @@ export type PoolView = {
   extraUsd: number;
   leftUsd: number;
   members: { id: string; name: string; spentUsd: number }[];
+  /** Owners' monthly cap in credits (null: none); this UTC month's spend counts against it. */
+  budgetCredits?: number | null;
+  spentCredits?: number;
+  blockedBy?: 'budget' | 'credits';
 };
 
 /** GET /me/apps: a connected app with each of your agents, whether it may use it, and how it has. */
