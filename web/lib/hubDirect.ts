@@ -31,7 +31,7 @@ export function forgetTicket() {
   cached = null;
 }
 
-/** GET a hub path as the signed-in person; null when that can't be done from the browser, so the caller falls back. */
+/** GET a hub path as the signed-in person; null when that can't be done from the browser. */
 export async function hubGet<T>(path: string, signal?: AbortSignal): Promise<T | null> {
   for (const fresh of [false, true]) {
     const t = await ticket(fresh);

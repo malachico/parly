@@ -16,7 +16,7 @@ import { RoomDocument, type RoomDocData } from '@/components/RoomDocument';
 import { RoomStatus } from '@/components/RoomStatus';
 import { RoomSummaryOpener, RoomTabs } from '@/components/RoomTabs';
 import { LoadOlder } from '@/components/ScrollToBottom';
-import { channelDescription, channelReadOnly, mentionableOf, POSTS, REPLIES, waitingNotes } from '@/lib/channelView';
+import { channelDescription, channelReadOnly, countParam, mentionableOf, openPath, PAGE_MAX, POSTS, REPLIES, waitingNotes } from '@/lib/channelView';
 import type { Agent, Channel, ConversationPage, MessageView, Schedule, ScopedSkillView, SkillSummaryView, Webhook, Workspace, WorkspaceSlackStatus, WorkspaceTelegramStatus } from '@/lib/hub';
 import { hubGet } from '@/lib/hubDirect';
 import { conversationUnread } from '@/lib/receipts';
@@ -44,28 +44,18 @@ type OpenBundle = {
     telegram?: WorkspaceTelegramStatus;
   };
 };
-// Keyed by the conversation (channel:<id> or agent:<id>), so one never shows while another loads.
-type State = { key: string; bundle: OpenBundle | DmBundle } | { key: string; failed: 'gone' | 'error' } | undefined;
-
-// The hub's PAGE_MAX: at it, there's no loading more (older ones stay out of view).
-const PAGE_MAX = 1000;
-const countParam = (v: string | null, d: number) => Math.min(Math.max(Number(v) || d, d), PAGE_MAX);
-
-/** Straight from the hub with a read ticket; through /api when that can't be done. Not a member: 'gone'. */
-async function load(path: string, signal: AbortSignal): Promise<OpenBundle | DmBundle | 'gone' | 'error'> {
-  const direct = await hubGet<OpenBundle | DmBundle>(path, signal).catch(() => null);
-  if (direct) return direct;
-  const res = await fetch(`/api${path}`, { signal, cache: 'no-store' }).catch(() => undefined);
-  if (res?.ok) return (await res.json()) as OpenBundle | DmBundle;
-  return res && [400, 403, 404].includes(res.status) ? 'gone' : 'error';
-}
+/** What the server page read for this conversation; 'gone' when I'm not in it. */
+export type Opened = OpenBundle | DmBundle | 'gone';
+// What the browser read, keyed by the /open query it was for, so it never shows for another conversation or page of it.
+type State = { key: string; bundle: OpenBundle | DmBundle | null } | undefined;
 
 /**
- * A conversation page's contents, fetched from the browser: the page around it makes no hub call. `kind` picks a
- * channel (GET /channels/:id/open) or a DM with an agent (GET /agents/:id/open). `renderedAt` changes each time the
- * server page re-renders (an action's revalidate, a tab shown again), and that re-reads it.
+ * A conversation page's contents. `kind` picks a channel (GET /channels/:id/open) or a DM with an agent
+ * (GET /agents/:id/open). The server page reads it and passes it as `initial`, again on each re-render (an action's
+ * revalidate, a tab shown again, more posts). Only when the server couldn't does the browser read it, straight from
+ * the hub (lib/hubDirect).
  */
-export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl, graph }: { ws: string; kind: 'channel' | 'agent'; id: string; renderedAt: number; webhookUrl?: string; graph?: boolean }) {
+export function ChannelLoader({ ws, kind, id: channelId, initial, webhookUrl, graph }: { ws: string; kind: 'channel' | 'agent'; id: string; initial?: Opened; webhookUrl?: string; graph?: boolean }) {
   const router = useRouter();
   const sp = useSearchParams();
   const dm = kind === 'agent';
@@ -83,33 +73,25 @@ export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl,
   const postCount = countParam(sp.get('posts'), POSTS);
   const replyCount = countParam(sp.get('replies'), REPLIES);
   const showDone = !dm && filter === 'done';
-  const wantPanel = !dm && panel === 'channel';
   const [state, setState] = useState<State>();
   const [retry, setRetry] = useState(0);
+  // Less the thread: one opened in place (ChannelShell fetches it itself) rides along without a re-read.
+  const query = openPath(kind, channelId, ws, (k) => (k === 'thread' ? null : sp.get(k)));
 
-  // Re-read on what the server page used to render from; a thread opened in place is fetched by ChannelShell
-  // itself, so the current one rides along (read from the address, not a dependency) without causing a fetch.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: renderedAt and retry are the re-run triggers, not read here — a server re-render or "Try again" re-reads the channel
+  // biome-ignore lint/correctness/useExhaustiveDependencies: query, replyCount and retry are the re-run triggers, not read here — another page of the conversation, or "Try again", reads it again
   useEffect(() => {
+    if (initial) return;
     const ctrl = new AbortController();
-    const id = encodeURIComponent(channelId);
-    let path: string;
-    if (dm) path = `/agents/${id}/open?${new URLSearchParams({ limit: String(postCount), workspace: ws })}`;
-    else {
-      const now = new URLSearchParams(window.location.search);
-      const q = new URLSearchParams({ limit: String(postCount), threads: showDone ? 'done' : 'open' });
-      if (now.get('thread')) q.set('thread', now.get('thread')!), q.set('replies', String(countParam(now.get('replies'), REPLIES)));
-      if (wantPanel) q.set('panel', 'channel');
-      path = `/channels/${id}/open?${q}`;
-    }
-    void load(path, ctrl.signal).then((r) => {
-      if (ctrl.signal.aborted) return;
-      setState(typeof r === 'string' ? { key, failed: r } : { key, bundle: r });
-    });
+    const now = new URLSearchParams(window.location.search);
+    void hubGet<OpenBundle | DmBundle>(openPath(kind, channelId, ws, (k) => now.get(k)), ctrl.signal)
+      .catch(() => null)
+      .then((bundle) => ctrl.signal.aborted || setState({ key: query, bundle }));
     return () => ctrl.abort();
-  }, [dm, ws, key, channelId, postCount, showDone, wantPanel, renderedAt, retry]);
+  }, [initial, kind, ws, channelId, query, replyCount, retry]);
 
-  const loaded = state?.key === key && 'bundle' in state ? state.bundle : undefined;
+  const read = state?.key === query ? state.bundle : undefined;
+  const failed = initial === 'gone' ? 'gone' : !initial && read === null ? 'error' : undefined;
+  const loaded = initial === 'gone' ? undefined : (initial ?? read ?? undefined);
   const bundle = loaded && 'channel' in loaded ? loaded : undefined;
   // A channel from another workspace opens there (a DM is read in the workspace it was asked for).
   const elsewhere = bundle && bundle.channel.workspaceId !== ws ? bundle.channel.workspaceId : undefined;
@@ -117,10 +99,10 @@ export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl,
     if (elsewhere) router.replace(chatHref(elsewhere, key, { thread, panel, at }));
   }, [elsewhere, router, key, thread, panel, at]);
 
-  if (state?.key === key && 'failed' in state) {
+  if (failed) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-[var(--bg)] p-8 text-center text-sm text-[var(--muted)]" data-main>
-        {state.failed === 'gone' ? (
+        {failed === 'gone' ? (
           <>
             <p>{dm ? "This conversation isn't available." : "This channel isn't available. It may have been removed, or you are no longer in it."}</p>
             <Link href={wsHref(ws)} className="btn-ghost">Back to the workspace</Link>

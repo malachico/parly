@@ -411,6 +411,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - re-merges on every render; fine for a page of messages
 
+## `web/lib/proxyOpen.ts`
+
+- nothing calls this now; kept for tabs still open on the old bundle, delete it and the two /open routes after the next deploy
+
 ## `web/lib/roomStatus.check.ts`
 
 - one runnable check for the readyToApprove gate (seq-1768 bug). Run: node --import tsx lib/roomStatus.check.ts
@@ -425,4 +429,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**149 markers, 33 with no trigger.**
+**150 markers, 33 with no trigger.**

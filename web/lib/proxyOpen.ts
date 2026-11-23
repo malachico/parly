@@ -4,6 +4,7 @@ import { HUB_FETCH_TIMEOUT_MS, HUB_URL, token } from '@/lib/hub';
  * The hub's GET /<kind>/:id/open, for when the browser can't read it directly (no ticket, or the hub refused):
  * the same query, the person's token added here, the hub's status passed through.
  */
+// ponytail: nothing calls this now; kept for tabs still open on the old bundle, delete it and the two /open routes after the next deploy
 export async function proxyOpen(kind: 'agents' | 'channels', req: Request, { params }: { params: Promise<{ id: string }> }) {
   const t = await token();
   if (!t) return Response.json({ error: 'Not signed in' }, { status: 401 });

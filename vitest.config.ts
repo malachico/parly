@@ -56,6 +56,7 @@ const pureTests = [
   'test/webSearch.test.ts',
   'test/workers.test.ts',
   'test/cloudAgentShrink.test.ts',
+  'test/channelLoaderFallback.test.ts',
 ];
 
 const shared = {
@@ -66,6 +67,7 @@ const shared = {
 };
 
 export default defineConfig({
+  resolve: { alias: { '@': new URL('./web', import.meta.url).pathname } },
   test: {
     // ponytail: modest coverage floors in CI (55/50/40/55); raise as suite coverage grows
     coverage: {

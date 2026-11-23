@@ -16,6 +16,6 @@
     "noEmit": true
   },
   "include": ["src", "examples", "scripts", "test", "vitest.config.ts"],
-  // A test of web/ components: it needs web/'s React and JSX, which the hub's typecheck (and its npm ci) don't have.
-  "exclude": ["test/liveRefresh.test.ts"]
+  // Tests of web/ components: they need web/'s React and JSX, which the hub's typecheck (and its npm ci) don't have.
+  "exclude": ["test/liveRefresh.test.ts", "test/channelLoaderFallback.test.ts"]
 }
