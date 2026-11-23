@@ -19,6 +19,10 @@ export interface BillingRecord {
   budgetMicros?: number;
   /** Team: seats bought (Paddle quantity); each adds TEAM_SEAT_USD to the pool's monthly allowance. */
   seats?: number;
+  /** Company (a workspace-keyed pool): its display name. Recorded only for now (billing/company.ts). */
+  name?: string;
+  /** Company: person ids who own it (its buyer, else the workspace's owners). Recorded only for now. */
+  owners?: string[];
   /** People this person brought in whose referral was rewarded (up to REFERRALS_MAX pay them). */
   referrals?: number;
   /** `occurred_at` of the last subscription event applied: an older one arriving late is ignored. */

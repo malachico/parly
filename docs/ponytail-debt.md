@@ -51,6 +51,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - submitted even if the chat is mid-turn (VS Code queues it); blockOnResponse waits for the answer, so a burst of mail is one prompt, not one per message.
 - a task Cline drops without its TaskComplete/TaskCancel hook (a crash) stays busy until this window's next start; add a timeout if that bites.
 
+## `scripts/backfill-companies.ts`
+
+- only owners are candidates, so a non-owner buyer falls back to the workspace owners; fine for phase 1.
+
 ## `src/admin/admin.ts`
 
 - reads raw docs and counts in memory; switch to count() aggregations or a rollup doc if a day holds more than this
@@ -416,4 +420,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**146 markers, 33 with no trigger.**
+**147 markers, 33 with no trigger.**

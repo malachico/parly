@@ -2,6 +2,7 @@ import { FieldValue, type Database, type DocumentReference, type Transaction } f
 import { BILLING, CREDIT_MICROS, limitsOf, type BillingRecord, type Plan } from '../lib/plans.js';
 import type { AgentUsage } from '../llm/llm.js';
 import type { CreditVoucher } from './billing.js';
+import { type CompanyFields, missingCompanyFields } from './company.js';
 
 const VOUCHERS = 'vouchers';
 const EVENTS = 'paddleEvents';
@@ -47,9 +48,9 @@ export class BillingStore {
     return (await this.db.collection('workspaces').doc(id).get()).exists;
   }
 
-  /** A workspace's name and owners, to word a company pool's budget stop. */
-  async workspace(id: string): Promise<{ name?: string; ownerId?: string; ownerIds?: string[] } | undefined> {
-    return (await this.db.collection('workspaces').doc(id).get()).data() as { name?: string; ownerId?: string; ownerIds?: string[] } | undefined;
+  /** A workspace's name, domains and owners, to word a company pool's budget stop and name its company. */
+  async workspace(id: string): Promise<{ name?: string; domains?: string[]; ownerId?: string; ownerIds?: string[] } | undefined> {
+    return (await this.db.collection('workspaces').doc(id).get()).data() as { name?: string; domains?: string[]; ownerId?: string; ownerIds?: string[] } | undefined;
   }
 
   async workspaceOwner(id: string): Promise<string | undefined> {
@@ -161,6 +162,7 @@ export class BillingStore {
     occurredAt: string | undefined,
     now: string,
     team?: { seats: number },
+    company?: CompanyFields,
   ): Promise<'done' | 'seen' | 'ignored'> {
     const seen = this.db.collection(EVENTS).doc(eventId);
     return this.db.runTransaction(async (tx) => {
@@ -184,6 +186,7 @@ export class BillingStore {
           ownerId,
           plan: paying ? (team ? 'team' : 'pro') : 'free',
           ...(team ? { seats: team.seats } : {}),
+          ...missingCompanyFields(current, company),
           // ponytail: a Team pool keeps the buyer's paddleCustomerId (its portal needs it), so ownerOfCustomer's limit(1) may pick
           // the pool or the buyer's own doc for a customer-only event; only adjustments without custom_data hit that fallback.
           paddleCustomerId: data.customer_id,
@@ -208,6 +211,7 @@ export class BillingStore {
     customerId: string | undefined,
     micros: number,
     now: string,
+    company?: CompanyFields,
   ): Promise<'done' | 'seen' | 'ignored'> {
     const seen = this.db.collection(EVENTS).doc(eventId);
     return this.db.runTransaction(async (tx) => {
@@ -227,6 +231,7 @@ export class BillingStore {
           extraMicros: FieldValue.increment(micros),
           ...(current?.plan ? {} : { plan: 'free' }),
           ...(customerId ? { paddleCustomerId: customerId } : {}),
+          ...missingCompanyFields(current, company),
           updatedAt: now,
         },
         { merge: true },

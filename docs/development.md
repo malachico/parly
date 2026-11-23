@@ -66,6 +66,15 @@ default it only checks the fixture and the prompt. To call the model, sign in wi
 (`GRAPH_MODEL` overrides `gemini-3.5-flash-lite`). It fails below 80%. Run it after changing
 the prompt or the model, and add a case for each extraction bug you fix.
 
+## Companies (billing)
+
+A company is a workspace-keyed billing record (a pool) with optional `name` and `owners`
+(`src/billing/company.ts`). They are recorded only: nothing reads them yet. Pool webhooks
+fill them when missing, never overwriting. Name comes from the workspace name, else its first domain,
+else its id. Owners are the verified Team buyer, else the workspace owners. For older pools, run
+`MONGODB_URI=<uri> npx tsx scripts/backfill-companies.ts` to see what would change, then add
+`--apply` to write it. `MONGODB_DB` overrides `parly`. Re-running is safe, since only missing fields are set.
+
 ## Ponytail shortcuts
 
 Deliberate simplifications are marked in code with a `ponytail:` comment that names

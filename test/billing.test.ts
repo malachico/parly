@@ -459,6 +459,34 @@ describe('Team plan', () => {
       server.close();
     }
   });
+  it('records company name/owners on the pool, without overwriting ones already set', async () => {
+    const db = testDb();
+    const { app, hub } = createApp({ db, config: testConfig({ paddle: { ...PADDLE, prices: { ...PADDLE.prices, team: 'pri_team' } }, cloudAgents: CLOUD }) });
+    const server = app.listen(0);
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/billing/paddle`;
+    const post = (event: object) => {
+      const body = JSON.stringify(event);
+      return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'paddle-signature': sign(body) }, body });
+    };
+    try {
+      const owner = await testPerson(hub.registry, 'Owner');
+      const ws = await hub.registry.createWorkspace(owner, 'Acme');
+      await post({ event_id: 'c1', event_type: 'subscription.created', data: { id: 'sub_c1', status: 'active', customer_id: 'ctm_c1', custom_data: { ownerId: owner.id, billingAccountId: ws.id }, items: [{ price: { id: 'pri_team' }, quantity: 3 }] } });
+      expect(await hub.billing.get(ws.id)).toMatchObject({ plan: 'team', name: 'Acme', owners: [owner.id] });
+
+      // A pool top-up on a workspace with no billing doc yet names it after the workspace, owned by its owners.
+      const ws2 = await hub.registry.createWorkspace(owner, 'Beta');
+      await post({ event_id: 'c2', event_type: 'transaction.completed', data: { id: 'txn_c2', customer_id: 'ctm_c2', custom_data: { ownerId: owner.id, billingAccountId: ws2.id }, items: [{ price: { id: 'pri_t10' }, quantity: 1 }] } });
+      expect(await hub.billing.get(ws2.id)).toMatchObject({ extraMicros: 10_000_000, name: 'Beta', owners: [owner.id] });
+
+      // Already-set fields stay put.
+      await db.collection('billing').doc(ws.id).set({ name: 'Renamed', owners: ['someone'] }, { merge: true });
+      await post({ event_id: 'c3', event_type: 'subscription.updated', data: { id: 'sub_c1', status: 'active', customer_id: 'ctm_c1', custom_data: { ownerId: owner.id, billingAccountId: ws.id }, items: [{ price: { id: 'pri_team' }, quantity: 4 }] } });
+      expect(await hub.billing.get(ws.id)).toMatchObject({ seats: 4, name: 'Renamed', owners: ['someone'] });
+    } finally {
+      server.close();
+    }
+  });
 });
 
 describe('Enterprise leads', () => {

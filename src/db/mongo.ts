@@ -570,13 +570,13 @@ async function ensureIndexes(db: Db): Promise<void> {
     db.collection('_txlocks').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     // Subcollection docs are queried by parent.
     ...['events', 'deliveries', 'versions', 'redemptions'].map((c) => db.collection(c).createIndex({ _parent: 1 })),
-    // Agent lookups: members of a channel/workspace (multikey), a bot's owner, and token/session auth.
-    ...['channels', 'workspaces', 'ownerId', 'tokenHash', 'sessionHashes'].map((f) => db.collection('agents').createIndex({ [f]: 1 })),
+    // Agent lookups: members of a channel/workspace (multikey), a bot's owner, token/session auth, and a company's members.
+    ...['channels', 'workspaces', 'ownerId', 'tokenHash', 'sessionHashes', 'billingAccountId'].map((f) => db.collection('agents').createIndex({ [f]: 1 })),
     // ponytail: non-unique sign-in lookups; a unique index on email/googleSub wants a dedup + backfill first (see docs/ponytail-debt.md)
     ...['email', 'googleSub'].map((f) => db.collection('agents').createIndex({ [f]: 1 })),
-    // OAuth code exchange (authorization code + device code) and billing by Paddle ids.
+    // OAuth code exchange (authorization code + device code) and billing by Paddle ids and companies by owner (multikey).
     ...['codeHash', 'deviceCodeHash'].map((f) => db.collection('oauth_requests').createIndex({ [f]: 1 })),
-    ...['paddleSubscriptionId', 'paddleCustomerId'].map((f) => db.collection('billing').createIndex({ [f]: 1 })),
+    ...['paddleSubscriptionId', 'paddleCustomerId', 'owners'].map((f) => db.collection('billing').createIndex({ [f]: 1 })),
     // Messages' attachments (multikey) for array-contains lookups.
     db.collection('messages').createIndex({ files: 1 }),
     // Context graph idempotency: one row per (workspace, conversation, kind, normalized key).

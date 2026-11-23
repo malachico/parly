@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Billing } from '../src/billing/billing.js';
+import { companyFields, missingCompanyFields } from '../src/billing/company.js';
 import { payerName } from '../src/billing/payer.js';
 import { LlmMeter } from '../src/llm/llm.js';
 import { usedByPayer } from '../src/rest/account.js';
 import type { Database } from '../src/db/types.js';
 import type { AgentRecord } from '../src/registry/types.js';
+import type { BillingRecord } from '../src/lib/plans.js';
 
 const PADDLE = { apiKey: 'k', webhookSecret: 's', clientToken: 't', environment: 'sandbox' as const, prices: { pro: 'pri_pro', topups: { '10': 'pri_t10' } } };
 
@@ -15,6 +17,7 @@ function billing(workspaces: string[]) {
   const sub = vi.spyOn(b.store, 'handleSubscriptionEvent').mockResolvedValue('done');
   vi.spyOn(b.store, 'ownerOfSubscription').mockResolvedValue('sub-owner');
   vi.spyOn(b.store, 'ownerOfCustomer').mockResolvedValue('cus-owner');
+  vi.spyOn(b.store, 'workspace').mockImplementation(async (id) => (workspaces.includes(id) ? { name: 'Acme', ownerId: 'o', ownerIds: ['co'] } : undefined));
   return { b, topup, sub };
 }
 const topupEvent = (billingAccountId: string) => ({
@@ -28,19 +31,40 @@ describe('pool top-up webhook', () => {
   it("ignores a billingAccountId that is a person's id: credits the buyer, never touches that person", async () => {
     const { b, topup } = billing(['ws']);
     await b.handle(topupEvent('victim') as never);
-    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'buyer', 'txn', 'ctm', 10_000_000, expect.any(String));
+    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'buyer', 'txn', 'ctm', 10_000_000, expect.any(String), undefined);
   });
 
-  it('credits a real workspace pool without setting its paddleCustomerId', async () => {
+  it('credits a real workspace pool without setting its paddleCustomerId, naming it and owning it by the workspace owners (not the unverified buyer)', async () => {
     const { b, topup } = billing(['ws']);
     await b.handle(topupEvent('ws') as never);
-    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'ws', 'txn', undefined, 10_000_000, expect.any(String));
+    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'ws', 'txn', undefined, 10_000_000, expect.any(String), { name: 'Acme', owners: ['o', 'co'] });
   });
 
   it('ignores billingAccountId on anything but a top-up', async () => {
     const { b, sub } = billing(['ws']);
     await b.handle({ event_id: 'evt', event_type: 'subscription.created', occurred_at: 'x', data: { id: 'sub', customer_id: 'ctm', custom_data: { billingAccountId: 'ws' } } } as never);
     expect(sub.mock.calls[0]?.[2]).toBe('sub-owner');
+  });
+});
+
+describe('company metadata', () => {
+  it('names a company after its workspace, else a domain, else its id; owned by the buyer, else the workspace owners', () => {
+    expect(companyFields('ws', { name: ' Acme ', ownerId: 'o', ownerIds: ['o', 'co'] })).toEqual({ name: 'Acme', owners: ['o', 'co'] });
+    expect(companyFields('ws', { name: '', domains: ['acme.com'], ownerId: 'o' }, 'buyer')).toEqual({ name: 'acme.com', owners: ['buyer'] });
+    expect(companyFields('ws', undefined)).toEqual({ name: 'ws' });
+  });
+
+  it('only fills what is missing: idempotent, never overwrites, never writes an empty owners', () => {
+    const want = { name: 'Acme', owners: ['o'] };
+    // A lapsed (cancelled) pool that still holds top-ups gets both fields.
+    const lapsed: Partial<BillingRecord> = { plan: 'team', cancelAtPeriodEnd: true, periodEnd: '2026-01-01T00:00:00Z', paddleSubscriptionId: 'sub', extraMicros: 5_000_000 };
+    const patch = missingCompanyFields(lapsed, want);
+    expect(patch).toEqual(want);
+    expect(missingCompanyFields({ ...lapsed, ...patch }, want)).toEqual({});
+    expect(missingCompanyFields({ name: 'Mine', owners: ['me'] }, want)).toEqual({});
+    expect(missingCompanyFields({ name: 'Mine', owners: [] }, want)).toEqual({ owners: ['o'] });
+    expect(missingCompanyFields(undefined, { name: 'Acme' })).toEqual({ name: 'Acme' });
+    expect(missingCompanyFields(undefined, undefined)).toEqual({});
   });
 });
 

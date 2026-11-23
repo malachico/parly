@@ -3,6 +3,7 @@ export { BILLING, CREDIT_MICROS, limitsOf, type BillingRecord, type Plan, type L
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Database } from '../db/types.js';
 import { HubError } from '../lib/errors.js';
+import { companyFields } from './company.js';
 import { BillingStore } from './store.js';
 
 /**
@@ -191,7 +192,9 @@ export class Billing {
         console.warn(`billing: ignoring ${event.event_type} ${d.id}: Team needs ${TEAM_MIN_SEATS}+ seats, got ${seats}`);
         return this.store.markEventSeen(event.event_id, event.event_type, now);
       }
-      return this.store.handleSubscriptionEvent(event.event_id, event.event_type, toPool ?? person, d, event.occurred_at, now, toPool ? { seats } : undefined);
+      // Company metadata, set only where missing: the buyer owns it when checkout verified them (pool, not an existing one), else the workspace's owners.
+      const company = toPool ? companyFields(toPool, await this.store.workspace(toPool), pool && !knownPool ? d.custom_data?.ownerId : undefined) : undefined;
+      return this.store.handleSubscriptionEvent(event.event_id, event.event_type, toPool ?? person, d, event.occurred_at, now, toPool ? { seats } : undefined, company);
     }
     const ownerId: string | undefined =
       pool ??
@@ -209,7 +212,9 @@ export class Billing {
       }, 0);
       if (!usd) return this.store.markEventSeen(event.event_id, event.event_type, now);
       const micros = Math.round(usd * 1_000_000);
-      return this.store.handleTopupTransaction(event.event_id, event.event_type, ownerId, d.id, pool ? undefined : d.customer_id, micros, now);
+      // A top-up's ownerId is unverified (anyone may top up a pool), so the company's owners come from the workspace only.
+      const company = pool ? companyFields(pool, await this.store.workspace(pool)) : undefined;
+      return this.store.handleTopupTransaction(event.event_id, event.event_type, ownerId, d.id, pool ? undefined : d.customer_id, micros, now, company);
     }
     if (event.event_type === 'adjustment.updated' || event.event_type === 'adjustment.created') {
       // ponytail: derive refund cents from Paddle's adjustment totals.subtotal or items[].amount (before tax)
