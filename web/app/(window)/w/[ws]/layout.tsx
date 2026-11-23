@@ -1,10 +1,10 @@
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { CanvasBoundary } from '@/components/CanvasBoundary';
 import { CanvasHome } from '@/components/CanvasHome';
 import { FindDialog } from '@/components/FindDialog';
 import { HireAgentDialog } from '@/components/HireAgentDialog';
-import { KeepAliveBoundary } from '@/components/KeepAliveBoundary';
 import { NewChannelDialog } from '@/components/NewChannelDialog';
 import { NewWorkspaceDialog } from '@/components/NewWorkspaceDialog';
 import { PanelSlot } from '@/components/PanelSlot';
@@ -35,19 +35,20 @@ export default async function WorkspaceLayout({ children, params }: Props) {
           <Suspense fallback={<div className="h-[53px] shrink-0 border-b border-[var(--border)] bg-[var(--surface)]" />}>
             <RoomBar me={user} workspace={workspace} />
           </Suspense>
-          <KeepAliveBoundary className="flex min-h-0 min-w-0 flex-1">{children}</KeepAliveBoundary>
+          <div className="flex min-h-0 min-w-0 flex-1">{children}</div>
         </div>
       ) : (
         <div className="relative flex h-full min-w-0 flex-1 overflow-clip">
           {/* Its own boundary: a panel never waits for the canvas's data (and the canvas keeps showing while it refreshes). */}
-          <KeepAliveBoundary className="flex h-full min-w-0 flex-1">
-            <Suspense fallback={<div className="h-full flex-1 bg-[var(--bg)]" />}>
-              <CanvasHome me={user} workspace={workspace} />
-            </Suspense>
-          </KeepAliveBoundary>
-          <KeepAliveBoundary className="contents">
-            <PanelSlot ws={workspace.id}>{children}</PanelSlot>
-          </KeepAliveBoundary>
+          <div className="flex h-full min-w-0 flex-1">
+            {/* error.tsx can't catch its own layout: without this a canvas failure would take the open panel with it. */}
+            <CanvasBoundary>
+              <Suspense fallback={<div className="h-full flex-1 bg-[var(--bg)]" />}>
+                <CanvasHome me={user} workspace={workspace} />
+              </Suspense>
+            </CanvasBoundary>
+          </div>
+          <PanelSlot ws={workspace.id}>{children}</PanelSlot>
         </div>
       )}
       {/* Opened by ?find=, ?channel=new, ?hire=1 and ?workspace=new. */}

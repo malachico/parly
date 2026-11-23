@@ -1,58 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-describe('KeepAliveBoundary', () => {
-  it('KeepAliveBoundary catches mid-stream TypeError: network error while re-throwing Next.js router errors', async () => {
-    const { isNextRouterError, KeepAliveBoundaryInner } = await import('../web/components/KeepAliveBoundary.js');
-
-    expect(isNextRouterError(new TypeError('network error'))).toBe(false);
-    expect(isNextRouterError({ digest: 'NEXT_REDIRECT;replace;/login;307;' })).toBe(true);
-    expect(isNextRouterError({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' })).toBe(true);
-
-    // Mid-stream network error is caught instead of bubbling to DefaultGlobalError.
-    const netErr = new TypeError('network error');
-    expect(KeepAliveBoundaryInner.getDerivedStateFromError(netErr)).toEqual({ error: netErr });
-
-    // Next.js redirect / notFound errors are re-thrown so routing works normally.
-    const redirErr = Object.assign(new Error('NEXT_REDIRECT'), { digest: 'NEXT_REDIRECT;replace;/login;307;' });
-    expect(() => KeepAliveBoundaryInner.getDerivedStateFromError(redirErr)).toThrow(redirErr);
-  });
-
-  it('KeepAliveBoundary auto-retry backoff grows then caps, and stops after a fixed count', async () => {
-    const { KEEP_ALIVE_MAX_AUTO_RETRIES, keepAliveRetryDelayMs } = await import('../web/components/KeepAliveBoundary.js');
-    expect(keepAliveRetryDelayMs(0)).toBe(1_500);
-    expect(keepAliveRetryDelayMs(1)).toBe(3_000);
-    expect(keepAliveRetryDelayMs(2)).toBe(6_000);
-    expect(keepAliveRetryDelayMs(10)).toBe(30_000);
-    expect(KEEP_ALIVE_MAX_AUTO_RETRIES).toBe(5);
-  });
-
-  it('KeepAliveBoundary keeps a live recovery control after the auto-retry cap (never freezes a dead DOM)', async () => {
-    const { KEEP_ALIVE_MAX_AUTO_RETRIES, KeepAliveBoundaryInner } = await import('../web/components/KeepAliveBoundary.js');
-    const boundary = new KeepAliveBoundaryInner({ routeKey: '/r', onRetry: () => {}, children: null });
-    // At the retry cap: no more AutoRetry, but recovery must still be reachable (the P0: old code stuck here).
-    boundary.state = { error: new TypeError('network error'), routeKey: '/r', autoAttempts: KEEP_ALIVE_MAX_AUTO_RETRIES };
-
-    const nodes: unknown[] = [];
-    const visit = (node: unknown) => {
-      if (Array.isArray(node)) return node.forEach(visit);
-      if (!node || typeof node !== 'object') return;
-      nodes.push(node);
-      const props = (node as { props?: Record<string, unknown> }).props;
-      if (props) {
-        // The fix must never re-inject a stale DOM snapshot.
-        expect('dangerouslySetInnerHTML' in props).toBe(false);
-        visit(props.children);
-      }
-    };
-    visit(boundary.render());
-
-    const hasTryAgain = nodes.some(
-      (n) => (n as { type?: unknown }).type === 'button' && (n as { props?: { onClick?: unknown } }).props?.onClick,
-    );
-    expect(hasTryAgain).toBe(true);
-  });
-});
-
+import { afterEach, expect, it, vi } from 'vitest';
 
 const hooks = vi.hoisted(() => ({
   cleanup: undefined as (() => void) | undefined,
@@ -175,4 +121,55 @@ it('steady live traffic with a slow hub still updates the counts, one read at a 
   expect(fetched).toHaveBeenCalledTimes(12);
   expect(set).toHaveBeenCalledTimes(11);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('useAutoRecover stops auto-retrying a child that keeps throwing; Try again still works', async () => {
+  visiblePage();
+  vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.resetModules();
+  const { AUTO_RECOVER_MAX_RETRIES, useAutoRecover } = await import('../web/lib/autoRecover.js');
+  const error = new TypeError('network error');
+  // Each retry resets the boundary, the child throws again and the fallback mounts afresh.
+  const retry = vi.fn(() => {
+    hooks.cleanup?.();
+    useAutoRecover({ error, retry });
+  });
+  const { recover } = useAutoRecover({ error, retry });
+  await vi.advanceTimersByTimeAsync(40_000);
+  expect(retry).toHaveBeenCalledTimes(AUTO_RECOVER_MAX_RETRIES);
+  expect(vi.getTimerCount()).toBe(0);
+  recover!();
+  expect(retry).toHaveBeenCalledTimes(AUTO_RECOVER_MAX_RETRIES + 1);
+  expect(vi.getTimerCount()).toBe(0);
+  // After a quiet spell (say the laptop slept) the next failure gets a fresh budget.
+  await vi.advanceTimersByTimeAsync(120_000);
+  hooks.cleanup?.();
+  useAutoRecover({ error, retry });
+  await vi.advanceTimersByTimeAsync(800);
+  expect(retry).toHaveBeenCalledTimes(AUTO_RECOVER_MAX_RETRIES + 2);
+});
+
+it('the workspace layout gives the canvas its own error boundary, so a canvas failure leaves the open panel up', async () => {
+  const stub = (name: string) => ({ [name]: () => null });
+  vi.doMock('../web/node_modules/next/headers.js', () => ({ cookies: async () => ({ get: () => undefined }) }));
+  vi.doMock('@/lib/routes', () => ({ WORKSPACE_COOKIE: 'ws' }));
+  vi.doMock('@/lib/hub', () => ({ meOrLogin: async () => ({ id: 'me', workspaces: [{ id: 'acme', name: 'Acme' }] }) }));
+  for (const name of ['CanvasBoundary', 'CanvasHome', 'FindDialog', 'HireAgentDialog', 'NewChannelDialog', 'NewWorkspaceDialog', 'PanelSlot', 'RememberWorkspace', 'RoomBar', 'Tour']) {
+    vi.doMock(`@/components/${name}`, () => stub(name));
+  }
+  const { default: WorkspaceLayout } = await import('../web/app/(window)/w/[ws]/layout.js');
+  const { CanvasBoundary } = await import('@/components/CanvasBoundary');
+  const { CanvasHome } = await import('@/components/CanvasHome');
+  const { PanelSlot } = await import('@/components/PanelSlot');
+  type El = { type?: unknown; props?: { children?: unknown } };
+  const find = (node: unknown, type: unknown): El | undefined => {
+    if (Array.isArray(node)) return node.map((n) => find(n, type)).find(Boolean);
+    if (!node || typeof node !== 'object') return undefined;
+    return (node as El).type === type ? (node as El) : find((node as El).props?.children, type);
+  };
+  const tree = await WorkspaceLayout({ children: null, params: Promise.resolve({ ws: 'acme' }) });
+  const boundary = find(tree, CanvasBoundary);
+  expect(find(boundary, CanvasHome)).toBeDefined();
+  expect(find(tree, PanelSlot)).toBeDefined();
+  expect(find(boundary, PanelSlot)).toBeUndefined();
 });

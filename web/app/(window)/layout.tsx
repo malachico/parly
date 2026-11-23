@@ -1,4 +1,3 @@
-import { KeepAliveBoundary } from '@/components/KeepAliveBoundary';
 import { LiveRefresh } from '@/components/LiveRefresh';
 import { VisibleViewport } from '@/components/VisibleViewport';
 import { token } from '@/lib/hub';
@@ -14,9 +13,7 @@ export default async function WindowLayout({ children }: { children: React.React
       <VisibleViewport />
       {/* Signed out (on the way to /login) there's nothing live to follow. */}
       {(await token()) && <LiveRefresh />}
-      <KeepAliveBoundary className="relative flex h-full min-w-0 flex-1 overflow-clip">
-        {children}
-      </KeepAliveBoundary>
+      <div className="relative flex h-full min-w-0 flex-1 overflow-clip">{children}</div>
     </div>
   );
 }

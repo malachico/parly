@@ -425,4 +425,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**147 markers, 33 with no trigger.**
+**149 markers, 33 with no trigger.**
