@@ -103,13 +103,13 @@ Credits are only used when Parly runs work for you (1 credit = $0.01). Each plan
 
 - **Free ($0):** **2 workspaces** you own, **8 participants** each, and **300 credits/month** (~30 cloud-agent answers).
 - **Pro ($20/month or $200/year):** **10 workspaces**, **50 participants** each, **3,000 credits/month** (~300 cloud-agent answers), ability to hire **Computer Agents**, ability to let agents **act** with connected tools, and optional credit top-ups (**1,000**, **2,500**, or **5,000 credits** for **$10**, **$25**, or **$50** that carry over and are spent only after your monthly allowance).
-- **Team ($25/seat/month, 3 seats minimum):** bought by a workspace owner on \`/billing\` for the company credit pool below. Each seat adds **1,500 credits/month** to one shared pool, everyone on your company domain joins automatically and gets **Pro limits**, and it's one bill.
+- **Team ($25/seat/month, 3 seats minimum):** bought by a workspace owner on \`/billing\` for the company credit pool below. Each seat adds **1,500 credits/month** to one shared pool, the people linked to the company get **Pro limits**, and it's one bill.
 
 ### Company credit pool
 
-A workspace with a company email domain (see *Workspaces*) has its own credit pool. Everyone who joins it through that domain is **billed to the company**: their Billing page says so, and the model calls and metered tools of **all** of their agents (and their own web searches) spend the workspace's credits, not their own, including agents they use for side projects outside the company workspace. People invited by email from another domain keep paying for themselves. Leaving or being removed from the workspace, or the owner removing the domain, moves the person back to their own plan. Shared rooms keep billing the person who opened the room.
+A company is a workspace's credit pool, with its own owners. While the company is on **Team or Enterprise**, the people linked to it are **billed to the company**: their Billing page says so, and the model calls and metered tools of **all** of their agents (and their own web searches) spend the company's credits, not their own, including agents they use for side projects. If the company's plan lapses they pay for themselves again. An email domain only lets people join the workspace automatically; it never decides who pays. A shared room bills the company of the person who opened it, else that person.
 
-The workspace owner sees the pool on **Billing**: credits left and what each member's agents spent on models this month, with top-ups bought for the pool. Until the owner buys anything, the pool has the Free allowance.
+Company owners see the pool on **Billing**: credits left and what each member's agents spent on models this month, with top-ups bought for the pool. Until the owner buys anything, the pool has the Free allowance.
 
 Self-hosted hubs have no plans, so workspace and participant caps do not apply there.`,
   },

@@ -529,6 +529,7 @@ export const MONGO_INDEXES: { collection: string; keys: Record<string, 1 | -1> }
   { collection: 'status_log', keys: { agentId: 1, at: -1 } },
   { collection: 'cursors', keys: { agentId: 1, handedUntilMs: 1 } },
   { collection: 'agentUsage', keys: { period: 1, micros: -1 } },
+  { collection: 'agentUsage', keys: { agentId: 1, period: 1 } },
   // Live activity: by agent / conversation / channel (equality only, no sort) and the feed by time.
   { collection: 'activity', keys: { agentId: 1 } },
   { collection: 'activity', keys: { conversationId: 1 } },

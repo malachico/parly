@@ -74,6 +74,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - first Team subscription wins a pool; another one (e.g. a $75 checkout by someone who knows the owner's id) is ignored until the first ends or lapses. A legit replacement needs the first cancelled.
 - a Team pool keeps the buyer's paddleCustomerId (its portal needs it), so ownerOfCustomer's limit(1) may pick the pool or the buyer's own doc for a customer-only event; only adjustments without custom_data hit that fallback.
 - one doc per workspace per day that never expires; add a TTL index or a cleanup sweep if they pile up.
+- one row per agent and payer, so an agent whose payer changed mid-month shows twice (once per payer); merge per agent if admin wants one line.
 
 ## `src/chat/activity.ts`
 
@@ -243,7 +244,6 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - 10k entries, then the oldest goes; a hit still costs 1 doc read (caching the record would make it 0 but serve stale workspaces/channels).
 - two first-time sign-ins racing for one email could create two agents; add a unique `emails` doc if that ever matters
 - `no-trigger` one owner read per matching workspace; few workspaces share a domain.
-- first matching workspace wins when several share the domain; let the person pick if that happens.
 - room is read outside the accept, so two concurrent sign-ins could overshoot by one; transact if that matters.
 
 ## `src/registry/channels.ts`
@@ -276,7 +276,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `src/rest/workspaces.ts`
 
-- model spend (agentUsage) only, metered tools aren't per agent; agentUsage keeps the latest payer, so someone linked mid-month shows their whole month.
+- model spend (agentUsage) only, metered tools aren't per agent. Rows are per payer, so only the company's part shows; a legacy (pre-split) row keeps its last payer's whole month.
 
 ## `src/rooms/rooms.ts`
 

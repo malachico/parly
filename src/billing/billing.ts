@@ -3,7 +3,7 @@ export { BILLING, CREDIT_MICROS, limitsOf, type BillingRecord, type Plan, type L
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Database } from '../db/types.js';
 import { HubError } from '../lib/errors.js';
-import { companyFields } from './company.js';
+import { companyFields, isCompanyOwner } from './company.js';
 import { BillingStore } from './store.js';
 
 /**
@@ -159,7 +159,7 @@ export class Billing {
   /**
    * One webhook event, at most once (Paddle retries): a subscription sets the person's plan; a completed
    * transaction for a top-up adds to their balance. Who it is comes from the checkout's `custom_data`:
-   * `billingAccountId` (a workspace owner buying for the company pool, keyed by the workspace id) or `ownerId`.
+   * `billingAccountId` (a company owner buying for the company pool, keyed by the workspace id) or `ownerId`.
    */
   async handle(event: PaddleEvent): Promise<'done' | 'seen' | 'ignored'> {
     const d = event.data;
@@ -167,7 +167,7 @@ export class Billing {
     const teamPrice = this.paddle?.prices.team;
     const teamItem = isSub && teamPrice ? (d.items ?? []).find((i: { price?: { id?: string } }) => i.price?.id === teamPrice) : undefined;
     // custom_data comes from the client, so a pool id (billingAccountId) counts only on a top-up that names a real workspace,
-    // or on a Team-price subscription whose ownerId is that workspace's owner (as forgeable as Pro's ownerId, so it is no stronger
+    // or on a Team-price subscription whose ownerId owns that company (`isCompanyOwner`; as forgeable as Pro's ownerId, so it is no stronger
     // than the trust Pro already puts in it); a pool keeps its first Team subscription (store), and a Team subscription never lands on ownerId's own doc.
     // A subscription a pool already holds stays there whatever its price (the Team price id may rotate); no other subscription
     // touches a workspace-keyed doc, and a paying Team subscription under 3 seats grants nothing.
@@ -176,7 +176,7 @@ export class Billing {
       ? undefined
       : event.event_type === 'transaction.completed'
         ? (await this.store.isWorkspace(poolId)) ? poolId : undefined
-        : teamItem && d.custom_data?.ownerId && (await this.store.workspaceOwner(poolId)) === d.custom_data.ownerId
+        : teamItem && d.custom_data?.ownerId && isCompanyOwner(await this.store.getBilling(poolId), await this.store.workspace(poolId), d.custom_data.ownerId)
           ? poolId
           : undefined;
     const now = new Date().toISOString();
@@ -192,8 +192,9 @@ export class Billing {
         console.warn(`billing: ignoring ${event.event_type} ${d.id}: Team needs ${TEAM_MIN_SEATS}+ seats, got ${seats}`);
         return this.store.markEventSeen(event.event_id, event.event_type, now);
       }
-      // Company metadata, set only where missing: the buyer owns it when checkout verified them (pool, not an existing one), else the workspace's owners.
-      const company = toPool ? companyFields(toPool, await this.store.workspace(toPool), pool && !knownPool ? d.custom_data?.ownerId : undefined) : undefined;
+      // Company metadata, set only where missing: a buyer checkout verified (pool, not an existing one) owns it, else the workspace's creator.
+      const buyer = pool && !knownPool ? d.custom_data?.ownerId : undefined;
+      const company = toPool ? companyFields(toPool, await this.store.workspace(toPool), buyer) : undefined;
       return this.store.handleSubscriptionEvent(event.event_id, event.event_type, toPool ?? person, d, event.occurred_at, now, toPool ? { seats } : undefined, company);
     }
     const ownerId: string | undefined =
@@ -212,7 +213,7 @@ export class Billing {
       }, 0);
       if (!usd) return this.store.markEventSeen(event.event_id, event.event_type, now);
       const micros = Math.round(usd * 1_000_000);
-      // A top-up's ownerId is unverified (anyone may top up a pool), so the company's owners come from the workspace only.
+      // A top-up's ownerId is unverified (anyone may top up a pool), so it never adds an owner: a new company's owner is the workspace's creator.
       const company = pool ? companyFields(pool, await this.store.workspace(pool)) : undefined;
       return this.store.handleTopupTransaction(event.event_id, event.event_type, ownerId, d.id, pool ? undefined : d.customer_id, micros, now, company);
     }

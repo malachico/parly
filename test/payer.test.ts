@@ -12,10 +12,10 @@ describe('payerOf', () => {
     expect(await payerOf({ id: 'a' }, none)).toBe('a');
   });
 
-  it("bills the company pool when the person is linked to one, but a room agent keeps its payerId", async () => {
+  it("bills the company pool when the person is linked to one, a room agent's opener's included", async () => {
     expect(await payerOf({ id: 'a', ownerId: 'o' }, linked)).toBe('ws');
     expect(await payerOf({ id: 'o' }, linked)).toBe('ws');
-    expect(await payerOf({ id: 'a', payerId: 'o' }, linked)).toBe('o');
+    expect(await payerOf({ id: 'a', payerId: 'o' }, linked)).toBe('ws');
     expect(await payerOf({ id: 'x', ownerId: 'z' }, linked)).toBe('z');
   });
 });

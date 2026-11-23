@@ -37,7 +37,7 @@ const PLANS = [
     name: 'Team',
     price: '$25',
     per: 'per seat per month · 3 seats minimum',
-    blurb: 'One bill for your company: everyone on your domain shares one pool of credits.',
+    blurb: 'One bill for your company: your team shares one pool of credits.',
     features: [
       '1,500 credits per seat, pooled',
       'Everyone on your company domain joins automatically',

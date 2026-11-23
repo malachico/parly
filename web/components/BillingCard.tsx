@@ -189,8 +189,7 @@ export function BillingCard({
 }
 
 /**
- * The company credit pool, for the owner of a workspace with a verified email domain: everyone who joined by that
- * domain spends it. Shows what's left and each member's model spend this month; top-ups bought here credit the pool.
+ * The company credit pool, for a company owner: the people linked to the company spend it while it is on Team or Enterprise. Shows what's left and each member's model spend this month; top-ups bought here credit the pool.
  */
 export function PoolCard({
   pool,
@@ -226,7 +225,7 @@ export function PoolCard({
         <div>
           <p className="label">Company pool · {PLAN_NAMES[pool.plan]}{pool.plan === 'team' && pool.seats ? ` · ${pool.seats} seats` : ''}</p>
           <h2 className="text-xl font-semibold">{name}</h2>
-          <p className="muted text-[13px]">Everyone who joined by your email domain uses these credits, for all of their agents.</p>
+          <p className="muted text-[13px]">While you're on Team, people linked to your company use these credits, for all of their agents.</p>
         </div>
         <div className="text-right">
           <p className="label">Balance</p>
@@ -264,10 +263,10 @@ export function PoolCard({
           <button type="button" disabled={!paddle} onClick={() => buy(teamPrice, seats, 'team')} className="btn-primary">
             Buy Team · ${25 * seats}/month
           </button>
-          <span className="muted text-[13px]">{credits(15 * seats)} pooled credits a month; everyone on your domain gets Pro limits.</span>
+          <span className="muted text-[13px]">{credits(15 * seats)} pooled credits a month; your team gets Pro limits.</span>
         </div>
         ) : (
-          <p className="muted text-[13px]">Only the person who created this workspace can buy Team for it.</p>
+          <p className="muted text-[13px]">Only a company owner can buy Team for it.</p>
         )
       ) : (
         pool.plan !== 'enterprise' && (

@@ -128,25 +128,15 @@ export class WorkspaceStore {
     });
   }
 
-  /** Stops these people's usage billing a company pool (they pay for themselves again). */
-  async clearBillingAccounts(agentIds: string[]): Promise<void> {
-    if (!agentIds.length) return;
-    const batch = this.db.batch();
-    for (const id of agentIds) batch.update(this.agents.doc(id), { billingAccountId: FieldValue.delete() });
-    await batch.commit();
-  }
-
   async dropWorkspaceMember(
     agentId: string,
     workspaceId: string,
     droppedChannelIds: string[],
     ban = false,
-    unlinkBilling = false,
   ): Promise<void> {
     const batch = this.db.batch();
     batch.update(this.agents.doc(agentId), {
       workspaces: FieldValue.arrayRemove(workspaceId),
-      ...(unlinkBilling ? { billingAccountId: FieldValue.delete() } : {}),
       ...(droppedChannelIds.length ? { channels: FieldValue.arrayRemove(...droppedChannelIds) } : {}),
     });
     batch.update(this.workspaces.doc(workspaceId), {

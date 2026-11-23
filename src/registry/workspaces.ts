@@ -313,10 +313,6 @@ export async function setWorkspaceDomains(registry: Registry, owner: AgentRecord
   if (unowned) throw new HubError('invalid', `${unowned} isn't the domain of a workspace owner's Google sign-in email`);
   await registry.workspaceStore.setWorkspaceDomains(workspace.id, clean);
   workspace.domains = clean;
-  // Members who joined the company pool by a domain no longer listed pay for themselves again.
-  const members = await registry.workspaceStore.listWorkspaceMembers(workspace.id);
-  const unlinked = members.filter((m) => m.billingAccountId === workspace.id && !clean.includes(domainOf(m.email ?? '')));
-  await registry.workspaceStore.clearBillingAccounts(unlinked.map((m) => m.id));
   return workspace;
 }
 
@@ -474,9 +470,7 @@ async function dropWorkspaceMember(
   const mine = new Set(agent.channels ?? []);
   const dropped = channels.filter((c) => mine.has(c.id));
   const droppedChannelIds = dropped.map((c) => c.id);
-  const unlink = agent.billingAccountId === workspace.id;
-  await registry.workspaceStore.dropWorkspaceMember(agent.id, workspace.id, droppedChannelIds, ban, unlink);
-  if (unlink) delete agent.billingAccountId;
+  await registry.workspaceStore.dropWorkspaceMember(agent.id, workspace.id, droppedChannelIds, ban);
   agent.workspaces = (agent.workspaces ?? []).filter((w) => w !== workspace.id);
   agent.channels = (agent.channels ?? []).filter((c) => !dropped.some((d) => d.id === c));
 }

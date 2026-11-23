@@ -4,8 +4,9 @@ import { agentOf, bearer, ipOf, requireAgent } from '../lib/auth.js';
 import { HubError } from '../lib/errors.js';
 import { githubInstallUrl, POPULAR } from '../hub/composio.js';
 import { GITHUB_CLOUD_TOOLS, GITHUB_NATIVE_LOGO, GITHUB_NATIVE_NAME } from '../hub/github.js';
-import { isOwner, isSuperAdmin } from '../lib/admin.js';
+import { isSuperAdmin } from '../lib/admin.js';
 import { agentView } from '../lib/present.js';
+import { isCompanyOwner } from '../billing/company.js';
 import { MAX_LIVE_BOTS } from '../registry/registry.js';
 import type { AgentRecord } from '../registry/types.js';
 import { json, myWorkspaces, str } from './helpers.js';
@@ -150,12 +151,13 @@ export function accountRoutes(router: Router, hub: HubService): void {
       const [rec, limits, { spentMicros, capMicros }, hired] = await Promise.all([hub.billing.get(me.id), hub.llm.limits(me.id), hub.llm.balance(me.id), hub.registry.agentCount(me, true)]);
       const connected = await hub.registry.agentCount(me, false);
       const owned = await hub.registry.ownedWorkspaceUsage(me, me);
-      // A company pays for this person (they joined its workspace by email domain): show which; the pool's balance is its owner's to see.
-      const pool = me.billingAccountId ? await hub.registry.workspaceDoc(me.billingAccountId) : undefined;
-      // Linked to a pool: the pool's credit is what runs out, so `used` is its ratio (never its dollars).
-      const used = me.billingAccountId ? await usedByPayer(hub.llm, me) : capMicros > 0 ? spentMicros / capMicros : 1;
+      // Whoever actually pays (payerOf): a company on Team or Enterprise shows by name; the pool's balance is its owners' to see.
+      const payer = await hub.llm.payerOf(me);
+      const pool = payer !== me.id ? await hub.registry.workspaceDoc(payer) : undefined;
+      // A company pays: its credit is what runs out, so `used` is its ratio (never its dollars).
+      const used = pool ? Math.min(1, await hub.llm.used(payer)) : capMicros > 0 ? spentMicros / capMicros : 1;
       // Why work stops, if it does: the payer's credits ran out, or its owners' monthly budget was reached (no amounts).
-      const blockedBy = await hub.llm.blockedBy(await hub.llm.payerOf(me));
+      const blockedBy = await hub.llm.blockedBy(payer);
       const p = hub.billing.paddle;
       return {
         plan: limits.plan,
@@ -170,7 +172,7 @@ export function accountRoutes(router: Router, hub: HubService): void {
         connected,
         maxConnected: MAX_LIVE_BOTS,
         referrals: rec?.referrals ?? 0,
-        ...(pool ? { billedTo: { workspaceId: pool.id, name: pool.name, ...(isOwner(pool, me) ? { owner: true } : {}) } } : {}),
+        ...(pool ? { billedTo: { workspaceId: pool.id, name: pool.name, ...(isCompanyOwner(await hub.billing.get(pool.id), pool, me.id) ? { owner: true } : {}) } } : {}),
         ...(blockedBy ? { blockedBy } : {}),
         ...(rec?.periodEnd ? { periodEnd: rec.periodEnd } : {}),
         ...(rec?.cancelAtPeriodEnd ? { cancelAtPeriodEnd: true } : {}),

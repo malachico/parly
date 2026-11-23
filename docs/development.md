@@ -71,11 +71,18 @@ the prompt or the model, and add a case for each extraction bug you fix.
 ## Companies (billing)
 
 A company is a workspace-keyed billing record (a pool) with optional `name` and `owners`
-(`src/billing/company.ts`). They are recorded only: nothing reads them yet. Pool webhooks
-fill them when missing, never overwriting. Name comes from the workspace name, else its first domain,
-else its id. Owners are the verified Team buyer, else the workspace owners. For older pools, run
-`MONGODB_URI=<uri> npx tsx scripts/backfill-companies.ts` to see what would change, then add
-`--apply` to write it. `MONGODB_DB` overrides `parly`. Re-running is safe, since only missing fields are set.
+(`src/billing/company.ts`). A person (and their agents, including a room agent's opener) bills the
+company only when they are linked to it (`billingAccountId`) and its plan is Team or Enterprise;
+otherwise they pay personally. An empty or over-budget company pool pauses its members, with no
+personal fallback. Signing in by domain auto-joins the workspace but never links billing, and
+leaving or editing domains never unlinks it. Budget, portal and Team-webhook rights belong to
+`owners`; a legacy record with no owners falls back to the workspace creator. A verified Team buyer
+is added to owners, while an unverified top-up never adds one. Per-agent usage rows are keyed by
+agent, month and payer, and older rows without a payer still count. Pool webhooks fill name and
+owners when missing. Name comes from the workspace name, else its first domain, else its id. For
+older pools, run `MONGODB_URI=<uri> npx tsx scripts/backfill-companies.ts` to see what would
+change, then add `--apply` to write it. `MONGODB_DB` overrides `parly`. Re-running is safe, since
+only missing fields are set.
 
 ## Ponytail shortcuts
 

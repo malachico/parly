@@ -39,9 +39,11 @@ export class BillingStore {
     return (await this.col().doc(ownerId).get()).data() as BillingRecord | undefined;
   }
 
-  /** The company credit pool (a workspace id) this person's usage bills, if their company pays for them. */
+  /** The company (a workspace-keyed pool) this person's usage bills: their `billingAccountId`, only while its plan is Team or Enterprise. */
   async billingAccountOf(personId: string): Promise<string | undefined> {
-    return ((await this.db.collection('agents').doc(personId).get()).data() as { billingAccountId?: string } | undefined)?.billingAccountId;
+    const id = ((await this.db.collection('agents').doc(personId).get()).data() as { billingAccountId?: string } | undefined)?.billingAccountId;
+    const plan = id ? limitsOf(await this.getBilling(id), 0).plan : undefined;
+    return plan === 'team' || plan === 'enterprise' ? id : undefined;
   }
 
   async isWorkspace(id: string): Promise<boolean> {
@@ -53,11 +55,7 @@ export class BillingStore {
     return (await this.db.collection('workspaces').doc(id).get()).data() as { name?: string; domains?: string[]; ownerId?: string; ownerIds?: string[] } | undefined;
   }
 
-  async workspaceOwner(id: string): Promise<string | undefined> {
-    return ((await this.db.collection('workspaces').doc(id).get()).data() as { ownerId?: string } | undefined)?.ownerId;
-  }
-
-  /** Model spend this period on a pool (agentUsage rows billed to it), by agent. */
+  /** Model spend this period on a pool (agentUsage rows billed to it); an agent may have several rows (a legacy one and its own), so callers sum. */
   async agentUsageBilledTo(ownerId: string, period: string): Promise<{ agentId: string; micros: number }[]> {
     const snap = await this.db.collection(AGENT_USAGE).where('ownerId', '==', ownerId).where('period', '==', period).get();
     return snap.docs.map((d) => d.data() as { agentId: string; micros: number });
@@ -382,7 +380,8 @@ export class BillingStore {
   ): Promise<void> {
     await this.db
       .collection(AGENT_USAGE)
-      .doc(`${agentId}_${period}`)
+      // One row per payer: a person paying, then their company, splits the month. Legacy `${agentId}_${period}` rows keep their last payer.
+      .doc(`${agentId}_${period}_${ownerId}`)
       .set(
         {
           agentId,
@@ -414,10 +413,13 @@ export class BillingStore {
   }
 
   async getAgentUsage(agentId: string, period: string): Promise<AgentUsage> {
-    const d = (await this.db.collection(AGENT_USAGE).doc(`${agentId}_${period}`).get()).data();
-    return { agentId, period, calls: d?.calls ?? 0, input: d?.input ?? 0, output: d?.output ?? 0, micros: d?.micros ?? 0 };
+    // Every payer's row, and the legacy one, summed.
+    const rows = (await this.db.collection(AGENT_USAGE).where('agentId', '==', agentId).where('period', '==', period).get()).docs.map((d) => d.data());
+    const sum = (k: string) => rows.reduce((n, r) => n + ((r[k] as number | undefined) ?? 0), 0);
+    return { agentId, period, calls: sum('calls'), input: sum('input'), output: sum('output'), micros: sum('micros') };
   }
 
+  // ponytail: one row per agent and payer, so an agent whose payer changed mid-month shows twice (once per payer); merge per agent if admin wants one line.
   async topAgents(period: string): Promise<(AgentUsage & { ownerId: string })[]> {
     const snap = await this.db.collection(AGENT_USAGE).where('period', '==', period).orderBy('micros', 'desc').limit(200).get();
     return snap.docs

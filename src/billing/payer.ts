@@ -1,16 +1,15 @@
 import type { AgentRecord } from '../registry/types.js';
 
 /**
- * Who pays for this agent's model calls and metered tools. An ownerless room agent bills `payerId` (the person
- * who opened the room). Otherwise the person (its owner, or itself for a person) pays, unless their company pays
- * for them: `billingAccountOf(person)` is the workspace id of the company credit pool they joined by email domain.
+ * Who pays for this agent's model calls and metered tools: a person (its owner, itself for a person, or for an ownerless
+ * room agent the `payerId` who opened the room), unless their company pays for them: `billingAccountOf(person)` is the
+ * company's workspace id while its plan is Team or Enterprise. A company out of credit pauses them; there is no personal fallback.
  */
 export async function payerOf(
   agent: Pick<AgentRecord, 'id' | 'payerId' | 'ownerId'>,
   billingAccountOf: (personId: string) => Promise<string | undefined>,
 ): Promise<string> {
-  if (!agent.ownerId && agent.payerId) return agent.payerId;
-  const person = agent.ownerId ?? agent.id;
+  const person = agent.ownerId ?? (agent.payerId || agent.id);
   return (await billingAccountOf(person)) ?? person;
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Billing } from '../src/billing/billing.js';
-import { companyFields, missingCompanyFields } from '../src/billing/company.js';
-import { payerName } from '../src/billing/payer.js';
+import { companyFields, isCompanyOwner, missingCompanyFields } from '../src/billing/company.js';
+import { payerName, payerOf } from '../src/billing/payer.js';
 import { LlmMeter } from '../src/llm/llm.js';
 import { usedByPayer } from '../src/rest/account.js';
 import type { Database } from '../src/db/types.js';
@@ -34,10 +34,10 @@ describe('pool top-up webhook', () => {
     expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'buyer', 'txn', 'ctm', 10_000_000, expect.any(String), undefined);
   });
 
-  it('credits a real workspace pool without setting its paddleCustomerId, naming it and owning it by the workspace owners (not the unverified buyer)', async () => {
+  it('credits a real workspace pool without setting its paddleCustomerId, naming it and owning it by the workspace creator only (not the unverified buyer, not co-owners)', async () => {
     const { b, topup } = billing(['ws']);
     await b.handle(topupEvent('ws') as never);
-    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'ws', 'txn', undefined, 10_000_000, expect.any(String), { name: 'Acme', owners: ['o', 'co'] });
+    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'ws', 'txn', undefined, 10_000_000, expect.any(String), { name: 'Acme', owners: ['o'] });
   });
 
   it('ignores billingAccountId on anything but a top-up', async () => {
@@ -48,8 +48,8 @@ describe('pool top-up webhook', () => {
 });
 
 describe('company metadata', () => {
-  it('names a company after its workspace, else a domain, else its id; owned by the buyer, else the workspace owners', () => {
-    expect(companyFields('ws', { name: ' Acme ', ownerId: 'o', ownerIds: ['o', 'co'] })).toEqual({ name: 'Acme', owners: ['o', 'co'] });
+  it('names a company after its workspace, else a domain, else its id; owned by the buyer, else the workspace creator', () => {
+    expect(companyFields('ws', { name: ' Acme ', ownerId: 'o', ownerIds: ['o', 'co'] })).toEqual({ name: 'Acme', owners: ['o'] });
     expect(companyFields('ws', { name: '', domains: ['acme.com'], ownerId: 'o' }, 'buyer')).toEqual({ name: 'acme.com', owners: ['buyer'] });
     expect(companyFields('ws', undefined)).toEqual({ name: 'ws' });
   });
@@ -127,5 +127,19 @@ describe('company pool spend', () => {
     const lookups = { agent: async (id: string) => (id === 'dana' ? { name: 'Dana' } : undefined), workspace: async (id: string) => (id === 'ws' ? { name: 'Acme' } : undefined) };
     expect(await payerName('ws', lookups)).toBe('Acme');
     expect(await payerName('dana', lookups)).toBe('Dana');
+  });
+});
+
+describe('company payer cutover', () => {
+  it("bills a room agent's opener's company", async () => {
+    expect(await payerOf({ id: 'room-bot', payerId: 'opener' }, async (id) => (id === 'opener' ? 'ws' : undefined))).toBe('ws');
+  });
+
+  it('only a listed owner manages a company; a legacy record with no owners falls back to the workspace creator', () => {
+    const ws = { ownerId: 'o' };
+    expect(isCompanyOwner({ owners: ['buyer'] }, ws, 'buyer')).toBe(true);
+    expect(isCompanyOwner({ owners: ['buyer'] }, ws, 'o')).toBe(false);
+    expect(isCompanyOwner(undefined, ws, 'o')).toBe(true);
+    expect(isCompanyOwner({}, ws, 'co')).toBe(false);
   });
 });

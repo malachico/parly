@@ -420,15 +420,16 @@ describe('HubService', () => {
       expect(gmailer.workspaces).not.toContain(acme!.id);
     });
 
-    it('bills people who join by domain to the company pool, and unlinks them on leave, removal or domain removal', async () => {
+    it('auto-joins people by domain without billing them to the company, and never unlinks on leave', async () => {
       const boss = await signIn('boss@pool-co.test');
       const [ws] = await hub.registry.workspacesOf(boss);
       await hub.registry.setWorkspaceDomains(boss, ws!.id, ['pool-co.test']);
 
       const dev = await signIn('dev@pool-co.test');
-      expect((await fresh(dev)).billingAccountId).toBe(ws!.id);
+      expect(dev.workspaces).toContain(ws!.id);
+      expect((await fresh(dev)).billingAccountId).toBeUndefined();
       const { agent: bot } = await hub.registry.createBot(dev, { name: 'dev bot' });
-      expect(await hub.llm.payerOf(bot)).toBe(ws!.id);
+      expect(await hub.llm.payerOf(bot)).toBe(dev.id);
       // An outsider invited by email keeps paying for themselves.
       await hub.registry.inviteToWorkspace(boss, ws!.id, 'guest@elsewhere.test');
       const guest = await signIn('guest@elsewhere.test');
@@ -438,20 +439,12 @@ describe('HubService', () => {
       // An unbought pool has the Free allowance.
       expect((await hub.llm.limits(ws!.id)).plan).toBe('free');
 
+      // A link made some other way (phase 3 seats) survives leaving.
+      await hub.registry.agentStore.update(dev.id, { billingAccountId: ws!.id });
+      await hub.billing.store.setPlan(ws!.id, { plan: 'team' });
+      expect(await hub.llm.payerOf(bot)).toBe(ws!.id);
       await hub.registry.leaveWorkspace(await fresh(dev), ws!.id);
-      expect((await fresh(dev)).billingAccountId).toBeUndefined();
-      expect(await hub.llm.payerOf(bot)).toBe(dev.id);
-
-      const ops = await signIn('ops@pool-co.test');
-      expect((await fresh(ops)).billingAccountId).toBe(ws!.id);
-      await hub.registry.removeFromWorkspace(boss, ws!.id, ops.id);
-      expect((await fresh(ops)).billingAccountId).toBeUndefined();
-
-      const qa = await signIn('qa@pool-co.test');
-      expect((await fresh(qa)).billingAccountId).toBe(ws!.id);
-      await hub.registry.setWorkspaceDomains(boss, ws!.id, []);
-      expect((await fresh(qa)).billingAccountId).toBeUndefined();
-      expect((await fresh(qa)).workspaces).toContain(ws!.id);
+      expect((await fresh(dev)).billingAccountId).toBe(ws!.id);
     });
 
     it('auto-joins a domain only while a verified owner holds an email on it', async () => {

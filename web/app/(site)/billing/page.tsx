@@ -37,11 +37,11 @@ export default async function Billing({ searchParams }: Props) {
     myBilling().catch(() => undefined),
   ]);
   const ws = await currentWorkspace(user);
-  // The owner of a workspace with a verified domain manages its company credit pool here: every such workspace of theirs.
+  // A workspace owner manages its company credit pool here: every workspace of theirs.
   const pools = (
     await Promise.all(
       user.workspaces
-        .filter((w) => w.owner && w.domains?.length && !w.archived)
+        .filter((w) => w.owner && !w.archived)
         .map(async (w) => ({ w, pool: await hub<PoolView>(`/workspaces/${w.id}/billing`).catch(() => undefined) })),
     )
   ).filter((p) => p.pool);
@@ -62,7 +62,7 @@ export default async function Billing({ searchParams }: Props) {
           <PoolCard key={w.id} pool={pool!} name={w.name} billing={billing} me={{ id: user.id, email: user.email }} had={paid === 'pool' && paidPool === w.id ? had : undefined} team={paid === 'team' && paidPool === w.id} />
         ))}
       {billing?.paddle?.prices.team && !pools.length && !billing.billedTo && (
-        <p className="muted text-sm">Team plan for your company: verify your company email domain in workspace settings, then buy Team here.</p>
+        <p className="muted text-sm">Team plan for your company: create a workspace for it, then buy Team here.</p>
       )}
       {billing ? (
         <BillingCard billing={billing} me={{ id: user.id, email: user.email }} asked={asked} paid={paid === 'pool' || paid === 'team' ? undefined : paid} had={had} />

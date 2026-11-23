@@ -449,12 +449,16 @@ describe('Team plan', () => {
       const member = await testPerson(hub.registry, 'Member');
       await hub.registry.agentStore.update(member.id, { billingAccountId: ws.id });
       for (const name of ['m1', 'm2', 'm3']) await hub.registry.createWorkspace(member, name);
+      // An active Team pool pays for its member.
+      expect(await hub.llm.payerOf(member)).toBe(ws.id);
 
       // Cancelling drops the pool back to free, and the member back to Free caps.
       await post({ ...teamSub('e5', owner.id, ws.id, 7, 'canceled', 'subscription.canceled'), data: { ...teamSub('e3', owner.id, ws.id, 7, 'canceled').data } });
       expect((await hub.llm.limits(ws.id)).plan).toBe('free');
       expect((await hub.registry.workspaceUsage(ws)).plan).toBe('free');
       await expect(hub.registry.createWorkspace(member, 'm4')).rejects.toThrow('Free plan');
+      // A lapsed Team pool pays for no one: the member is their own payer again, still linked.
+      expect(await hub.llm.payerOf(member)).toBe(member.id);
     } finally {
       server.close();
     }
@@ -474,10 +478,17 @@ describe('Team plan', () => {
       await post({ event_id: 'c1', event_type: 'subscription.created', data: { id: 'sub_c1', status: 'active', customer_id: 'ctm_c1', custom_data: { ownerId: owner.id, billingAccountId: ws.id }, items: [{ price: { id: 'pri_team' }, quantity: 3 }] } });
       expect(await hub.billing.get(ws.id)).toMatchObject({ plan: 'team', name: 'Acme', owners: [owner.id] });
 
-      // A pool top-up on a workspace with no billing doc yet names it after the workspace, owned by its owners.
+      // A pool top-up on a workspace with no billing doc yet names it after the workspace, owned by its creator only:
+      // a co-owner who tops up (an unverified buyer) never becomes an owner.
+      const co = await testPerson(hub.registry, 'Co');
       const ws2 = await hub.registry.createWorkspace(owner, 'Beta');
-      await post({ event_id: 'c2', event_type: 'transaction.completed', data: { id: 'txn_c2', customer_id: 'ctm_c2', custom_data: { ownerId: owner.id, billingAccountId: ws2.id }, items: [{ price: { id: 'pri_t10' }, quantity: 1 }] } });
+      await hub.registry.agentStore.update(co.id, { workspaces: [ws2.id] });
+      await hub.registry.addWorkspaceOwner(owner, ws2.id, co.id);
+      await post({ event_id: 'c2', event_type: 'transaction.completed', data: { id: 'txn_c2', customer_id: 'ctm_c2', custom_data: { ownerId: co.id, billingAccountId: ws2.id }, items: [{ price: { id: 'pri_t10' }, quantity: 1 }] } });
       expect(await hub.billing.get(ws2.id)).toMatchObject({ extraMicros: 10_000_000, name: 'Beta', owners: [owner.id] });
+      // The verified buyer of Team on a topped-up pool is an owner.
+      await post({ event_id: 'c2b', event_type: 'subscription.created', data: { id: 'sub_c2b', status: 'active', customer_id: 'ctm_c2b', custom_data: { ownerId: owner.id, billingAccountId: ws2.id }, items: [{ price: { id: 'pri_team' }, quantity: 3 }] } });
+      expect(await hub.billing.get(ws2.id)).toMatchObject({ plan: 'team', owners: [owner.id] });
 
       // Already-set fields stay put.
       await db.collection('billing').doc(ws.id).set({ name: 'Renamed', owners: ['someone'] }, { merge: true });
@@ -515,7 +526,7 @@ describe('Enterprise leads', () => {
 });
 
 describe('workspace budget', () => {
-  it('owners and co-owners set it, members and outsiders cannot, bad values are refused, and it shows in billing', async () => {
+  it('company owners set it, co-owners, members and outsiders cannot, bad values are refused, and it shows in billing', async () => {
     const { app, hub } = createApp({ db: testDb(), config: testConfig({ cloudAgents: CLOUD }) });
     const server = app.listen(0);
     const call = httpCaller(() => `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
@@ -530,26 +541,45 @@ describe('workspace budget', () => {
 
       expect((await put(owner.token, { credits: 5 })).json).toEqual({ workspaceId: ws.id, budgetCredits: 5 });
       expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: 5, spentCredits: 0 });
-      expect((await put(co.token, { credits: 7.5 })).json).toMatchObject({ budgetCredits: 7.5 });
+      expect((await put(co.token, { credits: 7.5 })).status).toBe(403);
       expect((await put(member.token, { credits: 100 })).status).toBe(403);
       expect((await call(member.token, 'GET', `/workspaces/${ws.id}/billing`)).status).toBe(403);
       expect((await put(outsider.token, { credits: 100 })).status).toBe(404);
       for (const credits of [-1, '5', Number.MAX_VALUE, undefined]) expect((await put(owner.token, { credits })).status).toBe(400);
-      expect((await call(co.token, 'GET', `/workspaces/${ws.id}/billing`)).json.budgetCredits).toBe(7.5);
+      expect((await call(co.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: 5, buyer: false });
 
       await put(owner.token, { credits: 0 });
       expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json.blockedBy).toBe('budget');
-      // People the pool pays see why on /me/billing; owners are flagged.
-      for (const p of [co, member]) await hub.registry.agentStore.update(p.agent.id, { billingAccountId: ws.id });
+      // People the pool pays (it is on Team) see why on /me/billing; company owners are flagged, co-owners are not.
+      await hub.billing.store.setPlan(ws.id, { plan: 'team' });
+      for (const p of [ownerRec.id, co.agent.id, member.agent.id]) await hub.registry.agentStore.update(p, { billingAccountId: ws.id });
       const mine = async (token: string) => (await call(token, 'GET', '/me/billing')).json;
       expect(await mine(member.token)).toMatchObject({ blockedBy: 'budget', billedTo: { workspaceId: ws.id, name: 'Acme' } });
       expect((await mine(member.token)).billedTo.owner).toBeUndefined();
-      expect(await mine(co.token)).toMatchObject({ blockedBy: 'budget', billedTo: { owner: true } });
+      expect((await mine(co.token)).billedTo.owner).toBeUndefined();
+      expect(await mine(owner.token)).toMatchObject({ blockedBy: 'budget', billedTo: { owner: true } });
       expect((await put(owner.token, { credits: null })).json.budgetCredits).toBeNull();
       expect((await mine(member.token)).blockedBy).toBeUndefined(); // nothing spent: removing the budget unblocks
       expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: null });
     } finally {
       server.close();
     }
+  });
+});
+
+describe('agent usage per payer', () => {
+  it('splits a month between a personal and a company payer, and still sums a legacy row', async () => {
+    const db = testDb();
+    const { hub } = createApp({ db, config: testConfig() });
+    const store = hub.billing.store;
+    const at = new Date().toISOString();
+    await store.recordAgentUsage('bot', 'person', '2026-11', 3, 3, {}, at);
+    await store.recordAgentUsage('bot', 'ws', '2026-11', 5, 5, {}, at);
+    // The company's report shows only what it paid; the person keeps theirs.
+    expect(await store.agentUsageBilledTo('ws', '2026-11')).toMatchObject([{ agentId: 'bot', micros: 5 }]);
+    expect(await store.agentUsageBilledTo('person', '2026-11')).toMatchObject([{ agentId: 'bot', micros: 3 }]);
+    // A pre-split row (`${agentId}_${period}`) still counts toward the agent's month.
+    await db.collection('agentUsage').doc('bot_2026-11').set({ agentId: 'bot', ownerId: 'person', period: '2026-11', calls: 2, input: 0, output: 0, micros: 7 });
+    expect(await store.getAgentUsage('bot', '2026-11')).toMatchObject({ calls: 4, micros: 15 });
   });
 });

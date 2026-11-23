@@ -326,22 +326,18 @@ async function applyDomainJoins(registry: Registry, agent: AgentRecord, created 
     if (ws.archived || (agent.workspaces ?? []).includes(ws.id) || (ws.bannedAgents ?? []).includes(agent.id)) continue;
     // ponytail: one owner read per matching workspace; few workspaces share a domain.
     if (!(await registryWorkspaces.verifiedOwnerDomains(registry, ws)).has(domain)) continue;
-    // Seat check, membership, payer link and referral commit together, so concurrent joins can't overshoot the cap.
+    // Seat check, membership and referral commit together, so concurrent joins can't overshoot the cap. Joining never sets who pays (billingAccountId).
     const refer = created && ws.ownerId && ws.ownerId !== agent.id && !agent.referredBy ? { referredBy: ws.ownerId } : {};
-    // Joining by company domain links the person to that workspace's credit pool (billing/payer.ts); invited outsiders aren't linked.
-    // ponytail: first matching workspace wins when several share the domain; let the person pick if that happens.
-    const link = agent.billingAccountId ? {} : { billingAccountId: ws.id };
     try {
       await registryWorkspaces.addWithRoom(registry, [ws], agent, undefined, async (tx) => {
         await registry.workspaceStore.addAgentToWorkspace(agent.id, ws.id, false, tx);
-        if (refer.referredBy || link.billingAccountId) await registry.agentStore.update(agent.id, { ...refer, ...link }, tx);
+        if (refer.referredBy) await registry.agentStore.update(agent.id, refer, tx);
       });
     } catch (e) {
       if (e instanceof PlanLimitError) continue; // A full workspace is skipped silently.
       throw e;
     }
     if (refer.referredBy) agent.referredBy = refer.referredBy;
-    if (link.billingAccountId) agent.billingAccountId = link.billingAccountId;
     agent.workspaces = [...(agent.workspaces ?? []), ws.id];
   }
 }
