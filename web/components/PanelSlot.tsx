@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { PanelSkeleton } from '@/components/PanelSkeleton';
+import { publishPanelClosing } from '@/lib/panelClosing';
 import { timelineParamsChanged, wsHref } from '@/lib/routes';
 
 const PANEL_NAV_EVENT = 'parly:panel-nav';
@@ -75,6 +76,7 @@ export function PanelSlot({ ws, children }: { ws: string; children: React.ReactN
   const [closingFrom, setClosingFrom] = useState<string | null>(null);
   const [replacingFrom, setReplacingFrom] = useState<string | null>(null);
   const closing = closingFrom === routeKey;
+  useLayoutEffect(() => publishPanelClosing(closing), [closing]);
   const replacing = replacingFrom === routeKey;
   const [pendingState, setPendingState] = useState<PendingPanelState>(null);
   const pending = pendingState?.kind ?? null;

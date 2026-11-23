@@ -1,9 +1,9 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { AgentDayDrawer, NeedsYouPopover, SelectedAgentCard } from '@/components/CanvasPanels';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Activity, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { attentionCount, attentionGroups, liveConversations, markDestinationRead, type CanvasConversation } from '@/lib/attention';
 import { AddToTeam, BenchDrawer, ConfirmTeamMemberDialog, EmptyCanvasCard, type PendingAction } from '@/components/CanvasModals';
 import type { AvatarOf } from '@/components/Avatar';
@@ -25,6 +25,7 @@ import type {
 import { CommandPalette, type PaletteItem } from '@/components/CommandPalette';
 import type { MenuWorkspace } from '@/components/AccountMenu';
 import { notifyPanelNav } from '@/components/PanelSlot';
+import { panelClosing, panelCoversCanvas, subscribePanelClosing } from '@/lib/panelClosing';
 import { agentHref, channelHref, chatHref, dmHref, wsHref } from '@/lib/routes';
 import {
   buildCrossTeamLinks,
@@ -48,6 +49,35 @@ function useServerState<T>(server: T) {
     setState(server);
   }
   return [state, setState] as const;
+}
+
+// The two route readers below are their own components so a panel navigation re-renders them, not the whole canvas.
+
+// "(N) Parly" in the tab while anything needs you; re-applied after a navigation sets the page's own title.
+function NeedsYouTitle({ count }: { count: number }) {
+  const pathname = usePathname();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the trigger, the page title changes with it.
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\) /, '');
+    document.title = count > 0 ? `(${count}) ${base}` : base;
+  }, [count, pathname]);
+  return null;
+}
+
+// Below md the panel is full width (PanelSlot), so the canvas behind it is invisible: hide it. Activity keeps its state and DOM.
+const phoneQuery = '(max-width: 767.98px)';
+const subscribePhone = (onChange: () => void) => {
+  const mq = window.matchMedia(phoneQuery);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+};
+function HiddenBehindPanel({ ws, children }: { ws: string; children: ReactNode }) {
+  const path = usePathname();
+  const params = useSearchParams();
+  const phone = useSyncExternalStore(subscribePhone, () => window.matchMedia(phoneQuery).matches, () => false);
+  const closing = useSyncExternalStore(subscribePanelClosing, panelClosing, () => false);
+  const covered = phone && panelCoversCanvas(ws, path, params.get('panel'), closing);
+  return <Activity mode={covered ? 'hidden' : 'visible'}>{children}</Activity>;
 }
 
 export function CrewCanvas({
@@ -605,13 +635,6 @@ export function CrewCanvas({
 
   const attention = useMemo(() => attentionGroups(waiting, conversations), [waiting, conversations]);
   const needsYouCount = attentionCount(attention);
-  // "(N) Parly" in the tab while anything needs you; re-applied after a navigation sets the page's own title.
-  const pathname = usePathname();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the trigger, the page title changes with it.
-  useEffect(() => {
-    const base = document.title.replace(/^\(\d+\) /, '');
-    document.title = needsYouCount > 0 ? `(${needsYouCount}) ${base}` : base;
-  }, [needsYouCount, pathname]);
 
   // ⌘K: everything on the canvas, and what you can do here.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the camera/action closures (connectAgent, flyToBox, tidyUp, startNewTeam, fitAll, pushPanel, router.push) are recreated every render and read the latest state when run; depending on them would rebuild the palette on every render. State values are the real triggers.
@@ -819,6 +842,8 @@ export function CrewCanvas({
       }}
       className={`relative h-full min-w-0 flex-1 overflow-clip select-none outline-none ${cards ? 'touch-pan-y' : 'touch-none'}`}
     >
+      <NeedsYouTitle count={needsYouCount} />
+      <HiddenBehindPanel ws={ws}>
       {cards && <CanvasCards ws={ws} guest={guest} teams={orderedCardTeams} agentsById={agentsById} meId={me.id} onLog={(id) => setOpenDayAgentId(id)} onAdd={setAddTo} notes={notes.length ? <section aria-label="Workspace notes" className="flex flex-col gap-3"><h2 className="text-base font-bold">Notes</h2>{noteCards(false)}</section> : undefined} onboarding={isFirstRun ? onboarding : undefined} onCreated={isFirstRun && hasAgents ? setAddTo : undefined} />}
 
       {/* Empty-workspace onboarding follows the next useful step */}
@@ -877,6 +902,7 @@ export function CrewCanvas({
         }}
         onCancelNewTeam={() => setShowNewTeam(false)}
       />
+      </HiddenBehindPanel>
 
       <CanvasChrome
         ws={ws}

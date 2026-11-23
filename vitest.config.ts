@@ -35,6 +35,7 @@ const pureTests = [
   'test/labels.test.ts',
   'test/liveRefresh.test.ts',
   'test/mentions.test.ts',
+  'test/panelClose.test.ts',
   'test/ponytailDebt.test.ts',
   'test/readThreadOnce.test.ts',
   'test/toolFields.test.ts',
