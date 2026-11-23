@@ -102,12 +102,29 @@ export class LlmMeter {
     return Math.max(ratio(spentMicros, capMicros), budgetMicros === undefined ? 0 : ratio(spentMicros, budgetMicros));
   }
 
-  /** Why work billed to `ownerId` stops this month: its credits ran out (checked first: raising the budget wouldn't help), or its budget was reached. */
+  /**
+   * Why work billed to `ownerId` stops this month: its owners' monthly budget, when that is reached and binds first
+   * (a budget at or under the credits: a tie goes to the budget), else its credits ran out.
+   */
   async blockedBy(ownerId: string, period = periodOf()): Promise<'budget' | 'credits' | undefined> {
     const { spentMicros, capMicros, budgetMicros } = await this.balance(ownerId, period);
+    const overBudget = budgetMicros !== undefined && ratio(spentMicros, budgetMicros) >= 1;
+    if (overBudget && budgetMicros <= capMicros) return 'budget';
     if (ratio(spentMicros, capMicros) >= 1) return 'credits';
-    if (budgetMicros !== undefined && ratio(spentMicros, budgetMicros) >= 1) return 'budget';
-    return undefined;
+    return overBudget ? 'budget' : undefined;
+  }
+
+  /**
+   * What to tell `personId` when work billed to `payerId` stopped: a company pool's monthly budget (owners raise it in
+   * Billing; members ask one, with no amounts), else `credits`, the caller's own out-of-credits wording.
+   */
+  async stopText(payerId: string, personId: string | undefined, credits: string): Promise<string> {
+    if ((await this.blockedBy(payerId)) !== 'budget') return credits;
+    const ws = await this.store.workspace(payerId);
+    const name = ws?.name ?? 'This workspace';
+    // ponytail: owner by id only (a super admin reads the member wording); use isOwner if admins need the owner wording
+    const owner = !!personId && (ws?.ownerId === personId || !!ws?.ownerIds?.includes(personId));
+    return owner ? `${name} reached its monthly budget. Raise it in Account → Billing.` : `${name} reached its monthly budget. Ask an owner to raise it.`;
   }
 
   /** Global daily public-showcase spend (micro-dollars, AI_MARKUP included) for `day` (`YYYY-MM-DD`). */

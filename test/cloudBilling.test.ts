@@ -14,6 +14,7 @@ function setup(rootHuman?: string, maxRounds = 15) {
     publicShowcaseOverCeiling: vi.fn(async () => false),
     payerOf: async (a: AgentRecord) => a.payerId ?? a.ownerId ?? a.id,
     add: vi.fn(async (_payer: string, _cost: number, _agent: unknown, _period?: string, _opts?: unknown) => {}),
+    stopText: async (_payer: string, _person: string | undefined, credits: string) => credits,
   };
   const fetchImpl = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Answer' }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20 } })));
   const cloud = new CloudAgents({ model: 'test', project: 'test', location: 'global', prices: { input: 1, output: 1 }, meter: meter as unknown as LlmMeter, fetchImpl: fetchImpl as typeof fetch, accessToken: async () => 'test', showcaseJudgeAgentIds: [agent.id], maxRounds, taskMaxRounds: maxRounds });

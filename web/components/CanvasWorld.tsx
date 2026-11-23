@@ -537,7 +537,7 @@ export function CanvasChrome({
   /** A public workspace's shareable link (/p/w/<ws>); shown as a copy icon. */
   shareUrl?: string;
   me: { id: string; name: string; avatar?: string; kind?: string; admin?: boolean; hire?: boolean; graph?: boolean };
-  billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd: number; used: number };
+  billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd: number; used: number; billedTo?: { name: string; owner?: boolean }; blockedBy?: 'budget' | 'credits' };
   workspaces: MenuWorkspace[];
   logout: () => Promise<void>;
   botAgentsCount: number;
@@ -596,7 +596,13 @@ export function CanvasChrome({
       </header>
       {focusedTeamName && <button type="button" onClick={onFitAll} className="absolute top-17 left-4 z-10 max-w-[calc(100%-32px)] truncate rounded-lg bg-[var(--surface)] px-2 py-1 text-xs text-[var(--muted)]">All teams / {focusedTeamName}{selAgentName ? ` / ${selAgentName}` : ''}</button>}
       {showNewTeam && <div role="status" className="absolute top-17 right-4 z-10 hidden rounded-xl bg-[var(--fg)] px-3 py-2 text-sm text-[var(--bg)] md:block">Drawing a team · drag to size it · Esc to cancel</div>}
-      {billing && (billing.plan === 'free' || billing.used >= 0.8) && !showNewTeam && <Link href="/billing" role="status" className="absolute top-17 right-4 z-10 max-w-[calc(100%-32px)] rounded-xl bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent-ink)] sm:text-sm">{billing.used >= 1 ? 'Out of credits: cloud agents, apps and triggers are paused' : `${credits(billing.leftUsd)} credits left this month`} · {billing.plan === 'free' ? 'Upgrade to Pro' : 'Top up'}</Link>}
+      {billing && billing.used >= 1 && billing.billedTo && billing.blockedBy === 'budget' && !showNewTeam ? (
+        billing.billedTo.owner ? (
+          <Link href="/billing" role="status" className="absolute top-17 right-4 z-10 max-w-[calc(100%-32px)] rounded-xl bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent-ink)] sm:text-sm">{billing.billedTo.name} reached its monthly budget · Raise it</Link>
+        ) : (
+          <div role="status" className="absolute top-17 right-4 z-10 max-w-[calc(100%-32px)] rounded-xl bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent-ink)] sm:text-sm">{billing.billedTo.name} reached its monthly budget. Ask an owner to raise it.</div>
+        )
+      ) : billing && (billing.plan === 'free' || billing.used >= 0.8) && !showNewTeam && <Link href="/billing" role="status" className="absolute top-17 right-4 z-10 max-w-[calc(100%-32px)] rounded-xl bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent-ink)] sm:text-sm">{billing.used >= 1 ? 'Out of credits: cloud agents, apps and triggers are paused' : `${credits(billing.leftUsd)} credits left this month`} · {billing.plan === 'free' ? 'Upgrade to Pro' : 'Top up'}</Link>}
       <div className="pointer-events-none absolute bottom-4 left-4 z-20 hidden rounded-[10px] bg-[var(--surface)]/85 px-3 py-2 text-xs text-[var(--muted)] sm:block">
         {overview
           ? 'Scroll or pinch to zoom · drag to pan · click a team to fly in, double-click to open its chat'

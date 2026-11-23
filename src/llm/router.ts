@@ -212,6 +212,7 @@ const keyOf = (req: Request) =>
   req.header('x-goog-api-key') ?? req.header('x-api-key') ?? req.header('authorization')?.replace(/^Bearer /, '');
 
 /** `…/models/<any>:<action>`: the model in the path is ignored (every call goes to the configured one). */
+const CREDITS_OUT = "This month's Parly credits are used up. They renew at the start of next month.";
 const CALL = /\/models\/[^/:]+:(generateContent|streamGenerateContent|countTokens)$/;
 
 /**
@@ -251,7 +252,7 @@ export function llmRouter(
       const metered = action !== 'countTokens';
       // ponytail: calls already under way can overshoot the allowance by their own cost; a reservation per call if that matters
       if (metered && (await meter.used(who.payerId)) >= 1) {
-        return geminiError(res, 429, 'RESOURCE_EXHAUSTED', "This month's Parly credits are used up. They renew at the start of next month.");
+        return geminiError(res, 429, 'RESOURCE_EXHAUSTED', await meter.stopText(who.payerId, who.personId, CREDITS_OUT));
       }
       const query = req.query.alt === 'sse' ? '?alt=sse' : '';
       const url = `${vertexBase(vertex)}/publishers/google/models/${vertex.model}:${action}${query}`;
@@ -270,7 +271,7 @@ export function llmRouter(
       if (!who) return geminiError(res, 401, 'UNAUTHENTICATED', 'Unknown, revoked or archived Parly agent key');
       onCall?.(who.ownerId);
       if ((await meter.used(who.payerId)) >= 1) {
-        return geminiError(res, 429, 'RESOURCE_EXHAUSTED', "This month's Parly credits are used up. They renew at the start of next month.");
+        return geminiError(res, 429, 'RESOURCE_EXHAUSTED', await meter.stopText(who.payerId, who.personId, CREDITS_OUT));
       }
       let body: Record<string, unknown>;
       try {

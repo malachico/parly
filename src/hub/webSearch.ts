@@ -22,7 +22,7 @@ export function makeWebSearch(opts: {
   project?: string;
   location: string;
   prices: LlmPrices;
-  meter: Pick<LlmMeter, 'add' | 'used'>;
+  meter: Pick<LlmMeter, 'add' | 'used' | 'stopText'>;
   accessToken?: () => Promise<string>;
   fetchImpl?: typeof fetch;
 }): WebSearch {
@@ -31,7 +31,10 @@ export function makeWebSearch(opts: {
     if (!q) return { ok: false, error: 'web_search needs a query' };
     try {
       // Same gate as a model turn: an MCP caller has no turn-entry check, so refuse once the payer's allowance is spent.
-      if ((await opts.meter.used(billing.payer, undefined, billing.meterOpts)) >= 1) return { ok: false, error: "This month's Parly credits are used up." };
+      if ((await opts.meter.used(billing.payer, undefined, billing.meterOpts)) >= 1) {
+        const out = "This month's Parly credits are used up.";
+        return { ok: false, error: billing.meterOpts?.freeOnly ? out : await opts.meter.stopText(billing.payer, billing.meterOpts?.personId, out) };
+      }
       const project = await vertexProject(opts.project);
       const out = await generate({
         project,

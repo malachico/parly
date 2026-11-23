@@ -364,7 +364,7 @@ export class CloudAgents {
       this.toldOut.add(`${payer}:${period}`);
       if (fromId === payer) return reply("Your Parly credits for this month are used up, so I'll be quiet until they renew next month. To keep going now, upgrade or top up in Account → Billing.");
       const name = (await this.parly?.name?.(payer).catch(() => undefined)) ?? "this agent's payer";
-      return reply(`This agent's Parly credits are paid by ${name}, and they're used up for this month, so I'll be quiet until they renew. ${name} can upgrade or top up in Account → Billing.`);
+      return reply(await this.opts.meter.stopText(payer, fromId, `This agent's Parly credits are paid by ${name}, and they're used up for this month, so I'll be quiet until they renew. ${name} can upgrade or top up in Account → Billing.`));
     }
     const project = await vertexProject(this.opts.project);
     const url = vertexGenerateUrl({ project, location: this.opts.location, model: this.opts.model });
@@ -534,7 +534,11 @@ export class CloudAgents {
         // prefix stays byte-stable for caching instead of re-wrapping into nested soup every round.
         shrinkOldResults(contents.slice(0, -1), shrunkResults);
         if (totalRounds > 0 && !(await canCallModel()))
-          return finish('Parly credits or the public showcase budget are used up, so I stopped before another model call.');
+          return finish(
+            meterOpts.freeOnly
+              ? 'Parly credits or the public showcase budget are used up, so I stopped before another model call.'
+              : await this.opts.meter.stopText(turnPayer, fromId, 'Parly credits or the public showcase budget are used up, so I stopped before another model call.'),
+          );
         if (totalRounds === 0) roundHasCredits = Promise.resolve(true);
         const res = await this.fetchImpl(url, {
           method: 'POST',

@@ -512,7 +512,10 @@ export type BillingView = {
   cancelAtPeriodEnd?: boolean;
   canManage: boolean;
   /** Your company pays: you joined its workspace by email domain, so your agents spend its credit pool. */
-  billedTo?: { workspaceId: string; name: string };
+  /** `owner`: you own that workspace, so you set its budget. */
+  billedTo?: { workspaceId: string; name: string; owner?: boolean };
+  /** Why work stops when `used` reaches 1: the pool's monthly budget, or credits ran out. */
+  blockedBy?: 'budget' | 'credits';
   paddle?: { clientToken: string; environment: 'sandbox' | 'production'; prices: { pro?: string; proYearly?: string; team?: string; topups?: Record<string, string> } };
 };
 

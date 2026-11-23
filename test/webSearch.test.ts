@@ -56,7 +56,7 @@ describe('web_search (grounded Gemini call)', () => {
   it('refuses without calling the model when the payer is out of credits', async () => {
     let calls = 0;
     const fetchImpl = (async () => (calls++, new Response('{}'))) as typeof fetch;
-    const search = makeWebSearch({ model: 'm', project: 'p', location: 'global', prices, meter: { add: async () => {}, used: async () => 1 } as never, accessToken: async () => 't', fetchImpl });
+    const search = makeWebSearch({ model: 'm', project: 'p', location: 'global', prices, meter: { add: async () => {}, used: async () => 1, stopText: async (_p: string, _q: string | undefined, credits: string) => credits } as never, accessToken: async () => 't', fetchImpl });
     expect(await search('anything', { payer: 'o', agentId: 'a' })).toMatchObject({ ok: false, error: expect.stringContaining('used up') });
     expect(calls).toBe(0);
   });

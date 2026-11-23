@@ -79,6 +79,24 @@ describe('company pool spend', () => {
     expect(await meter.blockedBy('ws')).toBeUndefined();
     billing.allowanceUsd = 2;
     expect(await meter.blockedBy('ws')).toBe('credits');
+    // Both used up: the budget is named when it binds first (at or under the credits).
+    billing.budgetMicros = 2_000_000;
+    expect(await meter.blockedBy('ws')).toBe('budget');
+    billing.budgetMicros = 1_000_000;
+    billing.allowanceUsd = 1.5;
+    expect(await meter.blockedBy('ws')).toBe('budget');
+  });
+
+  it('words a budget stop for owners and members, and keeps the credits wording otherwise', async () => {
+    const meter = new LlmMeter({} as Database, 1);
+    const billing = { ownerId: 'ws', plan: 'team' as const, allowanceUsd: 10, budgetMicros: 1_000_000 };
+    vi.spyOn(meter.store, 'getUsageAndBilling').mockImplementation(async () => ({ usage: { micros: 2_000_000 } as never, billing }));
+    vi.spyOn(meter.store, 'workspace').mockImplementation(async () => ({ name: 'Acme', ownerId: 'o', ownerIds: ['co'] }));
+    expect(await meter.stopText('ws', 'm', 'out')).toBe('Acme reached its monthly budget. Ask an owner to raise it.');
+    expect(await meter.stopText('ws', 'co', 'out')).toBe('Acme reached its monthly budget. Raise it in Account → Billing.');
+    billing.budgetMicros = 4_000_000;
+    billing.allowanceUsd = 1;
+    expect(await meter.stopText('ws', 'o', 'out')).toBe('out');
   });
 
   it("names the workspace when the payer is a pool", async () => {

@@ -4,7 +4,7 @@ import { agentOf, bearer, ipOf, requireAgent } from '../lib/auth.js';
 import { HubError } from '../lib/errors.js';
 import { githubInstallUrl, POPULAR } from '../hub/composio.js';
 import { GITHUB_CLOUD_TOOLS, GITHUB_NATIVE_LOGO, GITHUB_NATIVE_NAME } from '../hub/github.js';
-import { isSuperAdmin } from '../lib/admin.js';
+import { isOwner, isSuperAdmin } from '../lib/admin.js';
 import { agentView } from '../lib/present.js';
 import { MAX_LIVE_BOTS } from '../registry/registry.js';
 import type { AgentRecord } from '../registry/types.js';
@@ -170,7 +170,7 @@ export function accountRoutes(router: Router, hub: HubService): void {
         connected,
         maxConnected: MAX_LIVE_BOTS,
         referrals: rec?.referrals ?? 0,
-        ...(pool ? { billedTo: { workspaceId: pool.id, name: pool.name } } : {}),
+        ...(pool ? { billedTo: { workspaceId: pool.id, name: pool.name, ...(isOwner(pool, me) ? { owner: true } : {}) } } : {}),
         ...(blockedBy ? { blockedBy } : {}),
         ...(rec?.periodEnd ? { periodEnd: rec.periodEnd } : {}),
         ...(rec?.cancelAtPeriodEnd ? { cancelAtPeriodEnd: true } : {}),

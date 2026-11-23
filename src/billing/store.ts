@@ -47,6 +47,11 @@ export class BillingStore {
     return (await this.db.collection('workspaces').doc(id).get()).exists;
   }
 
+  /** A workspace's name and owners, to word a company pool's budget stop. */
+  async workspace(id: string): Promise<{ name?: string; ownerId?: string; ownerIds?: string[] } | undefined> {
+    return (await this.db.collection('workspaces').doc(id).get()).data() as { name?: string; ownerId?: string; ownerIds?: string[] } | undefined;
+  }
+
   async workspaceOwner(id: string): Promise<string | undefined> {
     return ((await this.db.collection('workspaces').doc(id).get()).data() as { ownerId?: string } | undefined)?.ownerId;
   }

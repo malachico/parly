@@ -511,7 +511,14 @@ describe('workspace budget', () => {
 
       await put(owner.token, { credits: 0 });
       expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json.blockedBy).toBe('budget');
+      // People the pool pays see why on /me/billing; owners are flagged.
+      for (const p of [co, member]) await hub.registry.agentStore.update(p.agent.id, { billingAccountId: ws.id });
+      const mine = async (token: string) => (await call(token, 'GET', '/me/billing')).json;
+      expect(await mine(member.token)).toMatchObject({ blockedBy: 'budget', billedTo: { workspaceId: ws.id, name: 'Acme' } });
+      expect((await mine(member.token)).billedTo.owner).toBeUndefined();
+      expect(await mine(co.token)).toMatchObject({ blockedBy: 'budget', billedTo: { owner: true } });
       expect((await put(owner.token, { credits: null })).json.budgetCredits).toBeNull();
+      expect((await mine(member.token)).blockedBy).toBeUndefined(); // nothing spent: removing the budget unblocks
       expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: null });
     } finally {
       server.close();

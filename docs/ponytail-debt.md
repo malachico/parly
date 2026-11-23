@@ -206,6 +206,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `src/llm/llm.ts`
 
 - the 200 costliest agents of the month (index period, micros desc); page it if the admin needs the long tail
+- owner by id only (a super admin reads the member wording); use isOwner if admins need the owner wording
 
 ## `src/llm/router.ts`
 
@@ -415,4 +416,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**145 markers, 33 with no trigger.**
+**146 markers, 33 with no trigger.**
