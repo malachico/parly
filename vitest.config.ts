@@ -39,7 +39,6 @@ const pureTests = [
   'test/readThreadOnce.test.ts',
   'test/toolFields.test.ts',
   'test/publicFetch.test.ts',
-  'test/refreshScheduler.test.ts',
   'test/retryingMemo.test.ts',
   'test/review73.test.ts',
   'test/roomStatus.test.ts',

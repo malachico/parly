@@ -48,9 +48,11 @@ read token so native writes and TTL deletion conflict; snapshots hide that token
 
 ## Live refresh and Vertex credentials
 
-Live events and mark-read actions share one page refresh. A read can hold it for at most
-five seconds; leaving the conversation releases its holds and cancels its pending refreshes.
-A read that finishes after leaving does not refresh the next page.
+Live events (messages, agent activity, reads) never re-render the server page: timelines are
+updated on the client from the event, and on a message or read the canvas re-reads its unread
+counts from the hub's conversation list (`GET /api/conversations`), once per burst of events. The page re-renders after
+a server action revalidates it and once when a hidden tab is shown again, which is what picks up
+changes the stream doesn't carry (new channels, waiting items, who is working).
 
 Vertex calls reuse one GoogleAuth instance, which manages token expiry. Credential-based
 project discovery is shared across calls; a failed discovery can retry on the next call.

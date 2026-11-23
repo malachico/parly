@@ -309,8 +309,8 @@ export function ChannelShell({
     const postId = viewState.threadId;
     const open = viewState.data;
     const lastSeq = open.replies.at(-1)?.seq ?? 0;
-    // Latched: the optimistic clear below makes this false at once, and unmounting MarkRead then would drop the refresh
-    // that brings the sidebar and ⌘K up to date. It stays mounted until a newer reply (a new key) needs marking.
+    // Latched: the optimistic clear below makes this false at once. MarkRead stays mounted until a newer reply
+    // (a new key) needs marking.
     if (open.unread > 0 || open.seen[me.id] === undefined) markReadKeyRef.current = `${conversationKey}:${postId}:${lastSeq}`;
     const isThreadDone = Boolean(open.done || doneSet.has(postId));
     const canToggleThreadDone = Boolean(channel.owner || open.post.fromId === me.id);
@@ -358,7 +358,7 @@ export function ChannelShell({
             conversationKey={markReadKeyRef.current}
             unread={1}
             action={async () => {
-              // Clear right away (the pane, the post's "N new"), then persist; MarkRead refreshes the sidebar and ⌘K after.
+              // Clear right away (the pane, the post's "N new"), then persist; the hub's read event clears ⌘K's count.
               controller.markThreadSeen(postId, lastSeq);
               window.dispatchEvent(new CustomEvent(THREAD_READ_EVENT, { detail: postId }));
               await markThreadRead(channel.id, postId);

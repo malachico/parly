@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { AgentDayDrawer, NeedsYouPopover, SelectedAgentCard } from '@/components/CanvasPanels';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { attentionCount, attentionGroups, markDestinationRead, type CanvasConversation } from '@/lib/attention';
+import { attentionCount, attentionGroups, liveConversations, markDestinationRead, type CanvasConversation } from '@/lib/attention';
 import { AddToTeam, BenchDrawer, ConfirmTeamMemberDialog, EmptyCanvasCard, type PendingAction } from '@/components/CanvasModals';
 import type { AvatarOf } from '@/components/Avatar';
 import { CanvasNoteCard, NoteEditor } from '@/components/CanvasNotes';
@@ -57,7 +57,7 @@ export function CrewCanvas({
   me,
   billing,
   workspaces,
-  conversations,
+  conversations: serverConversations,
   logout,
   initialCanvas,
   initialNotes,
@@ -92,6 +92,9 @@ export function CrewCanvas({
   joinableChannels: { id: string; name: string }[];
 }) {
   const router = useRouter();
+  // Live messages and reads re-read the counts from the hub; a fresh server list replaces them.
+  const [conversations, setConversations] = useServerState(serverConversations);
+  useEffect(() => liveConversations(ws, me.id, setConversations), [ws, me.id, setConversations]);
   const [notes, setNotes] = useServerState(initialNotes);
   const addNoteRef = useRef<() => void>(() => {});
   const [noteEditor, setNoteEditor] = useState<{ note?: CanvasNote; canvas: CanvasBox } | null>(null);
@@ -600,9 +603,7 @@ export function CrewCanvas({
       fitAll,
     });
 
-  // Destinations opened since the server last sent conversations; fresh server data already has them read.
-  const [readNow, setReadNow] = useState<{ of: CanvasConversation[]; keys: string[] }>({ of: conversations, keys: [] });
-  const attention = useMemo(() => attentionGroups(waiting, readNow.of === conversations ? readNow.keys.reduce(markDestinationRead, conversations) : conversations), [waiting, conversations, readNow]);
+  const attention = useMemo(() => attentionGroups(waiting, conversations), [waiting, conversations]);
   const needsYouCount = attentionCount(attention);
   // "(N) Parly" in the tab while anything needs you; re-applied after a navigation sets the page's own title.
   const pathname = usePathname();
@@ -763,7 +764,7 @@ export function CrewCanvas({
   const openWaiting = (item: WaitingItem) => {
     setWaiting((w) => w.filter((x) => x.replyTo !== item.replyTo));
     decNeedsYou(item.channelId);
-    setReadNow((r) => ({ of: conversations, keys: r.of === conversations ? [...r.keys, item.replyTo] : [item.replyTo] }));
+    setConversations((list) => markDestinationRead(list, item.replyTo));
     setActiveWaiting(item);
   };
   const menuVp = menu ? vpRect() : undefined;

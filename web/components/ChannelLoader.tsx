@@ -63,7 +63,7 @@ async function load(path: string, signal: AbortSignal): Promise<OpenBundle | DmB
 /**
  * A conversation page's contents, fetched from the browser: the page around it makes no hub call. `kind` picks a
  * channel (GET /channels/:id/open) or a DM with an agent (GET /agents/:id/open). `renderedAt` changes each time the
- * server page re-renders (a live refresh, an action's revalidate), and that re-reads it.
+ * server page re-renders (an action's revalidate, a tab shown again), and that re-reads it.
  */
 export function ChannelLoader({ ws, kind, id: channelId, renderedAt, webhookUrl, graph }: { ws: string; kind: 'channel' | 'agent'; id: string; renderedAt: number; webhookUrl?: string; graph?: boolean }) {
   const router = useRouter();

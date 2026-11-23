@@ -72,7 +72,6 @@ vi.mock('@/lib/actions', () => ({ markConversationRead: vi.fn() }));
 vi.mock('@/lib/live', () => ({
   subscribeLive: (event: typeof hooks.event) => { hooks.event = event; return hooks.unsubscribe; },
 }));
-vi.mock('@/lib/refreshScheduler', async () => import('../web/lib/refreshScheduler.js'));
 
 afterEach(() => {
   hooks.cleanup?.();
@@ -90,96 +89,90 @@ function visiblePage() {
   vi.stubGlobal('window', { dispatchEvent: vi.fn() });
 }
 
-it('leaving LiveRefresh cancels its queued render and message event', async () => {
-  visiblePage();
-  const { LiveRefresh } = await import('../web/components/LiveRefresh.js');
-  LiveRefresh({ fallbackMs: 1000 });
-  hooks.event?.({ type: 'message' });
-  hooks.cleanup?.();
-  vi.advanceTimersByTime(6000);
-  expect(hooks.unsubscribe).toHaveBeenCalled();
-  expect(hooks.refresh).not.toHaveBeenCalled();
-  expect(window.dispatchEvent).not.toHaveBeenCalled();
-  expect(vi.getTimerCount()).toBe(0);
-});
-
-it('leaving MarkRead releases a hung read and ignores its late completion', async () => {
-  visiblePage();
-  const { MarkRead } = await import('../web/components/MarkRead.js');
-  const { scheduleRefresh, SETTLE_MS } = await import('../web/lib/refreshScheduler.js');
-  let finish!: () => void;
-  const action = () => new Promise<void>((resolve) => { finish = resolve; });
-  MarkRead({ conversationKey: 'old', unread: 1, action });
-  const nextPage = vi.fn();
-  scheduleRefresh(nextPage);
-  vi.advanceTimersByTime(SETTLE_MS);
-  expect(nextPage).not.toHaveBeenCalled();
-  hooks.cleanup?.();
-  vi.advanceTimersByTime(1);
-  expect(nextPage).toHaveBeenCalledTimes(1);
-  finish();
-  await vi.runAllTimersAsync();
-  expect(hooks.refresh).not.toHaveBeenCalled();
-  expect(vi.getTimerCount()).toBe(0);
-});
-
-
-it('navigation cancels both components even when MarkRead cleans up first', async () => {
-  visiblePage();
-  const { MarkRead } = await import('../web/components/MarkRead.js');
-  const { LiveRefresh } = await import('../web/components/LiveRefresh.js');
-  MarkRead({ conversationKey: 'old', unread: 1, action: () => new Promise(() => {}) });
-  const leaveRead = hooks.cleanup;
-  LiveRefresh({});
-  hooks.event?.({ type: 'message' });
-  vi.advanceTimersByTime(300);
-  leaveRead?.();
-  hooks.cleanup?.();
-  vi.runAllTimers();
-  expect(hooks.refresh).not.toHaveBeenCalled();
-  expect(window.dispatchEvent).not.toHaveBeenCalled();
-});
-
-it('LiveRefresh: a burst re-renders once after its first second, never while hidden, and fetches no thread of its own', async () => {
+it('LiveRefresh: live events never re-render the page; a tab shown again does, once', async () => {
   visiblePage();
   const { LiveRefresh } = await import('../web/components/LiveRefresh.js');
   LiveRefresh({});
-  hooks.event?.({ type: 'message' });
-  vi.advanceTimersByTime(600);
-  hooks.event?.({ type: 'message' });
-  hooks.event?.({ type: 'activity', conversation: 'c', activity: [{ agentId: 'a' }] } as never);
-  vi.advanceTimersByTime(399);
+  expect(hooks.event).toBeUndefined();
+  vi.advanceTimersByTime(60_000);
   expect(hooks.refresh).not.toHaveBeenCalled();
-  vi.advanceTimersByTime(1);
-  expect(hooks.refresh).toHaveBeenCalledTimes(1);
-  expect(window.dispatchEvent).not.toHaveBeenCalled();
-
-  // Hidden when the window closes: nothing now, one catch-up when shown.
-  hooks.event?.({ type: 'message' });
-  (document as { visibilityState: string }).visibilityState = 'hidden';
-  vi.advanceTimersByTime(1000);
-  expect(hooks.refresh).toHaveBeenCalledTimes(1);
-  (document as { visibilityState: string }).visibilityState = 'visible';
   const onVisible = vi.mocked(document.addEventListener).mock.calls.find(([type]) => type === 'visibilitychange')![1] as () => void;
+  (document as { visibilityState: string }).visibilityState = 'hidden';
   onVisible();
-  vi.advanceTimersByTime(1000);
-  expect(hooks.refresh).toHaveBeenCalledTimes(2);
+  expect(hooks.refresh).not.toHaveBeenCalled();
+  (document as { visibilityState: string }).visibilityState = 'visible';
+  onVisible();
+  expect(hooks.refresh).toHaveBeenCalledTimes(1);
+  hooks.cleanup?.();
+  expect(vi.getTimerCount()).toBe(0);
 });
 
-it('LiveRefresh: a burst that settles while a re-render is loading waits instead of starting a second', async () => {
+it('MarkRead marks the conversation read without re-rendering the page, even when the read fails', async () => {
   visiblePage();
-  hooks.busy = true;
-  const { LiveRefresh } = await import('../web/components/LiveRefresh.js');
-  LiveRefresh({});
-  hooks.event?.({ type: 'message' });
-  vi.advanceTimersByTime(1000);
+  const { MarkRead } = await import('../web/components/MarkRead.js');
+  const action = vi.fn(() => Promise.reject(new Error('offline')));
+  MarkRead({ conversationKey: 'thread', unread: 1, action });
+  await vi.runAllTimersAsync();
+  expect(action).toHaveBeenCalledTimes(1);
   expect(hooks.refresh).not.toHaveBeenCalled();
 });
 
-it('a failed read still re-renders the page, so an optimistic clear does not leave the badges wrong', async () => {
-  visiblePage();
-  const { MarkRead } = await import('../web/components/MarkRead.js');
-  MarkRead({ conversationKey: 'thread', unread: 1, action: () => Promise.reject(new Error('offline')) });
-  await vi.runAllTimersAsync();
-  expect(hooks.refresh).toHaveBeenCalledTimes(1);
+it('a burst of live messages and reads re-reads the canvas counts once; activity never does', async () => {
+  vi.useFakeTimers();
+  const fetched = vi.fn(async () => ({ ok: true, json: async () => [{ key: 'channel:c1', kind: 'channel', channel: { name: 'general' }, last: { fromId: 'a', from: 'Ada', text: 'hi' }, updatedAt: '2026-01-01T00:00:00.000Z', unread: 3, mentions: 1 }] }));
+  vi.stubGlobal('fetch', fetched);
+  const { liveConversations } = await import('../web/lib/attention.js');
+  const set = vi.fn();
+  const stop = liveConversations('acme', 'me', set);
+  hooks.event!({ type: 'activity' });
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(fetched).not.toHaveBeenCalled();
+  for (const type of ['message', 'read', 'message', 'message', 'read']) hooks.event!({ type });
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(fetched).toHaveBeenCalledTimes(1);
+  expect(fetched).toHaveBeenCalledWith('/api/conversations?workspace=acme', { cache: 'no-store' });
+  expect(set).toHaveBeenCalledWith([expect.objectContaining({ key: 'channel:c1', title: '#general', unread: 3, mentions: 1 })]);
+  hooks.event!({ type: 'message' });
+  stop();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('steady live traffic with a slow hub still updates the counts, one read at a time', async () => {
+  vi.useFakeTimers();
+  const row = (unread: number) => [{ key: 'channel:c1', kind: 'channel', channel: { name: 'general' }, last: { fromId: 'a', from: 'Ada', text: 'hi' }, updatedAt: '2026-01-01T00:00:00.000Z', unread, mentions: 1 }];
+  let inFlight = 0;
+  let most = 0;
+  const fetched = vi.fn(async () => {
+    const unread = fetched.mock.calls.length;
+    most = Math.max(most, ++inFlight);
+    await new Promise((done) => setTimeout(done, 800));
+    inFlight--;
+    return { ok: true, json: async () => row(unread) };
+  });
+  vi.stubGlobal('fetch', fetched);
+  const { liveConversations } = await import('../web/lib/attention.js');
+  const set = vi.fn();
+  const stop = liveConversations('acme', 'me', set);
+  for (let i = 0; i < 20; i++) {
+    hooks.event!({ type: i % 2 ? 'read' : 'message' });
+    await vi.advanceTimersByTimeAsync(400);
+  }
+  // 8s of events: the first read starts at 400ms, then they run back to back, 800ms each.
+  expect(most).toBe(1);
+  expect(fetched).toHaveBeenCalledTimes(10);
+  expect(set).toHaveBeenCalledTimes(9);
+  expect(set).toHaveBeenLastCalledWith([expect.objectContaining({ unread: 9 })]);
+  // The traffic ends during the tenth read: it is applied, then exactly one more read follows for the events it missed.
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(fetched).toHaveBeenCalledTimes(11);
+  expect(set).toHaveBeenLastCalledWith([expect.objectContaining({ unread: 11 })]);
+  // Unsubscribed mid-read: that answer is dropped and nothing follows it.
+  hooks.event!({ type: 'message' });
+  await vi.advanceTimersByTimeAsync(400);
+  hooks.event!({ type: 'message' });
+  stop();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(fetched).toHaveBeenCalledTimes(12);
+  expect(set).toHaveBeenCalledTimes(11);
+  expect(vi.getTimerCount()).toBe(0);
 });

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { formatWorkspaceCookie } from '../../components/RememberWorkspace';
 import { Timeline } from '../../components/Thread';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { doc } from '../../lib/docs';
 import { people, post } from './fixtures';
 
@@ -59,8 +59,8 @@ assert.doesNotMatch(crewCanvasSrc, /router\.refresh\s*\(/, 'CrewCanvas must not 
 // Review #47: LiveRefresh and MarkRead share one refresh scheduler, so a live message re-renders the page once.
 const liveRefreshSrc = readFileSync(new URL('../../components/LiveRefresh.tsx', import.meta.url), 'utf8');
 const markReadSrc = readFileSync(new URL('../../components/MarkRead.tsx', import.meta.url), 'utf8');
-assert.match(liveRefreshSrc, /scheduleRefresh\(/, 'LiveRefresh must refresh through the shared scheduler');
-assert.doesNotMatch(liveRefreshSrc, /setTimeout\(/, 'LiveRefresh must not keep its own refresh timer');
-assert.match(markReadSrc, /holdRefresh\(\)/, 'MarkRead must hold the shared refresh while its read is in flight');
-assert.doesNotMatch(markReadSrc, /\.then\(\(\)\s*=>\s*router\.refresh\(\)/, 'MarkRead must not refresh on its own after a read');
+// The refresh storm must not come back: live events (message, activity, read) never re-render the page; the canvas re-reads its counts instead.
+assert.doesNotMatch(liveRefreshSrc, /subscribeLive/, 'LiveRefresh must not re-render the server page on live events');
+assert.doesNotMatch(markReadSrc, /router|refresh\(/, 'MarkRead must not re-render the server page after a read');
+assert.ok(!existsSync(new URL('../../lib/refreshScheduler.ts', import.meta.url)), 'the refresh scheduler is gone with the live refresh');
 console.log('chat checks passed');

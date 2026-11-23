@@ -1,6 +1,6 @@
 import { menuWorkspace } from '@/lib/menuWorkspace';
 import { CrewCanvas } from '@/components/CrewCanvas';
-import type { CanvasConversation } from '@/lib/attention';
+import { canvasConversations } from '@/lib/attention';
 import { logout } from '@/lib/actions';
 import { hub, myBilling, myConversations, type Agent, type CanvasAgent, type CanvasView, type CanvasNote, type Me, type WaitingItem, type Workspace, type WorkspaceSlackStatus } from '@/lib/hub';
 import { siteOrigin } from '@/lib/site';
@@ -36,11 +36,7 @@ export async function CanvasHome({ me, workspace }: { me: Me; workspace: Workspa
   ]);
   const waiting = canvas.waiting ?? (await hub<WaitingItem[]>('/waiting').catch(() => [] as WaitingItem[]));
   // My conversations here, for ⌘K's Unread and Recent (what the rail used to list).
-  const recent: CanvasConversation[] = conversations.flatMap((c) => {
-    const title = c.kind === 'channel' ? (c.channel ? `#${c.channel.name}` : undefined) : c.with?.name;
-    if (!title) return [];
-    return [{ key: c.key, title, preview: `${c.last.fromId === me.id ? 'You' : c.last.from}: ${c.last.text}`, unread: c.unread, ...(c.kind === 'channel' ? { mentions: c.mentions } : {}), ...(c.thread ? { thread: c.thread } : {}), updatedAt: c.updatedAt, ...(c.with ? { who: c.with } : {}) }];
-  });
+  const recent = canvasConversations(conversations, me.id);
   const workspaces = me.workspaces.map(menuWorkspace);
   const onCanvas = new Set(canvas.agents.map((a) => a.id));
   const roster = workspaceRoster(members, onCanvas);

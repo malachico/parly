@@ -24,7 +24,7 @@ export default async function ConversationPage({ params }: Props) {
   const { graph } = await meOrLogin(); // cached: the layout already read it
   return (
     <Suspense fallback={<PanelSkeleton />}>
-      {/* A new value on every server render (a live refresh, an action's revalidate) re-reads the conversation. */}
+      {/* A new value on every server render (an action's revalidate, a tab shown again) re-reads the conversation. */}
       <ChannelLoader ws={ws} kind={parsed.kind} id={parsed.id} renderedAt={Date.now()} webhookUrl={f?.channelId === parsed.id ? f.url : undefined} graph={graph} />
     </Suspense>
   );

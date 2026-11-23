@@ -50,7 +50,7 @@ async function connect() {
       activity: d.activity,
     });
   });
-  // Read here or in another tab: LiveRefresh redraws the unread counts.
+  // Read here or in another tab: the canvas re-reads its unread counts.
   s.addEventListener('read', (e) => {
     track(e as MessageEvent);
     emit({ type: 'read', conversation: (JSON.parse((e as MessageEvent).data) as { conversation: string }).conversation });

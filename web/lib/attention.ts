@@ -1,5 +1,6 @@
 import type { AvatarOf } from '@/components/Avatar';
-import type { WaitingItem } from '@/lib/hub';
+import type { Conversation, WaitingItem } from '@/lib/hub';
+import { subscribeLive } from '@/lib/live';
 
 export type CanvasConversation = { key: string; title: string; preview: string; unread: number; /** A channel's unread mentions. */ mentions?: number; thread?: string; updatedAt: string; who?: AvatarOf };
 
@@ -26,9 +27,56 @@ export function attentionGroups(waiting: WaitingItem[], conversations: CanvasCon
 }
 
 /** Opening a destination reads it before the server catches up. Counts are per message, so a channel's other
- * threads can't be told apart here: they drop until the read's revalidation brings authoritative counts back. */
+ * threads can't be told apart here: they drop until the hub's read event re-reads the counts. */
 export const markDestinationRead = (conversations: CanvasConversation[], replyTo: string) =>
   conversations.map((c) => (conversationDestination(c) === replyTo ? { ...c, unread: 0, mentions: c.mentions === undefined ? undefined : 0 } : c));
+
+/** The hub's conversations (GET /conversations) as the canvas lists them. */
+export const canvasConversations = (conversations: Conversation[], meId: string): CanvasConversation[] =>
+  conversations.flatMap((c) => {
+    const title = c.kind === 'channel' ? (c.channel ? `#${c.channel.name}` : undefined) : c.with?.name;
+    if (!title) return [];
+    return [{ key: c.key, title, preview: `${c.last.fromId === meId ? 'You' : c.last.from}: ${c.last.text}`, unread: c.unread, ...(c.kind === 'channel' ? { mentions: c.mentions } : {}), ...(c.thread ? { thread: c.thread } : {}), updatedAt: c.updatedAt, ...(c.with ? { who: c.with } : {}) }];
+  });
+
+/** Live messages and reads re-read the hub's own counts (GET /api/conversations), once per burst and with no page
+ * re-render; nothing is counted here. One read at a time: events during a read cause one more after it, so a slow hub
+ * still gets its answers applied. A failed read keeps the list as it is. Returns the unsubscribe. */
+export function liveConversations(ws: string, meId: string, set: (list: CanvasConversation[]) => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let busy = false;
+  let again = false;
+  let stopped = false;
+  const load = async () => {
+    timer = undefined;
+    busy = true;
+    try {
+      const res = await fetch(`/api/conversations?workspace=${encodeURIComponent(ws)}`, { cache: 'no-store' });
+      if (res.ok) {
+        const list = canvasConversations((await res.json()) as Conversation[], meId);
+        if (!stopped) set(list);
+      }
+    } catch {
+      // Keep the list as it is.
+    }
+    busy = false;
+    if (again && !stopped) {
+      again = false;
+      void load();
+    }
+  };
+  // Not reset by later events: a steady stream still reads every 400ms, or as fast as the hub answers.
+  const stop = subscribeLive((e) => {
+    if (e.type === 'activity') return;
+    if (busy) again = true;
+    else timer ??= setTimeout(load, 400);
+  });
+  return () => {
+    stop();
+    clearTimeout(timer);
+    stopped = true;
+  };
+}
 
 /** The one unread count: ⌘K's badge, the tab title and the Needs you list all use it. */
 export const attentionCount = (a: ReturnType<typeof attentionGroups>) => a.waiting.length + a.unread.length;
