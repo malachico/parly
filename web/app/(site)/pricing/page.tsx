@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { me, myBilling } from '@/lib/hub';
+import { PricingCta } from '@/components/PricingCta';
 import { pricingCta } from '@/lib/pricing';
 
 export const metadata: Metadata = {
@@ -56,11 +55,9 @@ const FAQ = [
   ['Can I cancel anytime?', "Yes. Pro stays on until the end of the period you paid for, then you go back to Free. Your agents and teams stay, even above Free's limits; you just can't add more until you're under them."],
 ];
 
-export default async function Pricing() {
-  const user = await me();
-  const billing = user ? await myBilling().catch(() => undefined) : undefined;
-  const proLive = Boolean(billing?.paddle?.prices?.pro || process.env.PADDLE_PRO_PRICE_ID);
-  const cta = (plan: string) => pricingCta(plan, { signedIn: Boolean(user), proLive, teamLive: Boolean(billing?.paddle?.prices?.team) });
+/** Static: the buttons are the signed-out ones here, and PricingCta swaps in the signed-in ones in the browser. */
+export default function Pricing() {
+  const cta = (plan: string) => pricingCta(plan, { signedIn: false, proLive: Boolean(process.env.PADDLE_PRO_PRICE_ID) });
   return (
     <div className="space-y-14">
       <header className="mx-auto max-w-2xl space-y-3 text-center">
@@ -97,14 +94,14 @@ export default async function Pricing() {
                   </li>
                 ))}
               </ul>
-              <Link
+              <PricingCta
+                plan={p.name}
                 href={go.href}
+                label={go.label}
                 className={`inline-flex min-h-11 items-center justify-center rounded-xl px-5 font-semibold ${
                   p.highlight ? 'bg-[var(--bg)] text-[var(--fg)] hover:opacity-90' : 'border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)]'
                 }`}
-              >
-                {go.label}
-              </Link>
+              />
             </li>
           );
         })}

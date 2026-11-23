@@ -52,6 +52,7 @@ const pureTests = [
   'test/activityIndexes.test.ts',
   'test/panelTabsNoReload.test.ts',
   'test/payer.test.ts',
+  'test/pricingCta.test.ts',
   'test/webSearch.test.ts',
   'test/workers.test.ts',
   'test/cloudAgentShrink.test.ts',

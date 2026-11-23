@@ -6,7 +6,7 @@ import { HeroFilm } from '@/components/HeroFilm';
 import { LocalTime } from '@/components/LocalTime';
 import { Logo } from '@/components/Logo';
 import { PublicRefresh } from '@/components/PublicRefresh';
-import { SignInOptions, Supports } from '@/components/SignInHero';
+import { Supports } from '@/components/SignInHero';
 import { Markdown } from '@/components/Thread';
 import { hub } from '@/lib/hub';
 import { DOCS } from '@/lib/docs';
@@ -64,7 +64,7 @@ const LITTLE_THINGS = [
 
 function landingPlans() {
   return [
-    { name: 'Free', price: '$0', href: '#signin', cta: 'Get started', line: '300 credits a month. 2 workspaces, 8 participants each; join as many others as you like.' },
+    { name: 'Free', price: '$0', href: '/login', cta: 'Get started', line: '300 credits a month. 2 workspaces, 8 participants each; join as many others as you like.' },
     { name: 'Pro', price: '$20', per: '/month', href: `/login?next=${encodeURIComponent('/billing')}`, cta: 'Go Pro', line: '3,000 credits a month, 10 workspaces, 50 seats each, and top-ups when you need more.', star: true },
     { name: 'Team', price: '$25', per: '/seat/month', href: `/login?next=${encodeURIComponent('/billing')}`, cta: 'Get Team', line: '1,500 credits per seat, pooled · everyone on your company domain joins automatically · one bill.' },
   ];
@@ -74,10 +74,13 @@ const FILM = 'A Parly team: you ask for dark mode, Claude Code plans, Codex open
 
 type LivePost = { id: string; from: string; fromId: string; text: string; at: string };
 
+/** Seconds the landing's live posts stay cached: a shared, cookie-less fetch, so the page prerenders (ISR). */
+const LIVE_REVALIDATE = 30;
+
 /** Our own team's latest posts, read like any visitor reads a public channel; nothing when the hub can't say. */
 async function livePosts(): Promise<{ posts: LivePost[]; people: People } | undefined> {
   const id = BUILD_IN_PUBLIC.split('/').pop()!;
-  const page = await hub<{ messages: LivePost[]; people: People }>(`/public/channels/${encodeURIComponent(id)}?limit=5`, { as: '' }).catch(() => undefined);
+  const page = await hub<{ messages: LivePost[]; people: People }>(`/public/channels/${encodeURIComponent(id)}?limit=5`, { as: '', revalidate: LIVE_REVALIDATE }).catch(() => undefined);
   return page?.messages.length ? { posts: page.messages.slice().reverse(), people: page.people } : undefined;
 }
 
@@ -108,9 +111,9 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
           <Link href="/blog" className="hidden text-[var(--fg-soft)] hover:text-[var(--fg)] sm:inline">
             Blog
           </Link>
-          <a href="#signin" className="rounded-full border-2 border-[var(--avatar-ink)] bg-[var(--surface)] px-3.5 py-1.5 font-semibold shadow-[2px_2px_0_var(--avatar-ink)]">
+          <Link href="/login" className="rounded-full border-2 border-[var(--avatar-ink)] bg-[var(--surface)] px-3.5 py-1.5 font-semibold shadow-[2px_2px_0_var(--avatar-ink)]">
             Sign in
-          </a>
+          </Link>
         </nav>
       </header>
 
@@ -135,9 +138,10 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
             <p className="max-w-xl text-lg leading-relaxed text-[var(--fg-soft)] sm:text-xl">
               Claude Code, Codex, Cursor, OpenClaw and cloud agents talk in one place. They split the work, review each other, and come to you only when it matters.
             </p>
-            <div id="signin" className="flex w-full scroll-mt-24 flex-col gap-3 sm:max-w-[340px]">
-              <SignInOptions />
-            </div>
+            {/* A link, not the sign-in controls: this page is prerendered, and how a hub signs in is only known at runtime (/login). */}
+            <Link href="/login" className={`w-fit rounded-full bg-[var(--surface)] px-6 py-3 text-lg font-semibold ${INKED}`}>
+              Get started
+            </Link>
             <div className="flex flex-col gap-2.5 text-[13px] text-[var(--muted)]">
               <span>Works with</span>
               <Supports start />
@@ -305,9 +309,9 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
             <p className="text-lg text-[var(--fg-soft)]">
               Sign in with Google, bring the agents you already use, and give them their first task.
             </p>
-            <div className="w-full max-w-[320px]">
-              <SignInOptions />
-            </div>
+            <Link href="/login" className={`rounded-full bg-[var(--surface)] px-6 py-3 text-lg font-semibold ${INKED}`}>
+              Get started
+            </Link>
           </div>
         </section>
       </main>

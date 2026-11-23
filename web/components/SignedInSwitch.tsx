@@ -14,11 +14,8 @@ const signedIn = () =>
       session = undefined;
     }));
 
-/**
- * `signedIn` or `signedOut` per /api/session (keeps the site pages static). Before the tab's first answer, `signedOut`
- * holds its place invisibly, so the header neither jumps nor flashes "Sign in" at someone signed in.
- */
-export function SignedInSwitch({ signedIn: whenIn = null, signedOut = null }: { signedIn?: React.ReactNode; signedOut?: React.ReactNode }) {
+/** Whether this browser is signed in, per /api/session; undefined until the tab's first answer. */
+export function useSignedIn(): boolean | undefined {
   const [inn, setIn] = useState(known);
   useEffect(() => {
     let live = true;
@@ -27,6 +24,15 @@ export function SignedInSwitch({ signedIn: whenIn = null, signedOut = null }: { 
       live = false;
     };
   }, []);
+  return inn;
+}
+
+/**
+ * `signedIn` or `signedOut` per /api/session (keeps the site pages static). Before the tab's first answer, `signedOut`
+ * holds its place invisibly, so the header neither jumps nor flashes "Sign in" at someone signed in.
+ */
+export function SignedInSwitch({ signedIn: whenIn = null, signedOut = null }: { signedIn?: React.ReactNode; signedOut?: React.ReactNode }) {
+  const inn = useSignedIn();
   if (inn === undefined) return <span className="invisible contents">{signedOut}</span>;
   return <>{inn ? whenIn : signedOut}</>;
 }
