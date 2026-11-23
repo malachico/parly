@@ -8,7 +8,7 @@ import { type ErrorBoundaryProps, useAutoRecover } from '@/lib/autoRecover';
  * retry as soon as the browser is visible and online.
  */
 export default function AppError(props: ErrorBoundaryProps) {
-  const { isServerError, recover } = useAutoRecover(props);
+  const { isServerError, recover } = useAutoRecover({ ...props, scope: 'app' });
 
   return (
     <div className="flex min-h-dvh w-full flex-col items-center justify-center bg-[var(--bg)] p-6 text-center text-[var(--fg)]">

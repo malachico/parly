@@ -9,7 +9,7 @@ import './globals.css';
  * a client-side `TypeError: network error`.
  */
 export default function GlobalError(props: ErrorBoundaryProps) {
-  const { isServerError, recover } = useAutoRecover(props);
+  const { isServerError, recover } = useAutoRecover({ ...props, scope: 'global' });
 
   return (
     <html lang="en" suppressHydrationWarning>

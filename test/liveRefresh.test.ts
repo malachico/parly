@@ -123,30 +123,43 @@ it('steady live traffic with a slow hub still updates the counts, one read at a 
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it('useAutoRecover stops auto-retrying a child that keeps throwing; Try again still works', async () => {
+it('useAutoRecover stops auto-retrying a child that keeps throwing; Try again still works and starts a fresh budget', async () => {
   visiblePage();
   vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.resetModules();
   const { AUTO_RECOVER_MAX_RETRIES, useAutoRecover } = await import('../web/lib/autoRecover.js');
   const error = new TypeError('network error');
   // Each retry resets the boundary, the child throws again and the fallback mounts afresh.
+  let last: ReturnType<typeof useAutoRecover> | undefined;
   const retry = vi.fn(() => {
     hooks.cleanup?.();
-    useAutoRecover({ error, retry });
+    last = useAutoRecover({ error, retry, scope: 'panel' });
   });
-  const { recover } = useAutoRecover({ error, retry });
+  last = useAutoRecover({ error, retry, scope: 'panel' });
+  expect(last.gaveUp).toBe(false);
   await vi.advanceTimersByTimeAsync(40_000);
   expect(retry).toHaveBeenCalledTimes(AUTO_RECOVER_MAX_RETRIES);
   expect(vi.getTimerCount()).toBe(0);
-  recover!();
-  expect(retry).toHaveBeenCalledTimes(AUTO_RECOVER_MAX_RETRIES + 1);
-  expect(vi.getTimerCount()).toBe(0);
-  // After a quiet spell (say the laptop slept) the next failure gets a fresh budget.
-  await vi.advanceTimersByTimeAsync(120_000);
+  expect(last.gaveUp).toBe(true);
+  // Another boundary failing now still gets its own auto-retries.
+  const canvasRetry = vi.fn();
+  useAutoRecover({ error, retry: canvasRetry, scope: 'canvas' });
+  await vi.advanceTimersByTimeAsync(800);
+  expect(canvasRetry).toHaveBeenCalledTimes(1);
   hooks.cleanup?.();
-  useAutoRecover({ error, retry });
+  // Try again works, and if the next blip comes within the quiet window it auto-retries again.
+  last.recover!();
+  expect(retry).toHaveBeenCalledTimes(AUTO_RECOVER_MAX_RETRIES + 1);
+  expect(last.gaveUp).toBe(false);
   await vi.advanceTimersByTimeAsync(800);
   expect(retry).toHaveBeenCalledTimes(AUTO_RECOVER_MAX_RETRIES + 2);
+  // After a quiet spell (say the laptop slept) the next failure gets a fresh budget.
+  await vi.advanceTimersByTimeAsync(120_000);
+  const before = retry.mock.calls.length;
+  hooks.cleanup?.();
+  useAutoRecover({ error, retry, scope: 'panel' });
+  await vi.advanceTimersByTimeAsync(800);
+  expect(retry.mock.calls.length).toBeGreaterThan(before);
 });
 
 it('the workspace layout gives the canvas its own error boundary, so a canvas failure leaves the open panel up', async () => {
