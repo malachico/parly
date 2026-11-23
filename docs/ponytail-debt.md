@@ -81,6 +81,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `src/chat/chatService.ts`
 
+- 2.5s, not 1.5s. Every read is indexed, but an idle web stream costs 5-6 of them per tick (changed conversations, channel docs, channel threads, the newest conversation's tail, activity, read cursors), so each open tab is ~2 queries/s here and would be ~4/s at 1.5s. Ceiling: a few hundred open streams. Upgrade path: a Mongo change stream feeding notifier.changed() on every instance, then this drops back to a slow safety net.
 - an agent's thread reply the router can't place wakes the thread's agents only while fewer than this many agents' messages in a row precede it, so a router outage can't bounce two agents off each other; tune if real threads need longer guessed chains.
 - the newest 50 mentions, and 50 messages after each; a per-person "waiting" doc if that falls short.
 - `no-trigger` take() must not drain a thread/DM the agent never joined — channel membership (canRead) isn't enough; missing participants fails closed.

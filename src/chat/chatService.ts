@@ -122,8 +122,12 @@ interface ChatOptions {
   pollMs?: number;
 }
 
-/** Waits wake at once for a post on this instance; this slow re-read catches the others' (Cloud Run runs several). */
-const WAIT_POLL_MS = 10_000;
+/** Waits wake at once for a post on this instance; this re-read catches the others' (Cloud Run runs several). */
+// ponytail: 2.5s, not 1.5s. Every read is indexed, but an idle web stream costs 5-6 of them per tick (changed
+// conversations, channel docs, channel threads, the newest conversation's tail, activity, read cursors), so each open
+// tab is ~2 queries/s here and would be ~4/s at 1.5s. Ceiling: a few hundred open streams. Upgrade path: a Mongo
+// change stream feeding notifier.changed() on every instance, then this drops back to a slow safety net.
+const WAIT_POLL_MS = 2_500;
 const EVENTS_LIMIT = 50;
 const SCAN = 50;
 /** Pause before the one retry of a push enqueue that failed. */
