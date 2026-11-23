@@ -37,6 +37,9 @@ const periodOf = (at = new Date()) => at.toISOString().slice(0, 7);
 /** The calendar day a public showcase turn counts in (UTC). */
 const dayOf = (at = new Date()) => at.toISOString().slice(0, 10);
 
+/** How much of `limit` is spent: 0 to 1 (past 1 by calls under way); nothing to spend counts as used up. */
+const ratio = (spent: number, limit: number) => (limit > 0 ? spent / limit : 1);
+
 const hash = (key: string) => createHash('sha256').update(key).digest('hex');
 
 export class LlmMeter {
@@ -86,6 +89,7 @@ export class LlmMeter {
   /**
    * How much of what a person can spend this month they have used: 0 to 1 (and past 1 by the calls already under
    * way). What they can spend is the plan's monthly allowance plus their top-ups: those spent this month and those left.
+   * A company pool's monthly budget (`budgetMicros`) caps that too: the larger ratio counts.
    * When `opts.freeOnly` is true (public showcase turns), only the hub's free allowance is counted and paid plans/top-ups are ignored.
    */
   async used(ownerId: string, period = periodOf(), opts?: { freeOnly?: boolean }): Promise<number> {
@@ -94,8 +98,16 @@ export class LlmMeter {
       const spentMicros = usage?.publicShowcaseMicros ?? 0;
       return this.allowanceMicros > 0 ? spentMicros / this.allowanceMicros : 1;
     }
-    const { spentMicros, capMicros } = await this.balance(ownerId, period);
-    return capMicros > 0 ? spentMicros / capMicros : 1;
+    const { spentMicros, capMicros, budgetMicros } = await this.balance(ownerId, period);
+    return Math.max(ratio(spentMicros, capMicros), budgetMicros === undefined ? 0 : ratio(spentMicros, budgetMicros));
+  }
+
+  /** Why work billed to `ownerId` stops this month: its credits ran out (checked first: raising the budget wouldn't help), or its budget was reached. */
+  async blockedBy(ownerId: string, period = periodOf()): Promise<'budget' | 'credits' | undefined> {
+    const { spentMicros, capMicros, budgetMicros } = await this.balance(ownerId, period);
+    if (ratio(spentMicros, capMicros) >= 1) return 'credits';
+    if (budgetMicros !== undefined && ratio(spentMicros, budgetMicros) >= 1) return 'budget';
+    return undefined;
   }
 
   /** Global daily public-showcase spend (micro-dollars, AI_MARKUP included) for `day` (`YYYY-MM-DD`). */
@@ -124,12 +136,13 @@ export class LlmMeter {
     await this.store.addGraphSpend(workspaceId, cost, day);
   }
 
-  /** This month's spend and what could be spent: the allowance plus top-ups (spent this month and left). */
-  async balance(ownerId: string, period = periodOf()): Promise<{ spentMicros: number; capMicros: number }> {
+  /** This month's spend, what could be spent (the allowance plus top-ups, spent this month and left), and the pool's budget if set. */
+  async balance(ownerId: string, period = periodOf()): Promise<{ spentMicros: number; capMicros: number; budgetMicros?: number }> {
     const { usage, billing } = await this.store.getUsageAndBilling(ownerId, period);
     const limits = limitsOf(billing, this.allowanceMicros);
     const spentMicros = usage?.micros ?? 0;
-    return { spentMicros, capMicros: limits.monthlyMicros + (usage?.extraSpentMicros ?? 0) + limits.extraMicros };
+    const budgetMicros = billing?.budgetMicros;
+    return { spentMicros, capMicros: limits.monthlyMicros + (usage?.extraSpentMicros ?? 0) + limits.extraMicros, ...(budgetMicros === undefined ? {} : { budgetMicros }) };
   }
 
   /** Whether a person has credits left this month (allowance or top-ups). */

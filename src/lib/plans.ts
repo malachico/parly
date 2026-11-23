@@ -15,6 +15,8 @@ export interface BillingRecord {
   allowanceUsd?: number;
   maxWorkspaces?: number;
   maxParticipants?: number;
+  /** A company pool's (workspace's) monthly spend limit in micros, set by its owners: past it, work stops until the month turns. Unset: no limit. */
+  budgetMicros?: number;
   /** Team: seats bought (Paddle quantity); each adds TEAM_SEAT_USD to the pool's monthly allowance. */
   seats?: number;
   /** People this person brought in whose referral was rewarded (up to REFERRALS_MAX pay them). */

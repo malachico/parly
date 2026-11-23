@@ -62,6 +62,25 @@ describe('company pool spend', () => {
     expect(await usedByPayer(llm, me)).toBe(1);
   });
 
+  it('stops a pool at its monthly budget even with allowance left; unset behaves as before; raising it unblocks', async () => {
+    const meter = new LlmMeter({} as Database, 1);
+    const billing = { ownerId: 'ws', plan: 'team' as const, allowanceUsd: 10 } as { ownerId: string; plan: 'team'; allowanceUsd: number; budgetMicros?: number };
+    vi.spyOn(meter.store, 'getUsageAndBilling').mockImplementation(async () => ({ usage: { micros: 2_000_000 } as never, billing }));
+    expect(await meter.used('ws')).toBeCloseTo(0.2);
+    expect(await meter.blockedBy('ws')).toBeUndefined();
+    billing.budgetMicros = 2_000_000;
+    expect(await meter.used('ws')).toBe(1);
+    expect(await meter.hasCredits('ws')).toBe(false);
+    expect(await meter.blockedBy('ws')).toBe('budget');
+    billing.budgetMicros = 0;
+    expect(await meter.blockedBy('ws')).toBe('budget');
+    billing.budgetMicros = 4_000_000;
+    expect(await meter.used('ws')).toBeCloseTo(0.5);
+    expect(await meter.blockedBy('ws')).toBeUndefined();
+    billing.allowanceUsd = 2;
+    expect(await meter.blockedBy('ws')).toBe('credits');
+  });
+
   it("names the workspace when the payer is a pool", async () => {
     const lookups = { agent: async (id: string) => (id === 'dana' ? { name: 'Dana' } : undefined), workspace: async (id: string) => (id === 'ws' ? { name: 'Acme' } : undefined) };
     expect(await payerName('ws', lookups)).toBe('Acme');
