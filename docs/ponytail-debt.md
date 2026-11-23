@@ -403,6 +403,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - slow hub calls in the runtime logs; a real trace (OpenTelemetry) if this stops being enough
 
+## `web/lib/live.check.ts`
+
+- one runnable check for sign-out during a pending ticket (PR #839 review). Run: node --import tsx lib/live.check.ts
+
 ## `web/lib/live.ts`
 
 - re-merges on every render; fine for a page of messages

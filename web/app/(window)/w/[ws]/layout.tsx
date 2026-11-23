@@ -11,7 +11,7 @@ import { PanelSlot } from '@/components/PanelSlot';
 import { RememberWorkspace } from '@/components/RememberWorkspace';
 import { RoomBar } from '@/components/RoomBar';
 import { Tour } from '@/components/Tour';
-import { meOrLogin, myBilling } from '@/lib/hub';
+import { meOrLogin } from '@/lib/hub';
 import { WORKSPACE_COOKIE } from '@/lib/routes';
 
 type Props = { children: React.ReactNode; params: Promise<{ ws: string }> };
@@ -26,7 +26,6 @@ export default async function WorkspaceLayout({ children, params }: Props) {
   const user = await meOrLogin();
   const workspace = user.workspaces.find((w) => w.id === ws);
   if (!workspace) notFound();
-  const billing = await myBilling().catch(() => undefined);
   return (
     <>
       <RememberWorkspace workspaceId={workspace.id} remembered={(await cookies()).get(WORKSPACE_COOKIE)?.value} />
@@ -62,7 +61,7 @@ export default async function WorkspaceLayout({ children, params }: Props) {
         />
       )}
       {!workspace.room && <NewChannelDialog workspaceId={workspace.id} workspaceName={workspace.name} />}
-      <NewWorkspaceDialog billing={billing} />
+      <NewWorkspaceDialog />
       {!workspace.room && <Tour />}
     </>
   );

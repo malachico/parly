@@ -7,6 +7,7 @@ import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
 import { startTour } from '@/components/Tour';
 import type { MenuWorkspace } from '@/lib/menuWorkspace';
+import { forgetLive } from '@/lib/live';
 import { devAppsHref, wsHref } from '@/lib/routes';
 import { credits } from '@/lib/labels';
 import { plural } from '@/lib/plural';
@@ -109,7 +110,7 @@ export function AccountMenu({ me, logout, tour = true, billing }: { me: { id: st
       {me.admin && <Link href="/admin" className={row}>Admin</Link>}
       <ThemeSwitch />
       {tour && <button type="button" onClick={startTour} className={`${row} w-full cursor-pointer text-left`}>Take the tour</button>}
-      <form action={logout}><button className={`${row} w-full cursor-pointer text-left text-[var(--muted)]`}>Log out</button></form>
+      <form action={logout} onSubmit={forgetLive}><button className={`${row} w-full cursor-pointer text-left text-[var(--muted)]`}>Log out</button></form>
     </CanvasMenu>
   );
 }

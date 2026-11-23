@@ -3,18 +3,24 @@ import { PendingButton } from './PendingButton';
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Dialog } from '@/components/Modal';
-import { connectSlackNew, createWorkspace } from '@/lib/actions';
+import { connectSlackNew, createWorkspace, workspaceBilling } from '@/lib/actions';
 import type { BillingView } from '@/lib/hub';
 import { atPlanCap, planCapMessage } from '@/lib/plan-limits';
 
 /** Make a workspace. Open while the URL has ?workspace=new. Hidden limit gate on self-host (max null). */
-export function NewWorkspaceDialog({ billing }: { billing?: BillingView }) {
+export function NewWorkspaceDialog() {
   const params = useSearchParams();
   const router = useRouter();
   const path = usePathname();
   const open = params.get('workspace') === 'new';
   const error = open ? params.get('error') : null;
+  // Asked once per opening, not by the layout on every page load. Until it answers the form shows; the hub enforces the limit either way.
+  const [billing, setBilling] = useState<BillingView>();
+  useEffect(() => {
+    if (open) void workspaceBilling().then(setBilling);
+  }, [open]);
   const close = () => {
     const next = new URLSearchParams(params.toString());
     next.delete('workspace');

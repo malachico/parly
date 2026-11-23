@@ -4,7 +4,7 @@ import { OWN_AGENT } from '@/lib/roomStatus';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { channelKey, hub, HubError, type Channel, type Workspace } from '../hub';
+import { channelKey, hub, HubError, myBilling, type BillingView, type Channel, type Workspace } from '../hub';
 import { chatHref, WORKSPACE_COOKIE, wsHref } from '../routes';
 import { rememberWorkspace } from './auth';
 import { attempt, channelDetails, field, setFlash, workspaceDetails } from './helpers';
@@ -14,6 +14,11 @@ export async function createWorkspace(form: FormData) {
   await rememberWorkspace(workspace.id);
   revalidatePath(wsHref(workspace.id), 'layout');
   redirect(workspaceDetails(workspace.id));
+}
+
+/** My plan and how many workspaces it has left, for the new-workspace dialog; undefined when the hub can't say. */
+export async function workspaceBilling(): Promise<BillingView | undefined> {
+  return myBilling().catch(() => undefined);
 }
 
 /** Adds a person to the workspace by email: now if they have an account, otherwise when they first sign in with Google. */

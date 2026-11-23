@@ -2,30 +2,35 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 import type { ActivityItem, MessageView } from '@/lib/hub';
+import { forgetTicket, ticket } from '@/lib/hubDirect';
 
 /** What the hub's GET /events/stream sends: each event carries the data to draw it. */
 type LiveEvent = { type: 'message'; message: MessageView & { forYou?: boolean } } | { type: 'activity'; conversation: string; activity: ActivityItem[] } | { type: 'read'; conversation: string };
 
 const listeners = new Set<(e: LiveEvent) => void>();
 let source: EventSource | undefined;
-let opening = false;
 let lastId = '';
+// Bumped on sign-out, so a ticket asked for before it isn't used after.
+let epoch = 0;
+// The epoch a ticket is being asked for in: one from before a sign-out doesn't hold up the next person's.
+let opening = -1;
 
 /**
- * One EventSource per tab, opened on the first subscriber, straight to the hub with a ticket from /api/stream/ticket.
+ * One EventSource per tab, opened on the first subscriber, straight to the hub with the tab's ticket (lib/hubDirect).
  * A ticket only opens a stream for a few minutes, so once the hub refuses a reconnect the tab gets a new one and
  * resumes from the last event.
  */
-async function connect() {
-  if (source || opening || typeof EventSource === 'undefined') return;
-  opening = true;
-  const res = await fetch('/api/stream/ticket', { method: 'POST' }).catch(() => null);
-  opening = false;
+async function connect(fresh = false) {
+  if (source || opening === epoch || typeof EventSource === 'undefined') return;
+  const mine = (opening = epoch);
+  const t = await ticket(fresh);
+  if (mine !== epoch) return;
+  opening = -1;
   // Signed out: no stream, and no retrying.
-  if (res?.status === 401) return;
+  if (t === 401) return;
   // Offline (asleep, changing networks) or the hub busy: ask for a ticket again.
-  if (!res?.ok) return void setTimeout(connect, res ? 30_000 : 5000);
-  const { url } = (await res.json()) as { url: string };
+  if (typeof t === 'number') return void setTimeout(connect, t ? 30_000 : 5000);
+  const { url } = t;
   const s = new EventSource(`${url}${lastId ? `&cursor=${encodeURIComponent(lastId)}` : ''}`);
   source = s;
   let opened = false;
@@ -60,8 +65,18 @@ async function connect() {
     if (s.readyState !== EventSource.CLOSED) return;
     source = undefined;
     // Never opened: the hub is unreachable from here, so back off rather than retry every 2 s.
-    setTimeout(connect, opened ? 2000 : 30_000);
+    setTimeout(() => connect(true), opened ? 2000 : 30_000);
   });
+}
+
+/** Signing out leaves this tab (and module) alive: the next person must not get this one's stream, messages or ticket. */
+export function forgetLive() {
+  epoch++;
+  forgetTicket();
+  source?.close();
+  source = undefined;
+  lastId = '';
+  arrived.clear();
 }
 
 export function subscribeLive(fn: (e: LiveEvent) => void): () => void {
