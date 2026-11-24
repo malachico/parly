@@ -1,4 +1,3 @@
-import './landing.css';
 import { Landing } from '@/components/Landing';
 
 /**
