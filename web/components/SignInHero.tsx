@@ -70,7 +70,7 @@ export function SignInHero({
  * The way in, on the login page (dynamic, so these runtime settings are read per request; the prerendered landing links here): anyone signs in (or up) with Google (or the dev sign-in)
  * or copy the self-host install line.
  */
-export function SignInOptions({ next: back }: { next?: string }) {
+function SignInOptions({ next: back }: { next?: string }) {
   if (PASSWORD_LOGIN) return <PasswordSignIn next={back} />;
   const google = Boolean(GOOGLE_CLIENT_ID) || GOOGLE_DEV;
   return (

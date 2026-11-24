@@ -5,7 +5,7 @@
  */
 
 /** The parts of a graph entry the map needs (structurally a `GraphEntry`). */
-export type MapEntry = { id: string; kind: string; title: string };
+type MapEntry = { id: string; kind: string; title: string };
 
 /** The parts of `GraphNodeDetails` the map needs. */
 export type MapInput = {
@@ -17,7 +17,7 @@ export type MapInput = {
 
 export type PlacedNode = MapEntry & { ring: 0 | 1 | 2; angle: number; x: number; y: number; parent?: string };
 type PlacedEdge = { from: string; to: string; kinds: string[] };
-export type MapLayout = { nodes: PlacedNode[]; edges: PlacedEdge[]; inner: number; outer: number };
+type MapLayout = { nodes: PlacedNode[]; edges: PlacedEdge[]; inner: number; outer: number };
 
 /** Centre included. */
 export const MAX_MAP_NODES = 30;
@@ -166,7 +166,7 @@ export function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 }
 
-export type GraphPoint = MapEntry & { x: number; y: number };
+type GraphPoint = MapEntry & { x: number; y: number };
 
 /**
  * The workspace graph: a small force layout (connected entries pull together, all push apart,

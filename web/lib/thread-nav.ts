@@ -432,7 +432,7 @@ export function createThreadNavController(options: ThreadNavControllerOptions): 
 }
 
 /** What the session-gated conversation readers (`readChannelThread`) need from the request. */
-export type SessionReadDeps = {
+type SessionReadDeps = {
   getToken: () => Promise<string | undefined>;
   getMe: () => Promise<Me | undefined>;
   fetchHub: <T>(path: string) => Promise<T>;

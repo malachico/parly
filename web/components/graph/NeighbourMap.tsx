@@ -4,7 +4,7 @@ import { type KeyboardEvent, useId, useMemo, useRef, useState } from 'react';
 import type { GraphNodeDetails } from '@/lib/actions/graph';
 import { neighbourLayout, nextFocus, type PlacedNode, truncate } from '@/lib/graphLayout';
 
-export type NeighbourMapProps = {
+type NeighbourMapProps = {
   details: GraphNodeDetails;
   onSelect: (id: string) => void;
   depth: 1 | 2;
