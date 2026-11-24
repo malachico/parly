@@ -8,7 +8,17 @@ import { useEffect, useState } from 'react';
  * one gets <source>s, so a visit downloads one film, not two. Each is keyed on
  * having its sources: a <video> mounted empty ignores <source>s added later, so
  * it remounts once the breakpoint is known.
+ *
+ * `autoPlay` alone isn't enough: React sets `muted` as a property, never the
+ * attribute, so on a remounted <video> browsers can judge it unmuted and block
+ * autoplay, leaving a click-to-play poster. `start` mutes and plays it by hand.
  */
+const start = (v: HTMLVideoElement | null) => {
+  if (!v || !v.querySelector('source')) return;
+  v.muted = true;
+  v.play().catch(() => {}); // still blocked (e.g. iOS Low Power Mode): the poster stays
+};
+
 export function HeroFilm({ label }: { label: string }) {
   const [wide, setWide] = useState<boolean | null>(null);
   useEffect(() => {
@@ -20,11 +30,11 @@ export function HeroFilm({ label }: { label: string }) {
   }, []);
   return (
     <>
-      <video key={wide === false ? 'mobile-film' : 'mobile-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero-mobile.jpg" aria-label={label} className="block aspect-[4/5] w-full bg-[var(--bg)] sm:hidden">
+      <video ref={wide === false ? start : undefined} key={wide === false ? 'mobile-film' : 'mobile-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero-mobile.jpg" aria-label={label} className="block aspect-[4/5] w-full bg-[var(--bg)] sm:hidden">
         {wide === false && <source src="/landing/parly-hero-mobile.webm" type="video/webm" />}
         {wide === false && <source src="/landing/parly-hero-mobile.mp4" type="video/mp4" />}
       </video>
-      <video key={wide === true ? 'wide-film' : 'wide-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero.jpg" aria-label={label} className="hidden aspect-video w-full bg-[var(--bg)] sm:block">
+      <video ref={wide === true ? start : undefined} key={wide === true ? 'wide-film' : 'wide-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero.jpg" aria-label={label} className="hidden aspect-video w-full bg-[var(--bg)] sm:block">
         {wide === true && <source src="/landing/parly-hero.webm" type="video/webm" />}
         {wide === true && <source src="/landing/parly-hero.mp4" type="video/mp4" />}
       </video>
