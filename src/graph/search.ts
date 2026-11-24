@@ -50,7 +50,7 @@ export type GraphSearch = (scope: GraphScope, query: string, opts?: { limit?: nu
 
 export type Embedder = (text: string) => Promise<{ ok: boolean; vector: number[]; tokens: number; errorText?: string }>;
 
-export interface GraphSearchDeps {
+interface GraphSearchDeps {
   db: Database;
   graph: Pick<GraphStore, 'canSpendOnGraph' | 'recordGraphSpend'>;
   enabled: boolean;

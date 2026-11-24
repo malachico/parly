@@ -10,7 +10,7 @@ import type { AgentRecord } from '../registry/types.js';
 import { json, str } from './helpers.js';
 
 /** Pending company invites, doc id `${companyId}:${email}`. Not `invites`: sign-in consumes every row there. */
-export const COMPANY_INVITES = 'companyInvites';
+const COMPANY_INVITES = 'companyInvites';
 
 interface CompanyInvite {
   companyId: string;

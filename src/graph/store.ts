@@ -52,7 +52,7 @@ const TOPIC_MERGE_THRESHOLD = 0.6;
 /** Lowercased words with a plain plural `s` dropped, so case, order, punctuation and plurals don't split an entry. */
 const words = (s: string) => new Set((s.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)));
 
-export interface EntityRef { kind: GraphNodeKind; key: string; title: string }
+interface EntityRef { kind: GraphNodeKind; key: string; title: string }
 
 /**
  * Whether two person or topic entries name the same thing. Same key always does. A person keyed by agent id (key

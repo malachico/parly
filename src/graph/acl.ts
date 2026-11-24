@@ -2,8 +2,8 @@ import type { ChatService } from '../chat/chatService.js';
 import type { AgentRecord } from '../registry/types.js';
 
 /** What the filter needs of a stored node (graph_nodes) or edge (graph_edges); anything else on them passes through. */
-export interface GraphNodeAcl { _id: string; workspaceId: string; conversationId: string }
-export interface GraphEdgeAcl { workspaceId: string; from: string; to: string; fromConversationId: string; toConversationId: string }
+interface GraphNodeAcl { _id: string; workspaceId: string; conversationId: string }
+interface GraphEdgeAcl { workspaceId: string; from: string; to: string; fromConversationId: string; toConversationId: string }
 
 /**
  * The part of a graph result `reader` may see; every graph read goes through this. A node is visible when it is in

@@ -89,9 +89,9 @@ function escapeTelegramHtml(text: string): string {
  * (`<b>Sender</b>\n<body>`) and HTML-escaped body truncated within Telegram's 4096-character limit
  * without splitting surrogate pairs or HTML entities.
  */
-function formatTelegramOutbound(body: string, sender?: string, maxLen = MAX_TELEGRAM_TEXT): string {
+function formatTelegramOutbound(body: string, sender?: string): string {
   const header = sender ? `<b>${escapeTelegramHtml(sender)}</b>\n` : '';
-  const budget = Math.max(0, maxLen - header.length);
+  const budget = Math.max(0, MAX_TELEGRAM_TEXT - header.length);
   let cut = body.length > budget ? body.slice(0, budget) : body;
   if (cut.length > 0) {
     const last = cut.charCodeAt(cut.length - 1);
