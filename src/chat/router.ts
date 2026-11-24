@@ -44,7 +44,7 @@ export function vertexRouter(opts: { project: string; location: string; model: s
       if (!Array.isArray(parsed.agents)) return undefined;
       const known = new Set(candidates.map((c) => c.id));
       const picked = parsed.agents.filter((id): id is string => typeof id === 'string' && known.has(id));
-      logPick(opts.model, picked, candidates, started);
+      logPick(opts.model, picked, candidates, started, from);
       return picked;
     } catch (err) {
       console.error(`channel route: no pick in ${Date.now() - started}ms (${(err as Error).name}), everyone wakes`);
@@ -70,11 +70,13 @@ function routePrompt(text: string, candidates: RouteCandidate[], from?: { name: 
   ].join('\n');
 }
 
-function logPick(model: string, picked: string[], candidates: RouteCandidate[], started: number) {
+function logPick(model: string, picked: string[], candidates: RouteCandidate[], started: number, from?: { agent: boolean }, scores?: (number | undefined)[]) {
   // ponytail: one log line per pick, to read the real latency and choices in prod; drop once it's settled.
-  // Who, not what was said: the post's text stays out of the logs.
+  // Who, not what was said: the post's text stays out of the logs. The sender's kind and each score tell a dropped
+  // handoff from a correctly ignored update.
   const names = picked.map((id) => candidates.find((c) => c.id === id)!.name);
-  console.log(`channel route (${model}): [${names.join(', ')}] of ${candidates.length} (${candidates.map((c) => c.name).join(', ')}) in ${Date.now() - started}ms`);
+  const list = candidates.map((c, i) => (scores ? `${c.name} ${scores[i]?.toFixed(2) ?? '?'}` : c.name)).join(', ');
+  console.log(`channel route (${model}): [${names.join(', ')}] of ${candidates.length} (${list}) from ${from?.agent ? 'agent' : 'person'} in ${Date.now() - started}ms`);
 }
 
 /**
@@ -99,12 +101,18 @@ export function decisionsRouter(opts: { apiKey: string; model: string; fetchImpl
       }
       const { answers } = (await res.json()) as { answers?: Record<string, { noul?: unknown }> };
       if (!answers) return undefined;
-      // ponytail: a flat threshold; tune it (or wake everyone when every answer is near 0.5) once prod logs show the spread.
-      const picked = candidates.filter((_, i) => {
+      const scores = candidates.map((_, i) => {
         const p = answers[`a${i}`]?.noul;
-        return typeof p === 'number' && p >= (opts.threshold ?? 0.5);
-      }).map((c) => c.id);
-      logPick(opts.model, picked, candidates, started);
+        return typeof p === 'number' ? p : undefined;
+      });
+      // ponytail: a flat threshold; tune it per sender kind once the logged scores show the spread.
+      let picked = candidates.filter((_, i) => (scores[i] ?? 0) >= (opts.threshold ?? 0.5)).map((c) => c.id);
+      // A person is never left unheard: below the threshold, the likeliest agent beats the hub's own-agent guess.
+      if (!picked.length && !from?.agent) {
+        const best = scores.reduce<number>((b, p, i) => (p !== undefined && p > (scores[b] ?? -1) ? i : b), -1);
+        if (best >= 0) picked = [candidates[best]!.id];
+      }
+      logPick(opts.model, picked, candidates, started, from, scores);
       return picked;
     } catch (err) {
       console.error(`channel route: no pick in ${Date.now() - started}ms (${(err as Error).name}), everyone wakes`);

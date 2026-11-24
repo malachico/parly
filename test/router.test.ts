@@ -18,4 +18,12 @@ describe('decisionsRouter', () => {
     next = () => new Response('{"error":{"code":"safety"}}', { status: 400 });
     expect(await route('hi', cands)).toBeUndefined();
   });
+
+  it("gives a person's post to the likeliest agent when none passes, and an agent's to nobody", async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ answers: { a0: { noul: 0.2 }, a1: { noul: 0.4 } } }))) as unknown as typeof fetch;
+    const route = decisionsRouter({ apiKey: 'k', model: 'gemini-decision-1', fetchImpl });
+    const cands = ['a', 'b'].map((id) => ({ id, name: id.toUpperCase() }));
+    expect(await route('can someone look?', cands, { name: 'Pat', agent: false })).toEqual(['b']);
+    expect(await route('done, thanks', cands, { name: 'A', agent: true })).toEqual([]);
+  });
 });
