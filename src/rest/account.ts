@@ -152,7 +152,7 @@ export function accountRoutes(router: Router, hub: HubService): void {
       const [rec, limits, { spentMicros, capMicros }, hired] = await Promise.all([hub.billing.get(me.id), hub.llm.limits(me.id), hub.llm.balance(me.id), hub.registry.agentCount(me, true)]);
       const connected = await hub.registry.agentCount(me, false);
       const owned = await hub.registry.ownedWorkspaceUsage(me, me);
-      // Whoever actually pays (payerOf): a company on Team or Enterprise shows by name; the pool's balance is its owners' to see.
+      // Whoever actually pays (payerOf): a company on Team shows by name; the pool's balance is its owners' to see.
       const payer = await hub.llm.payerOf(me);
       const companyRec = payer !== me.id ? await hub.billing.get(payer) : undefined;
       // ponytail: legacy companies are keyed by a workspace (its name, its creator as owner); drop once all carry name and owners.

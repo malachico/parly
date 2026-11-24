@@ -2,7 +2,7 @@ import type { BillingRecord } from '../lib/plans.js';
 
 /**
  * A company is a workspace-keyed billing record (a credit pool) plus a `name` and `owners`. A person bills it when their
- * `billingAccountId` points at it and its plan is Team or Enterprise; `owners` manage its budget and subscription.
+ * `billingAccountId` points at it and its plan is Team; `owners` manage its budget and subscription.
  */
 export type CompanyFields = Pick<BillingRecord, 'kind' | 'name' | 'owners'>;
 

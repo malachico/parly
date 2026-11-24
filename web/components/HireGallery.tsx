@@ -155,7 +155,7 @@ export function HireGallery({
 
 /** Your plan, one line, at the top: owned workspaces and credits used, and the way up. */
 export function PlanStrip({ billing }: { billing: BillingView }) {
-  const name = { free: 'Free', pro: 'Pro', team: 'Team', enterprise: 'Enterprise' }[billing.plan];
+  const name = { free: 'Free', pro: 'Pro', team: 'Team' }[billing.plan];
   const pct = Math.min(100, Math.round(billing.used * 100));
   const proLive = Boolean(billing.paddle?.prices?.pro);
   const ws = billing.workspaces;

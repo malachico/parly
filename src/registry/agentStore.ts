@@ -144,13 +144,13 @@ export class AgentStore {
 
   /**
    * A person's billing record for their workspace and participant caps: a Free person gets Pro's while their company (the pool
-   * their billingAccountId names, or one they own) is on Team or Enterprise. Caps follow the person; `workspaceId`'s own pool
+   * their billingAccountId names, or one they own) is on Team. Caps follow the person; `workspaceId`'s own pool
    * also counts, so a legacy pool with no `owners` still covers its creator's workspace.
    */
   async billingOf(ownerId: string, workspaceId?: string): Promise<BillingRecord | undefined> {
     const own = (await this.db.collection(BILLING).doc(ownerId).get()).data() as BillingRecord | undefined;
     if (limitsOf(own, 0).plan !== 'free') return own;
-    const paid = (rec?: BillingRecord) => ['team', 'enterprise'].includes(limitsOf(rec, 0).plan);
+    const paid = (rec?: BillingRecord) => limitsOf(rec, 0).plan === 'team';
     const linked = ((await this.col.doc(ownerId).get()).data() as AgentRecord | undefined)?.billingAccountId;
     const pro =
       (await Promise.all([workspaceId, linked].map(async (id) => !!id && paid((await this.db.collection(BILLING).doc(id).get()).data() as BillingRecord | undefined)))).some(Boolean) ||

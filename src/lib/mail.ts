@@ -79,7 +79,7 @@ export function inviteMailer(user: string | undefined, appPassword: string | und
   };
 }
 
-/** A plain notice to the hub's own people (e.g. an Enterprise lead to the super admins). */
+/** A plain notice to the hub's own people (e.g. a Pro waitlist lead to the super admins). */
 export type NoticeMailer = (to: string[], subject: string, text: string) => Promise<void>;
 
 export function noticeMailer(user: string | undefined, appPassword: string | undefined): NoticeMailer | undefined {

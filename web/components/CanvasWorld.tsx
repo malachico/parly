@@ -537,7 +537,7 @@ export function CanvasChrome({
   /** A public workspace's shareable link (/p/w/<ws>); shown as a copy icon. */
   shareUrl?: string;
   me: { id: string; name: string; avatar?: string; kind?: string; admin?: boolean; hire?: boolean; graph?: boolean };
-  billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd?: number; used: number; billedTo?: { name: string; owner?: boolean }; blockedBy?: 'budget' | 'credits' };
+  billing?: { plan: 'free' | 'pro' | 'team'; leftUsd?: number; used: number; billedTo?: { name: string; owner?: boolean }; blockedBy?: 'budget' | 'credits' };
   workspaces: MenuWorkspace[];
   logout: () => Promise<void>;
   botAgentsCount: number;

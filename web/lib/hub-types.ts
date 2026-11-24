@@ -490,7 +490,7 @@ export type MyTools = { available: boolean; searchable?: boolean; triggers?: boo
 
 /** GET /me/billing: your plan, what it gives you and what you've used; with `paddle`, the hub takes payments. */
 export type BillingView = {
-  plan: 'free' | 'pro' | 'team' | 'enterprise';
+  plan: 'free' | 'pro' | 'team';
   /** Your own dollars; absent when a company pays (its balance is on GET /companies/:id, for its owners). */
   monthlyUsd?: number;
   extraUsd?: number;
@@ -516,7 +516,7 @@ export type BillingView = {
   /** `owner`: you own that workspace, so you set its budget. */
   billedTo?: { workspaceId: string; name: string; owner?: boolean };
   /** Your own plan when a company pays (`plan` is then the company's). */
-  ownPlan?: 'free' | 'pro' | 'team' | 'enterprise';
+  ownPlan?: 'free' | 'pro' | 'team';
   /** The company that pays for you (Team); `owner`: you own it. */
   company?: { id: string; name: string; owner?: boolean };
   /** Why work stops when `used` reaches 1: the pool's monthly budget, or credits ran out. */
@@ -619,7 +619,7 @@ export type CompanyView = { member: CompanyMemberView | null; owned: CompanyOwne
 export type CompanyOwnerView = {
   id: string;
   name: string;
-  plan: 'free' | 'pro' | 'team' | 'enterprise';
+  plan: 'free' | 'pro' | 'team';
   /** Owners and members (each once) plus pending invites, against the plan's seats (max null: unlimited). */
   seats: { used: number; max: number | null };
   managed: boolean;
@@ -632,7 +632,7 @@ export type CompanyOwnerView = {
   members: { id: string; name: string; email?: string; owner: boolean; spentUsd: number }[];
   invites: { email: string; createdAt: number }[];
 };
-export type CompanyMemberView = { id: string; name: string; plan: 'free' | 'pro' | 'team' | 'enterprise'; active: boolean; owners: string[] };
+export type CompanyMemberView = { id: string; name: string; plan: 'free' | 'pro' | 'team'; active: boolean; owners: string[] };
 
 /** GET /me/company/invites: companies that invited your verified email. */
 export type CompanyInviteView = { companyId: string; companyName: string; invitedByName: string | null; createdAt: number };

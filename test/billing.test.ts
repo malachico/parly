@@ -84,11 +84,6 @@ describe('plans', () => {
       await post({ event_id: 'evt_3', event_type: 'subscription.canceled', data: { id: 'sub_1', status: 'canceled', customer_id: 'ctm_1' } });
       expect(await hub.llm.limits(person.id)).toMatchObject({ plan: 'free', extraMicros: 5_000_000 });
 
-      // An admin's Enterprise deal: their numbers, and Paddle doesn't undo it.
-      await hub.billing.setPlan(person.id, { plan: 'enterprise', allowanceUsd: 500, maxParticipants: 50 });
-      await post({ event_id: 'evt_4', event_type: 'subscription.updated', data: { id: 'sub_1', status: 'active', customer_id: 'ctm_1', custom_data: { ownerId: person.id } } });
-      expect(await hub.llm.limits(person.id)).toMatchObject({ plan: 'enterprise', monthlyMicros: 500_000_000, maxParticipants: 50 });
-
       // Malformed JSON with a valid signature returns 400 (not 500).
       const badJson = '{not-json';
       const badRes = await fetch(url, {
@@ -533,7 +528,7 @@ describe('Team plan', () => {
   });
 });
 
-describe('Enterprise leads', () => {
+describe('Pro waitlist leads', () => {
   it('are kept for Admin and emailed to the super admins', async () => {
     const { Admin } = await import('../src/admin/admin.js');
     const db = testDb();
@@ -544,14 +539,13 @@ describe('Enterprise leads', () => {
     process.env.SUPER_ADMIN_EMAILS = 'boss@admin.test, ops@admin.test';
     try {
       const person = await testPerson(hub.registry, 'Buyer');
-      await expect(admin.addEnterpriseLead(person, {})).rejects.toThrow(/company or what you need/);
-      await admin.addEnterpriseLead(person, { company: 'Acme', size: '40 people', message: 'Agents for support' });
-      expect((await admin.enterpriseLeads()).map((l) => [l.company, l.size, l.email])).toEqual([['Acme', '40 people', person.email]]);
-      expect(sent).toEqual([{ to: ['boss@admin.test', 'ops@admin.test'], subject: 'Parly Enterprise: Acme', text: expect.stringContaining('Agents for support') }]);
-      // While checkout is closed, wanting Pro is a lead too: who, and which plan, with nothing else to fill in.
-      await admin.addEnterpriseLead(person, { plan: 'pro-yearly' });
-      expect((await admin.enterpriseLeads())[0]).toMatchObject({ plan: 'pro-yearly', email: person.email });
-      expect(sent[1]).toMatchObject({ subject: `Parly Pro yearly ($200/year) request: ${person.name}`, text: expect.stringContaining(person.email!) });
+      await expect(admin.addLead(person, {})).rejects.toThrow(/pro-monthly or pro-yearly/);
+      await expect(admin.addLead(person, { plan: 'enterprise' })).rejects.toThrow(/pro-monthly or pro-yearly/);
+      await admin.addLead(person, { plan: 'pro-yearly' });
+      expect((await admin.leads())[0]).toMatchObject({ plan: 'pro-yearly', email: person.email });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({ to: ['boss@admin.test', 'ops@admin.test'] });
+      expect(sent[0]).toMatchObject({ subject: `Parly Pro yearly ($200/year) request: ${person.name}`, text: expect.stringContaining(person.email!) });
     } finally {
       process.env.SUPER_ADMIN_EMAILS = before;
     }

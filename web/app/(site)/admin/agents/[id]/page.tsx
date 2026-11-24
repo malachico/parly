@@ -83,7 +83,6 @@ export default async function AdminAgentPage({ params, searchParams }: Props) {
                   <option value="free">Free</option>
                   <option value="pro">Pro</option>
                   <option value="team">Team</option>
-                  <option value="enterprise">Enterprise</option>
                 </select>
                 <div className="grid grid-cols-2 gap-2">
                   <input name="allowanceUsd" type="number" min="0" step="1" defaultValue={a.billing.allowanceUsd} placeholder="$ / month" aria-label="Own monthly allowance in dollars" className="input" />

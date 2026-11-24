@@ -32,16 +32,16 @@ export interface ClientRequest {
 /** Longest client request, in characters. */
 const CLIENT_REQUEST_MAX = 500;
 
-/** `enterpriseLeads/{id}`: someone who asked about Enterprise, from Account → Billing. */
-export interface EnterpriseLead {
+/** `enterpriseLeads/{id}` (old collection name): someone who joined the Pro waitlist from Account → Billing while checkout is closed. */
+export interface PlanLead {
   id: string;
   agentId: string;
   name: string;
   email: string;
-  company: string;
-  size: string;
-  message: string;
-  /** The plan they asked for: `enterprise` (the default), or `pro-monthly` / `pro-yearly` while checkout is closed. */
+  /** Only on old leads. */
+  company?: string;
+  message?: string;
+  /** `pro-monthly` or `pro-yearly`; unset on old leads. */
   plan?: string;
   at: string;
 }
@@ -86,7 +86,7 @@ export class Admin {
   constructor(
     db: Database,
     private readonly hub: HubService,
-    /** Emails the super admins (Enterprise leads); unset, nothing is emailed. */
+    /** Emails the super admins (plan leads); unset, nothing is emailed. */
     private readonly notify?: NoticeMailer,
   ) {
     this.store = new AdminStore(db);
@@ -132,8 +132,8 @@ export class Admin {
     };
   }
 
-  /** Sets a person's plan (and any Enterprise overrides), logged like every admin action. */
-  async setPlan(actor: AgentRecord, id: string, change: { plan: 'free' | 'pro' | 'team' | 'enterprise'; allowanceUsd?: number | null; maxWorkspaces?: number | null; maxParticipants?: number | null }) {
+  /** Sets a person's plan (and any limit overrides), logged like every admin action. */
+  async setPlan(actor: AgentRecord, id: string, change: { plan: 'free' | 'pro' | 'team'; allowanceUsd?: number | null; maxWorkspaces?: number | null; maxParticipants?: number | null }) {
     const person = await this.hub.registry.get(id);
     if (!person || person.kind !== 'human') throw new HubError('not_found', `No person ${id}`);
     for (const v of [change.allowanceUsd, change.maxWorkspaces, change.maxParticipants]) if (v != null && !(Number.isFinite(v) && v >= 0)) throw new HubError('invalid', 'Amounts must be zero or more');
@@ -258,37 +258,24 @@ export class Admin {
     return { id: request.id, at: request.at };
   }
 
-  /** Someone asks about Enterprise (Account → Billing): kept for /admin/leads and emailed (ENTERPRISE_LEADS_EMAIL, else the super admins). */
-  async addEnterpriseLead(person: AgentRecord, input: { company?: string; size?: string; message?: string; plan?: string }): Promise<{ id: string }> {
-    if (person.kind !== 'human' || !person.email) throw new HubError('forbidden', 'Sign in with Google to ask about Enterprise');
-    const clip = (s: string | undefined, n: number) => (s ?? '').trim().slice(0, n);
-    const fields: Omit<EnterpriseLead, 'id'> = {
-      agentId: person.id,
-      name: person.name,
-      email: person.email,
-      company: clip(input.company, 200),
-      size: clip(input.size, 100),
-      message: clip(input.message, 2000),
-      plan: ['pro-monthly', 'pro-yearly'].includes(input.plan ?? '') ? input.plan : 'enterprise',
-      at: new Date().toISOString(),
-    };
-    if (fields.plan === 'enterprise' && !fields.company && !fields.message) throw new HubError('invalid', 'Tell us your company or what you need');
-    const lead = await this.store.addEnterpriseLead(fields);
-    // ENTERPRISE_LEADS_EMAIL, else every super admin.
-    const admins = (process.env.ENTERPRISE_LEADS_EMAIL || process.env.SUPER_ADMIN_EMAILS || '').split(/[\s,]+/).filter(Boolean);
+  /** Someone joins the Pro waitlist (Account → Billing): kept for /admin/leads and emailed (LEADS_EMAIL, else the super admins). */
+  async addLead(person: AgentRecord, input: { plan?: string }): Promise<{ id: string }> {
+    if (person.kind !== 'human' || !person.email) throw new HubError('forbidden', 'Sign in with Google to join the waitlist');
+    const plan = input.plan ?? '';
+    if (!Object.hasOwn(PLAN_LABEL, plan)) throw new HubError('invalid', 'plan must be pro-monthly or pro-yearly');
+    const lead = await this.store.addLead({ agentId: person.id, name: person.name, email: person.email, plan, at: new Date().toISOString() });
+    const admins = (process.env.LEADS_EMAIL || process.env.SUPER_ADMIN_EMAILS || '').split(/[\s,]+/).filter(Boolean);
     await this.notify?.(
       admins,
-      lead.plan === 'enterprise' ? `Parly Enterprise: ${lead.company || lead.name}` : `Parly ${PLAN_LABEL[lead.plan!]} request: ${lead.name}`,
-      lead.plan === 'enterprise'
-        ? `${lead.name} <${lead.email}> asked about Enterprise.\n\nCompany: ${lead.company || '-'}\nTeam size: ${lead.size || '-'}\n\n${lead.message || ''}\n\nAll leads: /admin/leads`
-        : `${lead.name} <${lead.email}> wants ${PLAN_LABEL[lead.plan!]} (checkout isn't open yet). Email them when it is.\n\nAll leads: /admin/leads`,
-    ).catch((err) => console.error('enterprise lead not emailed', err));
+      `Parly ${PLAN_LABEL[plan]} request: ${lead.name}`,
+      `${lead.name} <${lead.email}> wants ${PLAN_LABEL[plan]} (checkout isn't open yet). Email them when it is.\n\nAll leads: /admin/leads`,
+    ).catch((err) => console.error('plan lead not emailed', err));
     return { id: lead.id };
   }
 
-  /** Enterprise leads, newest first. */
-  async enterpriseLeads(limit = 200): Promise<EnterpriseLead[]> {
-    return this.store.listEnterpriseLeads(Math.min(Math.max(1, limit), 500));
+  /** Plan leads, newest first. */
+  async leads(limit = 200): Promise<PlanLead[]> {
+    return this.store.listLeads(Math.min(Math.max(1, limit), 500));
   }
 
   /** Client requests, newest first. */

@@ -134,7 +134,7 @@ export class Billing {
     }
   }
 
-  /** An admin sets someone's plan, and optionally their own allowance and workspace/participant limits (Enterprise deals). */
+  /** An admin sets someone's plan, and optionally their own allowance and workspace/participant limits (one-off deals). */
   async setPlan(ownerId: string, change: { plan: Plan; allowanceUsd?: number | null; maxWorkspaces?: number | null; maxParticipants?: number | null }): Promise<BillingRecord> {
     return this.store.setPlan(ownerId, change);
   }

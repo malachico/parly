@@ -40,12 +40,12 @@ export class BillingStore {
   }
 
   /**
-   * The company (a workspace-keyed pool) this person's usage bills, only while its plan is Team or Enterprise: their
+   * The company (a workspace-keyed pool) this person's usage bills, only while its plan is Team: their
    * `billingAccountId` if set (it wins, even when that company is inactive), else the oldest active company they own.
    * ponytail: one indexed `owners` query per call for unlinked people on the model-call path; cache per person if it shows in latency.
    */
   async billingAccountOf(personId: string): Promise<string | undefined> {
-    const active = (rec: BillingRecord | undefined) => ['team', 'enterprise'].includes(limitsOf(rec, 0).plan);
+    const active = (rec: BillingRecord | undefined) => limitsOf(rec, 0).plan === 'team';
     const id = ((await this.db.collection('agents').doc(personId).get()).data() as { billingAccountId?: string } | undefined)?.billingAccountId;
     if (id) return active(await this.getBilling(id)) ? id : undefined;
     const owned = (await this.col().where('owners', 'array-contains', personId).get()).docs.filter((d) => active(d.data() as BillingRecord)).map((d) => d.id);
@@ -185,7 +185,6 @@ export class BillingStore {
       if (!ownerId) return done('ignored');
       const ref = this.col().doc(ownerId);
       const current = (await tx.get(ref)).data() as BillingRecord | undefined;
-      if (current?.plan === 'enterprise') return done('ignored');
       const paying = ['active', 'trialing', 'past_due'].includes(data.status ?? '');
       if (!paying && current?.paddleSubscriptionId && current.paddleSubscriptionId !== data.id) return done('ignored');
       // ponytail: first Team subscription wins a pool; another one (e.g. a $75 checkout by someone who knows the owner's id) is ignored until the first ends or lapses. A legit replacement needs the first cancelled.

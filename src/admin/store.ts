@@ -1,9 +1,10 @@
 import { COLLECTIONS, Timestamp, type Database } from '../db/types.js';
-import type { AdminLogEntry, ClientRequest, EnterpriseLead } from './admin.js';
+import type { AdminLogEntry, ClientRequest, PlanLead } from './admin.js';
 
+// ponytail: old collection name kept so existing leads stay listed; rename with a data migration if it matters.
 const LEADS = 'enterpriseLeads';
 
-/** Persistence for the admin pages: `admin_log`, message times, client requests, Enterprise leads, and `settings/connect`. */
+/** Persistence for the admin pages: `admin_log`, message times, client requests, plan leads, and `settings/connect`. */
 export class AdminStore {
   constructor(private readonly db: Database) {}
 
@@ -26,7 +27,7 @@ export class AdminStore {
     return snap.docs.map((d) => (d.get('createdAt') as Timestamp).toMillis());
   }
 
-  // ---- client requests & Enterprise leads -------------------------------------------------------
+  // ---- client requests & plan leads -------------------------------------------------------
 
   async addClientRequest(request: Omit<ClientRequest, 'id'>): Promise<ClientRequest> {
     const ref = this.db.collection(COLLECTIONS.clientRequests).doc();
@@ -40,16 +41,16 @@ export class AdminStore {
     return snap.docs.map((d) => d.data() as ClientRequest);
   }
 
-  async addEnterpriseLead(lead: Omit<EnterpriseLead, 'id'>): Promise<EnterpriseLead> {
+  async addLead(lead: Omit<PlanLead, 'id'>): Promise<PlanLead> {
     const ref = this.db.collection(LEADS).doc();
-    const saved: EnterpriseLead = { id: ref.id, ...lead };
+    const saved: PlanLead = { id: ref.id, ...lead };
     await ref.set(saved);
     return saved;
   }
 
-  async listEnterpriseLeads(limit: number): Promise<EnterpriseLead[]> {
+  async listLeads(limit: number): Promise<PlanLead[]> {
     const snap = await this.db.collection(LEADS).orderBy('at', 'desc').limit(limit).get();
-    return snap.docs.map((d) => d.data() as EnterpriseLead);
+    return snap.docs.map((d) => d.data() as PlanLead);
   }
 
   // ---- connect settings (`settings/connect`) ----------------------------------------------------

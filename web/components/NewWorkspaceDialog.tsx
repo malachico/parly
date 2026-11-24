@@ -41,7 +41,7 @@ export function NewWorkspaceDialog() {
         <div role="status" className="flex flex-col gap-3">
           <p className="font-semibold">{planCapMessage('workspaces', { count: usage.count, max: usage.max })}, upgrade to add more</p>
           <p className="text-sm text-[var(--muted)]">
-            Your {billing!.plan === 'free' ? 'Free' : billing!.plan === 'pro' ? 'Pro' : 'Enterprise'} plan includes {usage.max} workspace
+            Your {billing!.plan === 'free' ? 'Free' : billing!.plan === 'pro' ? 'Pro' : 'Team'} plan includes {usage.max} workspace
             {usage.max === 1 ? '' : 's'} you can own. Archive one you don&apos;t use, or upgrade.
           </p>
           <Link href="/billing" className="btn-primary self-end">

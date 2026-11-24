@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { credits, meterColor } from '@/lib/labels';
 import { useEffect, useState } from 'react';
-import { askEnterprise, createCompany, openBillingPortal, openPoolPortal, setPoolBudget } from '@/lib/actions';
+import { createCompany, openBillingPortal, joinProWaitlist, openPoolPortal, setPoolBudget } from '@/lib/actions';
 import type { BillingView, CompanyOwnerView } from '@/lib/hub';
 import { PendingButton } from '@/components/PendingButton';
 
@@ -19,7 +19,7 @@ declare global {
   }
 }
 
-const PLAN_NAMES = { free: 'Free', pro: 'Pro', team: 'Team', enterprise: 'Enterprise' } as const;
+const PLAN_NAMES = { free: 'Free', pro: 'Pro', team: 'Team' } as const;
 
 /** Paddle.js, once per page, set up for this hub's environment. */
 function usePaddle(paddle: BillingView['paddle']): PaddleJs | undefined {
@@ -75,7 +75,7 @@ export function BillingCard({
       settings: { successUrl: `${window.location.origin}/billing?paid=${kind}&had=${billing.extraUsd}` },
     });
   const pct = Math.min(100, Math.round(billing.used * 100));
-  // On Team (or Enterprise) the company pool pays: your own credits don't matter, so the pool card shows the balance.
+  // On Team the company pool pays: your own credits don't matter, so the pool card shows the balance.
   const pooled = Boolean(billing.company);
   const ends = billing.periodEnd ? new Date(billing.periodEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : undefined;
 
@@ -152,11 +152,11 @@ export function BillingCard({
             <>
               <p className="mt-2 text-[13px]">Pro checkout opens very soon. Join the waitlist and we&apos;ll email you{me.email ? ` at ${me.email}` : ''} the moment it&apos;s ready.</p>
               <div className="mt-2.5 flex flex-wrap gap-2">
-                <form action={askEnterprise}>
+                <form action={joinProWaitlist}>
                   <input type="hidden" name="plan" value="pro-monthly" />
                   <PendingButton className="btn-primary">Join Pro waitlist · $20/mo</PendingButton>
                 </form>
-                <form action={askEnterprise}>
+                <form action={joinProWaitlist}>
                   <input type="hidden" name="plan" value="pro-yearly" />
                   <PendingButton className="btn">Join yearly waitlist · $200/yr</PendingButton>
                 </form>
@@ -254,7 +254,7 @@ export function StartTeam({ billing, me }: { billing: BillingView; me: { id: str
 }
 
 /**
- * A company you own: its credit pool, budget, Team subscription and top-ups. Its people spend the pool while it is on Team or Enterprise; members and invites are on CompanyCard.
+ * A company you own: its credit pool, budget, Team subscription and top-ups. Its people spend the pool while it is on Team; members and invites are on CompanyCard.
  */
 export function CompanyPool({
   company,
@@ -297,8 +297,7 @@ export function CompanyPool({
               <PendingButton className="btn">Manage Team</PendingButton>
             </form>
           )
-        : company.plan !== 'enterprise' &&
-          teamPrice && (
+        : teamPrice && (
             <div className="flex flex-wrap items-center gap-2">
               {seatsField}
               <button type="button" disabled={!paddle} onClick={() => buy(company.id, teamPrice, seats, 'team')} className="btn-primary">

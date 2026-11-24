@@ -593,7 +593,7 @@ export class HubService {
     if (workspaceId && isShowcaseGuest(await this.registry.workspaceById(workspaceId), person)) {
       throw new HubError('forbidden', 'Only a workspace owner can add bots to a public showcase workspace');
     }
-    // An agent with its own computer is part of Pro (and Enterprise).
+    // An agent with its own computer is part of Pro.
     if (!isSuperAdmin(person) && (await this.llm.limits(person.id)).plan === 'free')
       throw new HubError('forbidden', 'Agents with their own computer are part of Pro. Upgrade in Account → Billing.');
 

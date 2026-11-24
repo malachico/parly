@@ -61,6 +61,14 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - loads every agent like Registry.search; page the query once there are tens of thousands
 - no rate limit beyond sign-in; one per person per minute if it gets spammed.
 
+## `src/admin/routes.ts`
+
+- the old path stays until a web deploy that calls /leads is live; drop it after.
+
+## `src/admin/store.ts`
+
+- old collection name kept so existing leads stay listed; rename with a data migration if it matters.
+
 ## `src/apps/appAgents.ts`
 
 - newest SEARCH_POOL ranked by the model; embeddings + a vector index once an app has thousands.
@@ -432,4 +440,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**153 markers, 33 with no trigger.**
+**155 markers, 33 with no trigger.**

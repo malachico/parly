@@ -27,7 +27,7 @@ or obsolete variable names whenever hub source changes.
 | `GOOGLE_AUTH_DEV` | off | `1` accepts `dev:<email>` tokens; requires a localhost MONGODB_URI and refuses Cloud Run. |
 | `GOOGLE_AUTH_LIMIT_PER_HOUR` | `60` | Google sign-in attempts per IP per hour. |
 | `SUPER_ADMIN_EMAILS` | empty | Space/comma-separated Google emails with super-admin rights. |
-| `ENTERPRISE_LEADS_EMAIL` | SUPER_ADMIN_EMAILS | Space/comma-separated recipients of enterprise lead emails. |
+| `LEADS_EMAIL` | SUPER_ADMIN_EMAILS | Space/comma-separated recipients of Pro waitlist emails. |
 | `PASSWORD_LOGIN` | off | `1` enables self-hosted email/password login. Sign-up is open to anyone who can reach the hub. |
 | `SETUP_SECRET` | unset | First-owner setup secret; PASSWORD_LOGIN requires at least 24 characters. |
 | `CREDENTIALS_KEY` | unset | Base64 32-byte AES sealing key; keep its pinned secret version and a backup. Losing/changing it prevents opening existing sealed credentials. |

@@ -105,7 +105,7 @@ export function CrewCanvas({
   shareUrl?: string;
   me: { id: string; name: string; avatar?: string; kind?: string; admin?: boolean; hire?: boolean; graph?: boolean };
   /** Your plan and credits left, always in sight: Free shows Upgrade. */
-  billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd?: number; used: number; billedTo?: { name: string; owner?: boolean }; blockedBy?: 'budget' | 'credits' };
+  billing?: { plan: 'free' | 'pro' | 'team'; leftUsd?: number; used: number; billedTo?: { name: string; owner?: boolean }; blockedBy?: 'budget' | 'credits' };
   workspaces: MenuWorkspace[];
   conversations: CanvasConversation[];
   logout: () => Promise<void>;

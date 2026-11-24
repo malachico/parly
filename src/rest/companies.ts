@@ -26,11 +26,10 @@ interface CompanyInvite {
 const REMOVAL_CLAIM_MS = 60_000;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Seats a company may fill (owners, members and pending invites): Team's paid seats, Enterprise's (unlimited unless set), else none. */
+/** Seats a company may fill (owners, members and pending invites): Team's paid seats, else none. */
 function seatLimit(rec: BillingRecord | undefined): number {
   const plan = limitsOf(rec, 0).plan;
   if (plan === 'team') return Math.max(TEAM_MIN_SEATS, rec?.seats ?? 0);
-  if (plan === 'enterprise') return rec?.seats ?? Infinity;
   return 0;
 }
 
@@ -83,11 +82,11 @@ async function recountOf(hub: HubService, id: string) {
   }
 }
 
-/** Whether a Team or Enterprise pays for this person now. */
+/** Whether a Team pays for this person now. */
 async function coveredOf(hub: HubService, personId: string) {
   const db = hub.registry.db;
   const payer = ((await db.collection('agents').doc(personId).get()).data() as AgentRecord | undefined)?.billingAccountId;
-  return !!payer && ['team', 'enterprise'].includes(limitsOf((await db.collection(BILLING).doc(payer).get()).data() as BillingRecord | undefined, 0).plan);
+  return !!payer && limitsOf((await db.collection(BILLING).doc(payer).get()).data() as BillingRecord | undefined, 0).plan === 'team';
 }
 
 /** Whether this person holds a live accept claim on some invite. */
@@ -97,7 +96,7 @@ async function acceptingOf(hub: HubService, personId: string) {
   return claims.some((i) => now - ((i.data() as CompanyInvite).acceptingAt ?? 0) < REMOVAL_CLAIM_MS);
 }
 
-/** Whether Pro should be cancelled now: a Team or Enterprise covers the person, or they are mid-accept. */
+/** Whether Pro should be cancelled now: a Team covers the person, or they are mid-accept. */
 async function heldOf(hub: HubService, personId: string) {
   return (await coveredOf(hub, personId)) || (await acceptingOf(hub, personId));
 }
@@ -137,7 +136,7 @@ async function recancelPro(hub: HubService, personId: string) {
 
 /**
  * The /tick and per-instance sweep: recounts companies whose seats didn't converge, and undoes Pro cancels still owed
- * (dropped instead once a Team or Enterprise covers the person), and re-makes Pro cancels an undo raced (dropped once
+ * (dropped instead once a Team covers the person), and re-makes Pro cancels an undo raced (dropped once
  * nothing covers the person). Never throws; returns how many it looked at.
  */
 export async function retryBilling(hub: HubService): Promise<number> {
@@ -183,7 +182,7 @@ export function companiesRoutes(router: Router, hub: HubService): void {
   const agents = db.collection('agents');
   const invites = db.collection(COMPANY_INVITES);
 
-  const active = (rec: BillingRecord | undefined) => ['team', 'enterprise'].includes(limitsOf(rec, 0).plan);
+  const active = (rec: BillingRecord | undefined) => limitsOf(rec, 0).plan === 'team';
   /** The company I own (one per owner), if any. */
   const ownedBy = async (personId: string) => (await billing.where('owners', 'array-contains', personId).limit(1).get()).docs[0]?.id;
   /** An unpaid draft (an abandoned Team checkout): never subscribed, no balance, `me` its only owner and nobody else linked. */
@@ -271,7 +270,7 @@ export function companiesRoutes(router: Router, hub: HubService): void {
         const rec = (await billing.doc(id).get()).data() as BillingRecord | undefined;
         const owners = await hub.registry.workspaceStore.getAgentsByIds(rec?.owners ?? []);
         const plan = limitsOf(rec, 0).plan;
-        member = { id, name: await companyName(id, rec), plan, active: plan === 'team' || plan === 'enterprise', owners: owners.map((a) => a.name) };
+        member = { id, name: await companyName(id, rec), plan, active: plan === 'team', owners: owners.map((a) => a.name) };
       }
       return { member, owned: await Promise.all(ownedSnap.docs.map((d) => ownerView(d.id, d.data() as BillingRecord))) };
     }),
@@ -360,7 +359,7 @@ export function companiesRoutes(router: Router, hub: HubService): void {
         const old = (await tx.get(invites.doc(`${id}:${email}`))).data() as CompanyInvite | undefined;
         if (old?.acceptingAt && Date.now() - old.acceptingAt < REMOVAL_CLAIM_MS) throw new HubError('conflict', 'This invite is being accepted right now');
         const max = seatLimit(fresh);
-        if (!max) throw new HubError('invalid', 'Inviting people needs an active Team or Enterprise plan');
+        if (!max) throw new HubError('invalid', 'Inviting people needs an active Team plan');
         const memberDocs = (await tx.get(agents.where('billingAccountId', '==', id))).docs;
         if (memberDocs.some((d) => (d.data() as AgentRecord).email === email)) throw new HubError('conflict', `${email} is already a member`);
         const pending = (await tx.get(invites.where('companyId', '==', id))).docs.filter((d) => d.id !== `${id}:${email}`).length;

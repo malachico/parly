@@ -75,7 +75,7 @@ workspaces and rooms play no part in it. A company is a billing record with `kin
 `name` and `owners` (`src/billing/company.ts`). `POST /companies` makes one with a random id (one
 per owner, and not while you belong to an active company); older companies are keyed by a workspace
 id, and the hub stamps `kind` on those at startup (`backfillCompanyKind` in `src/db/mongo.ts`). A person (and their agents, including a room agent's opener) bills the
-company only when they are linked to it (`billingAccountId`) and its plan is Team or Enterprise;
+company only when they are linked to it (`billingAccountId`) and its plan is Team;
 otherwise they pay personally. An empty or over-budget company pool pauses its members, with no
 personal fallback. Signing in by domain auto-joins the workspace but never links billing, and
 leaving or editing domains never unlinks it. Budget, portal and Team-webhook rights belong to

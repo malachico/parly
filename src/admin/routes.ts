@@ -29,14 +29,15 @@ export function adminRouter(admin: Admin, billing: Billing): Router {
     return { ok: true };
   }));
 
-  /** Anyone signed in with Google: `{company, size, message}`, asking about Enterprise. Emailed to super admins; listed at /admin/enterprise-leads. */
+  /** Anyone signed in with Google: `{plan}` (pro-monthly or pro-yearly), joining the Pro waitlist. Emailed to super admins; listed at /admin/leads.
+   * ponytail: the old path stays until a web deploy that calls /leads is live; drop it after. */
   router.post(
-    '/enterprise-leads',
+    ['/leads', '/enterprise-leads'],
     json(async (req) => {
       const me = agentOf(req);
       if (!me) throw new HubError('unauthorized', 'Sign in first');
       const body = (req.body ?? {}) as Record<string, unknown>;
-      return admin.addEnterpriseLead(me, { company: str(body.company), size: str(body.size), message: str(body.message), plan: str(body.plan) });
+      return admin.addLead(me, { plan: str(body.plan) });
     }),
   );
 
@@ -90,20 +91,20 @@ export function adminRouter(admin: Admin, billing: Billing): Router {
     }),
   );
 
-  /** `{plan, allowanceUsd?, maxWorkspaces?, maxParticipants?}`: a person's plan, e.g. an Enterprise deal (null clears an override).
+  /** `{plan, allowanceUsd?, maxWorkspaces?, maxParticipants?}`: a person's plan and any limit overrides (null clears one).
    * The old `maxHired`/`maxConnected` keys still work, as maxWorkspaces/maxParticipants, until the admin page sends the new ones. */
   router.post(
     '/admin/agents/:id/billing',
     json(async (req) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const plan = String(body.plan ?? '');
-      if (!['free', 'pro', 'team', 'enterprise'].includes(plan)) throw new HubError('invalid', 'plan must be free, pro, team or enterprise');
+      if (!['free', 'pro', 'team'].includes(plan)) throw new HubError('invalid', 'plan must be free, pro or team');
       const amount = (v: unknown) => (v === null || v === '' ? null : v === undefined ? undefined : Number(v));
-      return admin.setPlan(agentOf(req)!, String(req.params.id), { plan: plan as 'free' | 'pro' | 'team' | 'enterprise', allowanceUsd: amount(body.allowanceUsd), maxWorkspaces: amount('maxWorkspaces' in body ? body.maxWorkspaces : body.maxHired), maxParticipants: amount('maxParticipants' in body ? body.maxParticipants : body.maxConnected) });
+      return admin.setPlan(agentOf(req)!, String(req.params.id), { plan: plan as 'free' | 'pro' | 'team', allowanceUsd: amount(body.allowanceUsd), maxWorkspaces: amount('maxWorkspaces' in body ? body.maxWorkspaces : body.maxHired), maxParticipants: amount('maxParticipants' in body ? body.maxParticipants : body.maxConnected) });
     }),
   );
 
-  router.get('/admin/enterprise-leads', json(async (req) => admin.enterpriseLeads(num(req.query.limit))));
+  router.get(['/admin/leads', '/admin/enterprise-leads'], json(async (req) => admin.leads(num(req.query.limit))));
 
   router.get('/admin/client-requests', json(async (req) => admin.clientRequests(num(req.query.limit))));
 

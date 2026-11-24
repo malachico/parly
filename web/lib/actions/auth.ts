@@ -178,12 +178,11 @@ export async function createCompany(name: string): Promise<{ id: string } | { er
   }
 }
 
-/** Asks about Enterprise or joins the Pro waitlist from Plan & billing: the Parly team gets an email, and it's listed in Admin → Leads. */
-export async function askEnterprise(form: FormData) {
+/** Joins the Pro waitlist from Plan & billing: the Parly team gets an email, and it's listed in Admin → Pro waitlist. */
+export async function joinProWaitlist(form: FormData) {
   const plan = field(form, 'plan');
-  await attempt('/billing', () =>
-    hub('/enterprise-leads', { method: 'POST', body: { company: field(form, 'company'), size: field(form, 'size'), message: field(form, 'message'), plan } }),
-  );
-  redirect(`/billing?asked=${encodeURIComponent(plan || 'enterprise')}`);
+  // Old path on purpose: the web can deploy before the hub, which only gains /leads in this release. Rename later.
+  await attempt('/billing', () => hub('/enterprise-leads', { method: 'POST', body: { plan } }));
+  redirect(`/billing?asked=${encodeURIComponent(plan)}`);
 }
 

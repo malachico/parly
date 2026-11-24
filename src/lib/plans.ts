@@ -1,4 +1,4 @@
-export type Plan = 'free' | 'pro' | 'team' | 'enterprise';
+export type Plan = 'free' | 'pro' | 'team';
 
 /** `billing/{ownerId}`: a person's plan, their Paddle ids, and their top-up balance. */
 export interface BillingRecord {
@@ -11,7 +11,7 @@ export interface BillingRecord {
   cancelAtPeriodEnd?: boolean;
   /** Top-ups not spent yet, in millionths of a dollar: spent only once the month's allowance is. */
   extraMicros?: number;
-  /** Set by an admin (Enterprise, or a one-off): overrides the plan's allowance and workspace/participant limits. */
+  /** Set by an admin (a one-off deal): overrides the plan's allowance and workspace/participant limits. */
   allowanceUsd?: number;
   maxWorkspaces?: number;
   maxParticipants?: number;
@@ -54,7 +54,6 @@ const PLAN_LIMITS: Record<Plan, { allowanceUsd?: number; maxWorkspaces: number; 
   free: { maxWorkspaces: 2, maxParticipants: 8 },
   pro: { allowanceUsd: 30, maxWorkspaces: 10, maxParticipants: 50 },
   team: { maxWorkspaces: 10, maxParticipants: 50 },
-  enterprise: { allowanceUsd: 100, maxWorkspaces: 100, maxParticipants: 500 },
 };
 
 /** Team: $25/seat/month buys 1,500 credits ($15) per seat into the company pool; at least 3 seats. */

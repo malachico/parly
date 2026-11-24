@@ -63,7 +63,7 @@ export interface AdminAgent extends AdminRow {
   };
 }
 
-type Plan = 'free' | 'pro' | 'team' | 'enterprise';
+type Plan = 'free' | 'pro' | 'team';
 
 export interface AdminLogEntry {
   at: string;
@@ -96,16 +96,13 @@ export async function adminGet<T>(path: string, next: string): Promise<T> {
   }
 }
 
-/** Someone who asked about Enterprise (GET /admin/enterprise-leads). */
-export interface EnterpriseLead {
+/** Someone on the Pro waitlist (GET /admin/leads). */
+export interface PlanLead {
   id: string;
   agentId: string;
   name: string;
   email: string;
-  company: string;
-  size: string;
-  message: string;
-  /** `enterprise`, or `pro-monthly` / `pro-yearly` while checkout is closed. */
+  /** `pro-monthly` or `pro-yearly`; old leads may have none. */
   plan?: string;
   at: string;
 }

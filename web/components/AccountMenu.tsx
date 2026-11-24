@@ -82,7 +82,7 @@ export function WorkspaceMenu({ ws, workspaceName, workspaces }: { ws: string; w
 }
 
 /** Personal settings, billing and sign out. */
-export function AccountMenu({ me, logout, tour = true, billing }: { me: { id: string; name: string; avatar?: string; admin?: boolean }; logout: () => Promise<void>; tour?: boolean; billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd?: number; billedTo?: { name: string } } }) {
+export function AccountMenu({ me, logout, tour = true, billing }: { me: { id: string; name: string; avatar?: string; admin?: boolean }; logout: () => Promise<void>; tour?: boolean; billing?: { plan: 'free' | 'pro' | 'team'; leftUsd?: number; billedTo?: { name: string } } }) {
   const plan = billing && `${billing.plan[0].toUpperCase()}${billing.plan.slice(1)}`;
   // A company pays: its balance isn't mine to show.
   const left = billing && (billing.leftUsd === undefined ? `covered by ${billing.billedTo?.name ?? 'your company'}` : `${credits(billing.leftUsd)} credits`);
