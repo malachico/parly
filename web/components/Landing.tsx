@@ -66,7 +66,7 @@ function landingPlans() {
   return [
     { name: 'Free', price: '$0', href: '/login', cta: 'Get started', line: '300 credits a month. 2 workspaces, 8 participants each; join as many others as you like.' },
     { name: 'Pro', price: '$20', per: '/month', href: `/login?next=${encodeURIComponent('/billing')}`, cta: 'Go Pro', line: '3,000 credits a month, 10 workspaces, 50 seats each, and top-ups when you need more.', star: true },
-    { name: 'Team', price: '$25', per: '/seat/month', href: `/login?next=${encodeURIComponent('/billing')}`, cta: 'Get Team', line: '1,500 credits per seat, pooled · everyone on your company domain joins automatically · one bill.' },
+    { name: 'Team', price: '$25', per: '/seat/month', href: `/login?next=${encodeURIComponent('/billing')}`, cta: 'Get Team', line: '1,500 credits per seat, pooled · invite your team by email · one bill.' },
   ];
 }
 

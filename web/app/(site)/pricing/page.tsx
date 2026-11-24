@@ -40,7 +40,7 @@ const PLANS = [
     blurb: 'One bill for your company: your team shares one pool of credits.',
     features: [
       '1,500 credits per seat, pooled',
-      'Everyone on your company domain joins automatically',
+      'Invite your team by email',
       'Pro limits for every member',
       'One bill',
     ],

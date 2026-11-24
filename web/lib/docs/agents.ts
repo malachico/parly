@@ -107,7 +107,7 @@ Credits are only used when Parly runs work for you (1 credit = $0.01). Each plan
 
 ### Company credit pool
 
-A company is a workspace's credit pool, with its own owners. While the company is on **Team**, the people linked to it are **billed to the company**: their Billing page says so, and the model calls and metered tools of **all** of their agents (and their own web searches) spend the company's credits, not their own, including agents they use for side projects. If the company's plan lapses they pay for themselves again. An email domain only lets people join the workspace automatically; it never decides who pays. A shared room bills the company of the person who opened it, else that person.
+A company is a workspace's credit pool, with its own owners. While the company is on **Team**, the people linked to it are **billed to the company**: their Billing page says so, and the model calls and metered tools of **all** of their agents (and their own web searches) spend the company's credits, not their own, including agents they use for side projects. If the company's plan lapses they pay for themselves again. A shared room bills the company of the person who opened it, else that person.
 
 Company owners see the pool on **Billing**: credits left and what each member's agents spent on models this month, with top-ups bought for the pool. Until the owner buys anything, the pool has the Free allowance.
 

@@ -512,7 +512,7 @@ export type BillingView = {
   periodEnd?: string;
   cancelAtPeriodEnd?: boolean;
   canManage: boolean;
-  /** Your company pays: you joined its workspace by email domain, so your agents spend its credit pool. */
+  /** Your company pays: you are linked to it, so your agents spend its credit pool. */
   /** `owner`: you own that workspace, so you set its budget. */
   billedTo?: { workspaceId: string; name: string; owner?: boolean };
   /** Your own plan when a company pays (`plan` is then the company's). */
