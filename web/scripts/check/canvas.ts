@@ -92,7 +92,7 @@ assert.doesNotMatch(readFileSync(path.resolve(import.meta.dirname, '../../compon
 const navSpaces = [{ id: 'ws1', name: 'Workspace one' }, { id: 'ws2', name: 'Workspace two' }, { id: 'room', name: 'Shared room', room: { others: ['Partner'], needsSetup: true } }];
 const workspaceMenuHtml = renderToStaticMarkup(createElement(WorkspaceMenu, { ws: 'ws1', workspaceName: 'Workspace one', workspaces: navSpaces }));
 assert.match(workspaceMenuHtml, /aria-label="Workspace: Workspace one"/);
-for (const url of ['/w/ws2', '/rooms/new', '/w/ws1?panel=workspace']) assert.ok(workspaceMenuHtml.includes(`href="${url}"`), url);
+for (const url of ['/w/ws2', '/w/ws1?panel=workspace']) assert.ok(workspaceMenuHtml.includes(`href="${url}"`), url);
 assert.doesNotMatch(workspaceMenuHtml, /href="\/(account|billing)"|Connected apps|Skills &amp; processes|Triggers/);
 
 // An app's rooms: one row per app (to its rooms in Developers), never one row each, and never "Set up your side".
@@ -168,8 +168,13 @@ assert.match(navHtml, /Triggers/);
 
 const canvasMenuHtml = navHtml.slice(navHtml.indexOf('aria-label="Canvas actions"')).split('</details>')[0]!;
 for (const label of ['Connected apps', 'Skills &amp; processes', 'Triggers', 'New team / channel']) assert.ok(canvasMenuHtml.includes(label), label);
-// Add an agent is a visible top-bar action, not hidden in the overflow menu.
+// Add an agent lives in the + menu, not the overflow menu.
 assert.doesNotMatch(canvasMenuHtml, /Add an agent/);
+assert.match(navHtml, /aria-label="Add agent, workspace or room"[^>]*data-tour="hire"/);
+const plusMenuHtml = navHtml.slice(navHtml.indexOf('data-tour="hire"')).split('</details>')[0]!;
+for (const url of ['/w/ws1/connect', '/w/ws1?workspace=new', '/rooms/new']) assert.ok(plusMenuHtml.includes(`href="${url}"`), url);
+assert.doesNotMatch(workspaceMenuHtml, /New workspace|New shared room/);
+assert.match(workspaceMenuHtml, /<div class="sticky [^"]*">[\s\S]*?\?panel=workspace/, 'Workspace settings footer stays pinned');
 assert.ok(navHtml.indexOf('data-tour="hire"') < navHtml.indexOf('aria-label="Canvas actions"'));
 assert.doesNotMatch(canvasMenuHtml, /Plan and billing|Invite links|Workspace settings|New workspace/);
 assert.doesNotMatch(accountMenuHtml, /Connected apps|Skills &amp; processes|Triggers/);

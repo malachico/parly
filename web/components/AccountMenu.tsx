@@ -15,7 +15,7 @@ import { plural } from '@/lib/plural';
 export type { MenuWorkspace };
 
 /** Shared native disclosure: one canvas menu at a time, dismissed by navigation, Escape or an outside click. */
-export function CanvasMenu({ label, summary, children, end = false, tour }: { label: string; summary: React.ReactNode; children: React.ReactNode; end?: boolean; tour?: string }) {
+export function CanvasMenu({ label, summary, children, end = false, tour, summaryClass = 'hover:bg-[var(--subtle)]' }: { label: string; summary: React.ReactNode; children: React.ReactNode; end?: boolean; tour?: string; summaryClass?: string }) {
   const box = useRef<HTMLDetailsElement>(null);
   const path = usePathname();
   const params = useSearchParams();
@@ -40,7 +40,7 @@ export function CanvasMenu({ label, summary, children, end = false, tour }: { la
   useEffect(() => box.current?.removeAttribute('open'), [path, params]);
   return (
     <details ref={box} name="canvas-menu" data-tour-group className="relative min-w-0">
-      <summary aria-label={label} data-tour={tour} data-tour-trigger className="flex h-9 min-w-9 cursor-pointer list-none items-center justify-center gap-1.5 rounded-[9px] px-1.5 text-sm font-semibold hover:bg-[var(--subtle)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] [&::-webkit-details-marker]:hidden">
+      <summary aria-label={label} data-tour={tour} data-tour-trigger className={`flex h-9 min-w-9 cursor-pointer list-none items-center justify-center gap-1.5 rounded-[9px] px-1.5 text-sm font-semibold ${summaryClass} focus-visible:outline-2 focus-visible:outline-[var(--accent)] [&::-webkit-details-marker]:hidden`}>
         {summary}
       </summary>
       <div onClick={(e) => {
@@ -69,14 +69,14 @@ export function WorkspaceMenu({ ws, workspaceName, workspaces }: { ws: string; w
     <CanvasMenu label={`Workspace: ${workspaceName}`} tour="workspace" summary={<><span className="min-w-0 truncate">{workspaceName}</span><Icon name="chevron-down" size={14} className="shrink-0" /></>}>
       {here?.room?.needsSetup && <Link href={`/rooms/${encodeURIComponent(ws)}/side`} className={`${row} text-[var(--accent)]`}>Set up your side</Link>}
       <div className="px-2.5 py-2 text-[11px] font-semibold text-[var(--muted)] uppercase">Workspaces</div>
-      {spaces.map((w) => <Link key={w.id} href={wsHref(w.id)} aria-current={w.id === ws ? 'page' : undefined} className={row}><span className="min-w-0 flex-1 truncate">{w.public ? '🌐 ' : ''}{w.name}{w.archived ? ' (archived)' : ''}</span>{w.id === ws && <Icon name="check" size={16} />}</Link>)}
-      <Link href={wsHref(ws, { workspace: 'new' })} scroll={false} className={row}><Icon name="plus" size={16} />New workspace</Link>
-      <div className="px-2.5 pt-3 pb-1 text-[11px] font-semibold text-[var(--muted)] uppercase">Shared rooms</div>
-      {rooms.map((w) => <Link key={w.id} href={wsHref(w.id)} className={row}><span className="flex min-w-0 flex-1 flex-col"><span className="truncate">{w.name}</span><span className="truncate text-xs text-[var(--muted)]">{w.room!.needsSetup ? 'Set up your side' : w.room!.others.length ? `with ${w.room!.others.join(', ')}` : 'Waiting for the other side'}</span></span></Link>)}
-      {[...apps.values()].map(({ app, count }) => <Link key={app.id} href={`${devAppsHref(app.workspaceId)}#app-${app.id}`} className={row}><span className="min-w-0 flex-1 truncate">{app.name}</span><span className="shrink-0 text-xs text-[var(--muted)]">{plural(count, 'room', 'rooms')}</span></Link>)}
-      <Link href="/rooms/new" className={row}><Icon name="plus" size={16} />New shared room</Link>
-      <div className="my-1.5 border-t border-[var(--border)]" />
-      <Link href={wsHref(ws, { panel: 'workspace' })} data-tour="workspace-settings" className={row}><Icon name="info" size={16} />Workspace settings & members</Link>
+      {spaces.map((w) => <Link key={w.id} href={wsHref(w.id)} aria-current={w.id === ws ? 'page' : undefined} className={row}><Icon name={w.public ? 'globe' : 'grid'} size={16} className="shrink-0 text-[var(--muted)]" /><span className="min-w-0 flex-1 truncate">{w.name}{w.archived ? ' (archived)' : ''}</span>{w.id === ws && <Icon name="check" size={16} />}</Link>)}
+      {(rooms.length > 0 || apps.size > 0) && <div className="px-2.5 pt-3 pb-1 text-[11px] font-semibold text-[var(--muted)] uppercase">Shared rooms</div>}
+      {rooms.map((w) => <Link key={w.id} href={wsHref(w.id)} className={row}><Icon name="chat" size={16} className="shrink-0 text-[var(--muted)]" /><span className="flex min-w-0 flex-1 flex-col"><span className="truncate">{w.name}</span><span className="truncate text-xs text-[var(--muted)]">{w.room!.needsSetup ? 'Set up your side' : w.room!.others.length ? `with ${w.room!.others.join(', ')}` : 'Waiting for the other side'}</span></span></Link>)}
+      {[...apps.values()].map(({ app, count }) => <Link key={app.id} href={`${devAppsHref(app.workspaceId)}#app-${app.id}`} className={row}><Icon name="plug" size={16} className="shrink-0 text-[var(--muted)]" /><span className="min-w-0 flex-1 truncate">{app.name}</span><span className="shrink-0 text-xs text-[var(--muted)]">{plural(count, 'room', 'rooms')}</span></Link>)}
+      {/* Pinned: the list scrolls under it, settings stay one click away. */}
+      <div className="sticky -bottom-1.5 -mx-1.5 mt-1.5 -mb-1.5 border-t border-[var(--border)] bg-[var(--surface)] p-1.5">
+        <Link href={wsHref(ws, { panel: 'workspace' })} data-tour="workspace-settings" className={row}><Icon name="info" size={16} />Workspace settings & members</Link>
+      </div>
     </CanvasMenu>
   );
 }

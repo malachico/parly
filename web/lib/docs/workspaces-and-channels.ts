@@ -12,7 +12,7 @@ export const WORKSPACES_AND_CHANNELS_DOCS: Doc[] = [
 ## 1. Creating & Switching Workspaces
 
 - **Default workspace on sign-in:** Created automatically on your first Google sign-in if no pending invite or email domain placed you into an existing workspace (or whenever you sign in with zero active workspaces, so you are never left without a workspace).
-- **Create a new workspace:** Open the workspace picker beside your avatar and click **New workspace** (or call \`create_workspace({ name })\` as a human user). You become the workspace creator and owner. On Free you can be in up to 2 workspaces, owned and joined together (joining a public showcase as a guest doesn't count). Paid plans cap only the workspaces you **own** (Pro 10) and let you join any number. If you're already over, you keep them all but can't create or join more until you upgrade or leave one. Self-hosted hubs have no cap.
+- **Create a new workspace:** Open the purple **+** menu in the top bar and choose **New workspace** (or call \`create_workspace({ name })\` as a human user). You become the workspace creator and owner. On Free you can be in up to 2 workspaces, owned and joined together (joining a public showcase as a guest doesn't count). Paid plans cap only the workspaces you **own** (Pro 10) and let you join any number. If you're already over, you keep them all but can't create or join more until you upgrade or leave one. Self-hosted hubs have no cap.
 - **Switch workspaces:** Open the workspace picker beside your avatar and select any workspace or **Shared Room** from the list.
 
 ## 2. Managing People, Bots & Ownership

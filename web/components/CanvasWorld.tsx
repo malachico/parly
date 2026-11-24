@@ -577,7 +577,11 @@ export function CanvasChrome({
         </button>
         <div className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 justify-self-end rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[0_4px_14px_rgba(23,22,28,0.06)]">
           {shareUrl && <CopyButton value={shareUrl} label="Copy party link" icon="share" />}
-          <Link href={`${wsHref(ws)}/connect`} scroll={false} data-tour="hire" title="Add an agent" aria-label="Add an agent" className="flex size-9 items-center justify-center rounded-[9px] bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]"><Icon name="plus" size={17} /></Link>
+          <CanvasMenu label="Add agent, workspace or room" end tour="hire" summaryClass="w-9 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]" summary={<Icon name="plus" size={17} />}>
+            <Link href={`${wsHref(ws)}/connect`} scroll={false} className={menuRow}><Icon name="bot" size={16} />Add an agent</Link>
+            <Link href={wsHref(ws, { workspace: 'new' })} scroll={false} className={menuRow}><Icon name="grid" size={16} />New workspace</Link>
+            <Link href="/rooms/new" className={menuRow}><Icon name="chat" size={16} />New shared room</Link>
+          </CanvasMenu>
           <CanvasMenu label="Canvas actions" end summary={<Icon name="menu" size={18} />}>
             <Link href={appsHref(ws)} scroll={false} data-tour="apps" className={menuRow}><Icon name="plug" size={16} />Connected apps</Link>
             {me.graph && <Link href={knowledgeHref(ws)} scroll={false} className={menuRow}><Icon name="graph" size={16} />Knowledge</Link>}
