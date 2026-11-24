@@ -39,11 +39,19 @@ export class BillingStore {
     return (await this.col().doc(ownerId).get()).data() as BillingRecord | undefined;
   }
 
-  /** The company (a workspace-keyed pool) this person's usage bills: their `billingAccountId`, only while its plan is Team or Enterprise. */
+  /**
+   * The company (a workspace-keyed pool) this person's usage bills, only while its plan is Team or Enterprise: their
+   * `billingAccountId` if set (it wins, even when that company is inactive), else the oldest active company they own.
+   * ponytail: one indexed `owners` query per call for unlinked people on the model-call path; cache per person if it shows in latency.
+   */
   async billingAccountOf(personId: string): Promise<string | undefined> {
+    const active = (rec: BillingRecord | undefined) => ['team', 'enterprise'].includes(limitsOf(rec, 0).plan);
     const id = ((await this.db.collection('agents').doc(personId).get()).data() as { billingAccountId?: string } | undefined)?.billingAccountId;
-    const plan = id ? limitsOf(await this.getBilling(id), 0).plan : undefined;
-    return plan === 'team' || plan === 'enterprise' ? id : undefined;
+    if (id) return active(await this.getBilling(id)) ? id : undefined;
+    const owned = (await this.col().where('owners', 'array-contains', personId).get()).docs.filter((d) => active(d.data() as BillingRecord)).map((d) => d.id);
+    if (owned.length < 2) return owned[0];
+    const born = new Map(await Promise.all(owned.map(async (w) => [w, String(((await this.workspace(w)) as { createdAt?: unknown } | undefined)?.createdAt ?? '')] as const)));
+    return owned.sort((a, b) => born.get(a)!.localeCompare(born.get(b)!) || a.localeCompare(b))[0];
   }
 
   async isWorkspace(id: string): Promise<boolean> {

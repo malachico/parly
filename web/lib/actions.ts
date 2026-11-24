@@ -5,3 +5,4 @@ export * from './actions/chat';
 export * from './actions/canvas';
 export * from './actions/integrations';
 export * from './actions/devApps';
+export * from './actions/companies';

@@ -2,6 +2,7 @@ import { appsRoutes } from './apps.js';
 import { Router } from 'express';
 import type { HubService } from '../hub/hubService.js';
 import { accountRoutes } from './account.js';
+import { companiesRoutes } from './companies.js';
 import { triggersRoutes } from './triggers.js';
 import { skillsRoutes } from './skills.js';
 import { agentsRoutes } from './agents.js';
@@ -19,6 +20,7 @@ export function restRouter(hub: HubService, stream: { sealingKey?: Buffer; publi
   const router = Router();
   // In this order: Express matches routes as they were added (/agents/bots before /agents/:id).
   accountRoutes(router, hub);
+  companiesRoutes(router, hub);
   appsRoutes(router, hub);
   triggersRoutes(router, hub);
   skillsRoutes(router, hub);

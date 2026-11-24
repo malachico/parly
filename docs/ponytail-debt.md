@@ -71,6 +71,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `src/billing/store.ts`
 
+- one indexed `owners` query per call for unlinked people on the model-call path; cache per person if it shows in latency.
 - first Team subscription wins a pool; another one (e.g. a $75 checkout by someone who knows the owner's id) is ignored until the first ends or lapses. A legit replacement needs the first cancelled.
 - a Team pool keeps the buyer's paddleCustomerId (its portal needs it), so ownerOfCustomer's limit(1) may pick the pool or the buyer's own doc for a customer-only event; only adjustments without custom_data hit that fallback.
 - one doc per workspace per day that never expires; add a TTL index or a cleanup sweep if they pile up.
@@ -261,6 +262,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - the newest 100 (Mongo index: room.appId + createdAt); add a cursor when an app needs more.
 - the creator can't leave, so a workspace always has an owner; co-owners can. Add transfer/delete when needed
 
+## `src/rest/companies.ts`
+
+- invites don't expire; owners revoke them. Add an expiresAt (TTL) if stale invites hold seats in practice.
+
 ## `src/rest/conversations.ts`
 
 - each stream polls the store like /events does; a pub/sub fan-out when many tabs are open at once
@@ -429,4 +434,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**150 markers, 33 with no trigger.**
+**152 markers, 33 with no trigger.**

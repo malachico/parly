@@ -134,7 +134,7 @@ export interface AgentRecord {
   googleSub?: string;
   /** Pays for an ownerless room agent's model calls (the person who opened the room). Ignored when the agent has an owner: the owner always pays. */
   payerId?: string;
-  /** Company credit pool: the workspace id whose billing record pays for this person (set on joining it by verified email domain). */
+  /** Company credit pool: the workspace id whose billing record pays for this person (set by accepting a company invite at `POST /companies/:id/accept`). */
   billingAccountId?: string;
   githubId?: string;
   /** Self-hosted password sign-in (registry/password.ts): never leaves the hub. */

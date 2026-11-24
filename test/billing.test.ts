@@ -455,7 +455,8 @@ describe('Team plan', () => {
       // Cancelling drops the pool back to free, and the member back to Free caps.
       await post({ ...teamSub('e5', owner.id, ws.id, 7, 'canceled', 'subscription.canceled'), data: { ...teamSub('e3', owner.id, ws.id, 7, 'canceled').data } });
       expect((await hub.llm.limits(ws.id)).plan).toBe('free');
-      expect((await hub.registry.workspaceUsage(ws)).plan).toBe('free');
+      // Caps follow the person: the owner still owns ws2's active Team company, so ws keeps Pro's cap.
+      expect((await hub.registry.workspaceUsage(ws)).plan).toBe('pro');
       await expect(hub.registry.createWorkspace(member, 'm4')).rejects.toThrow('Free plan');
       // A lapsed Team pool pays for no one: the member is their own payer again, still linked.
       expect(await hub.llm.payerOf(member)).toBe(member.id);

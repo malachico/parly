@@ -3,7 +3,8 @@ import type { AgentRecord } from '../registry/types.js';
 /**
  * Who pays for this agent's model calls and metered tools: a person (its owner, itself for a person, or for an ownerless
  * room agent the `payerId` who opened the room), unless their company pays for them: `billingAccountOf(person)` is the
- * company's workspace id while its plan is Team or Enterprise. A company out of credit pauses them; there is no personal fallback.
+ * company's workspace id while its plan is Team or Enterprise (the linked one, else the oldest
+ * active one they own; each owner takes a seat). A company out of credit pauses them; there is no personal fallback.
  */
 export async function payerOf(
   agent: Pick<AgentRecord, 'id' | 'payerId' | 'ownerId'>,

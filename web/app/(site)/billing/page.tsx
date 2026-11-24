@@ -3,8 +3,9 @@ import { BillingCard, PoolCard } from '@/components/BillingCard';
 import { RedeemVoucherForm } from '@/components/Vouchers';
 import { redeemCreditVoucher } from '@/lib/actions/vouchers';
 import { UsageCard } from '@/components/UsageCard';
+import { CompanyCard } from '@/components/CompanyCard';
 import Link from 'next/link';
-import { currentWorkspace, hub, hubOrLogin, myBilling, type Me, type PoolView, type UsageAllowance } from '@/lib/hub';
+import { currentWorkspace, hub, hubOrLogin, myBilling, type CompanyInviteView, type CompanyView, type Me, type PoolView, type UsageAllowance } from '@/lib/hub';
 import { wsHref } from '@/lib/routes';
 
 type Props = { searchParams: Promise<{ error?: string; asked?: string; paid?: string; had?: string; pool?: string }> };
@@ -31,10 +32,12 @@ function InviteCard({ referrals, ws }: { referrals: number; ws?: string }) {
 
 export default async function Billing({ searchParams }: Props) {
   const user = await hubOrLogin<Me>('/me', { next: '/billing' });
-  const [{ error, asked, paid, had, pool: paidPool }, usage, billing] = await Promise.all([
+  const [{ error, asked, paid, had, pool: paidPool }, usage, billing, company, invites] = await Promise.all([
     searchParams,
     hub<UsageAllowance>('/me/usage').catch(() => undefined),
     myBilling().catch(() => undefined),
+    hub<CompanyView | null>('/me/company').catch(() => null),
+    hub<CompanyInviteView[]>('/me/company/invites').catch(() => []),
   ]);
   const ws = await currentWorkspace(user);
   // A workspace owner manages its company credit pool here: every workspace of theirs.
@@ -52,7 +55,8 @@ export default async function Billing({ searchParams }: Props) {
         sub="Your monthly credits, cloud agent allowance, upgrades, and invoices."
       />
       <ErrorNote error={error} />
-      {billing?.billedTo && (
+      <CompanyCard company={company} invites={invites} me={{ id: user.id, email: user.email }} />
+      {billing?.billedTo && !company?.member && (
         <p role="status" className="rounded-lg bg-[var(--subtle)] px-3 py-2 text-sm">
           Billed to {billing.billedTo.name}: your agents use your company&apos;s credits.
         </p>

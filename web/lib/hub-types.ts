@@ -627,3 +627,26 @@ export interface ScopedSkillView {
   enabled: boolean;
 }
 
+
+/** GET /me/company: the company you're a member of (null if none, or you own it) and every company you own. */
+export type CompanyView = { member: CompanyMemberView | null; owned: CompanyOwnerView[] };
+export type CompanyOwnerView = {
+  id: string;
+  name: string;
+  plan: 'free' | 'pro' | 'team' | 'enterprise';
+  /** Owners and members (each once) plus pending invites, against the plan's seats (max null: unlimited). */
+  seats: { used: number; max: number | null };
+  managed: boolean;
+  monthlyUsd: number;
+  extraUsd: number;
+  leftUsd: number;
+  budgetCredits: number | null;
+  spentCredits: number;
+  blockedBy?: 'budget' | 'credits';
+  members: { id: string; name: string; email?: string; owner: boolean; spentUsd: number }[];
+  invites: { email: string; createdAt: number }[];
+};
+export type CompanyMemberView = { id: string; name: string; plan: 'free' | 'pro' | 'team' | 'enterprise'; active: boolean; owners: string[] };
+
+/** GET /me/company/invites: companies that invited your verified email. */
+export type CompanyInviteView = { companyId: string; companyName: string; invitedByName: string | null; createdAt: number };

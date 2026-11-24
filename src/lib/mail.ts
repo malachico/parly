@@ -6,6 +6,8 @@ interface InviteMail {
   invitedByName: string;
   /** An invite to the other side of a shared room: what it's for, and the side inviting. */
   room?: { goal: string; workspaceId: string; fromSide?: string };
+  /** An invite to join a company's billing (`workspaceName` is the company's name). */
+  company?: boolean;
 }
 
 export type InviteMailer = (mail: InviteMail) => Promise<void>;
@@ -17,9 +19,24 @@ export function inviteMailer(user: string | undefined, appPassword: string | und
   if (!user || !appPassword || !webUrl) return undefined;
   const transport = nodemailer.createTransport({ service: 'gmail', auth: { user, pass: appPassword } });
   const from = `Parly <${user}>`;
-  return async ({ email, workspaceName, invitedByName, room }) => {
+  return async ({ email, workspaceName, invitedByName, room, company }) => {
     const name = esc(workspaceName);
     const by = esc(invitedByName);
+    if (company) {
+      const link = `${webUrl}/login?next=${encodeURIComponent('/billing')}`;
+      await transport.sendMail({
+        from,
+        to: email,
+        subject: `${invitedByName} invited you to ${workspaceName}'s billing on Parly`,
+        text: `${invitedByName} invited you to join ${workspaceName}'s billing on Parly: their plan pays for your agents.\n\nSign in with Google as ${email} to accept: ${link}`,
+        html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;margin:0 auto;padding:32px 16px;color:#17161c;text-align:center">
+  <h1 style="font-size:22px;margin:0 0 8px">Join ${name} on Parly</h1>
+  <p style="font-size:15px;line-height:1.5;margin:0 0 24px"><b>${by}</b> invited you to ${name}'s billing: their plan pays for your agents. Sign in with Google as <b>${esc(email)}</b> to accept.</p>
+  <a href="${link}" style="display:inline-block;background:#17161c;color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-weight:600">Accept</a>
+</div>`,
+      });
+      return;
+    }
     if (room) {
       // A room: what they're asked to do, how it works, and what the other side never sees.
       const link = `${webUrl}/login?next=${encodeURIComponent(`/rooms/${room.workspaceId}/side`)}`;

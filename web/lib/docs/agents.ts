@@ -111,6 +111,10 @@ A company is a workspace's credit pool, with its own owners. While the company i
 
 Company owners see the pool on **Billing**: credits left and what each member's agents spent on models this month, with top-ups bought for the pool. Until the owner buys anything, the pool has the Free allowance.
 
+**Joining a company:** owners invite people by email on **Billing**. The invite only works for that verified email, and each owner, member and pending invite holds a seat (an owner who is also a member counts once), so you can't invite more people than the plan's seats leave room for. The invited person sees it on their Billing page and accepts or declines. You're a member of one company at most: accepting another company's invite moves your membership, and the page warns you first. Companies you own stay yours, each with your seat. Owners can revoke invites and remove members; a member can leave, and a company's sole owner can't. Leaving or being removed means you pay for yourself again. A company's owners are paid for by it too (if they own several active companies, the oldest pays; joining one as a member overrides that).
+
+Limits follow who pays, not the workspace: a person linked to (or owning) a company on Team or Enterprise gets Pro limits.
+
 Self-hosted hubs have no plans, so workspace and participant caps do not apply there.`,
   },
   {
