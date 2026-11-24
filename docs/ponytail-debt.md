@@ -98,7 +98,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `src/chat/router.ts`
 
 - Flash until Jev (TypeSafe's decision model) has access; same `Route`, swap the call.
-- a flat threshold; tune it (or wake everyone when every answer is near 0.5) once prod logs show the spread.
+- a flat threshold; tune it per sender kind once the logged scores show the spread.
 - `no-trigger` the last few messages, each cut short; enough to see who asked what was answered.
 - one log line per pick, to read the real latency and choices in prod; drop once it's settled.
 
