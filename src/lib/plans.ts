@@ -19,10 +19,22 @@ export interface BillingRecord {
   budgetMicros?: number;
   /** Team: seats bought (Paddle quantity); each adds TEAM_SEAT_USD to the pool's monthly allowance. */
   seats?: number;
+  /** Set on a company's record (it bills its members); a person's own record has none. */
+  kind?: 'company';
+  /** Company made by POST /companies: its creator. Unique (createdBy_unique index), so concurrent creates make one. */
+  createdBy?: string;
   /** Company (a workspace-keyed pool): its display name. Recorded only for now (billing/company.ts). */
   name?: string;
   /** Company: person ids who own it (its buyers, else the workspace's creator): they set its budget and manage its subscription. */
   owners?: string[];
+  /** Company: a seat recount didn't finish (Paddle and `seats` may be high); the billing sweep retries it. */
+  seatsSyncPending?: boolean;
+  /** Company: which recount last set or failed `seatsSyncPending`; only that one may clear it. */
+  seatsSyncToken?: string;
+  /** Person: a Pro cancel made for a join that failed is still to be undone; the billing sweep retries it. */
+  proRestorePending?: boolean;
+  /** Person: an undo raced an accept and the Pro cancel is still to be made again; the billing sweep retries it. */
+  proCancelPending?: boolean;
   /** People this person brought in whose referral was rewarded (up to REFERRALS_MAX pay them). */
   referrals?: number;
   /** `occurred_at` of the last subscription event applied: an older one arriving late is ignored. */

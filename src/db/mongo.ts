@@ -424,7 +424,7 @@ export class MongoTransaction extends MongoWrites {
 export class MongoDatabase {
   private initialized?: Promise<void>;
   ready() {
-    return this.initialized ??= ensureIndexes(this.mongoDb).catch((error) => { this.initialized = undefined; throw error; });
+    return this.initialized ??= ensureIndexes(this.mongoDb).then(() => backfillCompanyKind(this.mongoDb)).catch((error) => { this.initialized = undefined; throw error; });
   }
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     try { await this.ready(); return await fn(); }
@@ -586,7 +586,24 @@ async function ensureIndexes(db: Db): Promise<void> {
     db.collection('graph_nodes').createIndex({ 'source.skillId': 1 }),
     // Duplicate matching: a workspace's latest people or topics (GraphStore.upsertNode).
     db.collection('graph_nodes').createIndex({ workspaceId: 1, kind: 1, updatedAt: -1 }),
+    // One POST /companies company per person (the duplicate maps to 409). Legacy workspace pools have no createdBy, so an owner of several is untouched.
+    // Not swallowed: without it concurrent creates make several, so a failure fails ready() and the next operation retries.
+    db.collection('billing').createIndex({ createdBy: 1 }, { unique: true, name: 'createdBy_unique', partialFilterExpression: { createdBy: { $exists: true } } }),
   ]);
+}
+
+/**
+ * Stamps `kind: 'company'` on every workspace-keyed billing record (the legacy company ids), once per process.
+ * Idempotent; a failure is logged, never fatal: the webhook falls back to the workspace check (billing/store.ts isCompany).
+ */
+export async function backfillCompanyKind(db: Db): Promise<void> {
+  try {
+    const ids = await db.collection<{ _id: string }>('workspaces').distinct('_id');
+    const { modifiedCount } = await db.collection<{ _id: string }>('billing').updateMany({ _id: { $in: ids }, kind: { $exists: false } }, { $set: { kind: 'company' } });
+    if (modifiedCount) console.log(`billing: marked ${modifiedCount} companies kind=company`);
+  } catch (error) {
+    console.error('billing: company kind backfill failed', error instanceof Error ? error.message : error);
+  }
 }
 
 const clients = new Map<string, { uri: string; client: MongoClient; users: number }>();

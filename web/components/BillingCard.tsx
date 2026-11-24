@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { credits, meterColor } from '@/lib/labels';
 import { useEffect, useState } from 'react';
-import { askEnterprise, openBillingPortal, openPoolPortal, setPoolBudget } from '@/lib/actions';
-import type { BillingView, PoolView } from '@/lib/hub';
+import { askEnterprise, createCompany, openBillingPortal, openPoolPortal, setPoolBudget } from '@/lib/actions';
+import type { BillingView, CompanyOwnerView } from '@/lib/hub';
 import { PendingButton } from '@/components/PendingButton';
 
 type PaddleJs = {
@@ -46,7 +46,7 @@ function usePaddle(paddle: BillingView['paddle']): PaddleJs | undefined {
  * (Paddle is the merchant of record; no card reaches Parly); the hub hears of the payment from Paddle's webhook.
  */
 export function BillingCard({
-  billing,
+  billing: view,
   me,
   asked,
   paid,
@@ -59,8 +59,9 @@ export function BillingCard({
   paid?: string;
   had?: string;
 }) {
+  // Absent when a company pays (its amounts are hidden there anyway) or from a hub before leftUsd.
+  const billing = { ...view, monthlyUsd: view.monthlyUsd ?? 0, extraUsd: view.extraUsd ?? 0, leftUsd: view.leftUsd ?? 0 };
   const paddle = usePaddle(billing.paddle);
-  billing = { ...billing, leftUsd: billing.leftUsd ?? 0 }; // ponytail: a hub from before leftUsd; drop once deployed
   // Paddle's webhook usually lands a moment after its checkout sends you back: until it does, the page refreshes.
   const landed = paid === 'pro' ? billing.plan !== 'free' : paid === 'topup' ? billing.extraUsd > Number(had ?? 0) : true;
   const slow = useRefreshUntil(landed);
@@ -74,6 +75,8 @@ export function BillingCard({
       settings: { successUrl: `${window.location.origin}/billing?paid=${kind}&had=${billing.extraUsd}` },
     });
   const pct = Math.min(100, Math.round(billing.used * 100));
+  // On Team (or Enterprise) the company pool pays: your own credits don't matter, so the pool card shows the balance.
+  const pooled = Boolean(billing.company);
   const ends = billing.periodEnd ? new Date(billing.periodEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : undefined;
 
   return (
@@ -89,27 +92,32 @@ export function BillingCard({
               : `Top-up added. You have ${credits(billing.leftUsd)} credits left.`}
         </p>
       )}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <p className="label">Your plan</p>
           <h2 className="text-xl font-semibold">{PLAN_NAMES[billing.plan]}</h2>
           <p className="muted text-[13px]">
-            {credits(billing.monthlyUsd)} credits a month{billing.extraUsd > 0 ? ` + ${credits(billing.extraUsd)} from top-ups` : ''}
+            {pooled ? 'Your company pool pays for your agents' : `${credits(billing.monthlyUsd)} credits a month${billing.extraUsd > 0 ? ` + ${credits(billing.extraUsd)} from top-ups` : ''}`}
             {billing.workspaces?.max != null
               ? ` · ${billing.workspaces.count} of ${billing.workspaces.max} workspaces`
               : ''}
             {billing.cancelAtPeriodEnd && ends ? ` · ends ${ends}` : ends && billing.plan === 'pro' ? ` · renews ${ends}` : ''}
           </p>
         </div>
-        <div className="text-right">
-          <p className="label">Balance</p>
-          <p className="text-xl font-semibold">{credits(billing.leftUsd)}</p>
-          <p className="muted text-[13px]">credits left · {pct}% used</p>
+        {!pooled && (
+          <div className="shrink-0 sm:text-right">
+            <p className="label">Balance</p>
+            <p className="text-xl font-semibold">{credits(billing.leftUsd)}</p>
+            <p className="muted text-[13px]">credits left · {pct}% used</p>
+          </div>
+        )}
+      </div>
+      {billing.company && billing.ownPlan === 'pro' && ends && <p className="muted text-[13px]">Pro ends on {ends}, Team covers you now.</p>}
+      {!pooled && (
+        <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Credits used this month" className="h-2 w-full overflow-hidden rounded-full bg-[var(--subtle)]">
+          <div className={`h-full rounded-full ${meterColor(pct)}`} style={{ width: `${pct}%` }} />
         </div>
-      </div>
-      <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Credits used this month" className="h-2 w-full overflow-hidden rounded-full bg-[var(--subtle)]">
-        <div className={`h-full rounded-full ${meterColor(pct)}`} style={{ width: `${pct}%` }} />
-      </div>
+      )}
 
       {billing.plan === 'free' && prices.pro && (
         <div className="rounded-xl border border-[var(--accent)] bg-[var(--accent-soft)] p-3.5">
@@ -158,7 +166,7 @@ export function BillingCard({
         </div>
       )}
 
-      {billing.plan !== 'free' && prices.topups && Object.keys(prices.topups).length > 0 && (
+      {billing.plan !== 'free' && !billing.company && prices.topups && Object.keys(prices.topups).length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium">Top up credits</p>
           <p className="muted text-[13px]">Used after the month&apos;s credits; whatever&apos;s left carries over.</p>
@@ -188,103 +196,123 @@ export function BillingCard({
   );
 }
 
+/** Team checkout for a company: Paddle bills the company (`billingAccountId`), not the buyer. */
+function useTeamCheckout(billing: BillingView, me: { id: string; email?: string }) {
+  const paddle = usePaddle(billing.paddle);
+  const [seatsInput, setSeatsInput] = useState('3');
+  const seats = Math.max(3, Math.floor(Number(seatsInput)) || 3);
+  const buy = (companyId: string, priceId: string, quantity = 1, kind = 'pool', had = 0) =>
+    paddle?.Checkout.open({
+      items: [{ priceId, quantity }],
+      customData: { billingAccountId: companyId, ownerId: me.id },
+      ...(me.email ? { customer: { email: me.email } } : {}),
+      settings: { successUrl: `${window.location.origin}/billing?paid=${kind}&pool=${companyId}&had=${had}` },
+    });
+  const seatsField = (
+    <label className="text-sm">
+      Seats{' '}
+      <input type="number" min={3} value={seatsInput} onChange={(e) => setSeatsInput(e.target.value)} onBlur={() => setSeatsInput(String(seats))} className="input w-20" />
+    </label>
+  );
+  return { paddle, seats, buy, seatsField };
+}
+
+/** Free or Pro with no company: name it, pick seats, pay. The company is created first so the checkout bills it. */
+export function StartTeam({ billing, me }: { billing: BillingView; me: { id: string; email?: string; name: string } }) {
+  const { paddle, seats, buy, seatsField } = useTeamCheckout(billing, me);
+  const [name, setName] = useState(`${me.name}'s team`);
+  const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
+  const teamPrice = billing.paddle?.prices.team;
+  if (!teamPrice) return null;
+  const start = async () => {
+    setError(undefined);
+    setPending(true);
+    const r = await createCompany(name.trim()).finally(() => setPending(false));
+    if ('error' in r) return setError(r.error);
+    buy(r.id, teamPrice, seats, 'team');
+  };
+  return (
+    <details className="card">
+      <summary className="cursor-pointer text-sm font-medium">Start a Team</summary>
+      <div className="mt-3 space-y-2">
+        <p className="muted text-[13px]">$25/seat/month, at least 3 seats: {credits(15 * seats)} pooled credits a month, and Pro limits for everyone you add.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-sm">
+            Company{' '}
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} className="input w-48" />
+          </label>
+          {seatsField}
+          <button type="button" disabled={!paddle || !name.trim() || pending} onClick={start} className="btn-primary">
+            Buy Team · ${25 * seats}/month
+          </button>
+        </div>
+        {error && <p role="alert" className="text-[13px] text-[var(--bad-fg)]">{error}</p>}
+      </div>
+    </details>
+  );
+}
+
 /**
- * The company credit pool, for a company owner: the people linked to the company spend it while it is on Team or Enterprise. Shows what's left and each member's model spend this month; top-ups bought here credit the pool.
+ * A company you own: its credit pool, budget, Team subscription and top-ups. Its people spend the pool while it is on Team or Enterprise; members and invites are on CompanyCard.
  */
-export function PoolCard({
-  pool,
-  name,
+export function CompanyPool({
+  company,
   billing,
   me,
   had,
   team,
-}: { pool: PoolView; name: string; billing: BillingView; me: { id: string; email?: string }; had?: string; team?: boolean }) {
-  const paddle = usePaddle(billing.paddle);
+}: { company: CompanyOwnerView; billing: BillingView; me: { id: string; email?: string }; had?: string; team?: boolean }) {
+  const { paddle, seats, buy, seatsField } = useTeamCheckout(billing, me);
   // Back from a pool top-up (`had`: the pool's top-ups before it) or a Team checkout: refresh until the webhook lands.
-  const landed = team ? pool.plan === 'team' : had === undefined || pool.extraUsd > Number(had);
+  const landed = team ? company.plan === 'team' : had === undefined || company.extraUsd > Number(had);
   const slow = useRefreshUntil(landed);
   const topups = billing.paddle?.prices.topups ?? {};
   const teamPrice = billing.paddle?.prices.team;
-  const [seatsInput, setSeatsInput] = useState('3');
-  const seats = Math.max(3, Math.floor(Number(seatsInput)) || 3);
-  const buy = (priceId: string, quantity = 1, kind = 'pool') =>
-    paddle?.Checkout.open({
-      items: [{ priceId, quantity }],
-      customData: { billingAccountId: pool.workspaceId, ownerId: me.id },
-      ...(me.email ? { customer: { email: me.email } } : {}),
-      settings: { successUrl: `${window.location.origin}/billing?paid=${kind}&pool=${pool.workspaceId}&had=${pool.extraUsd}` },
-    });
   return (
-    <section id="company" className="card scroll-mt-6 space-y-3" aria-label="Company credit pool">
+    <section className="card scroll-mt-6 space-y-3" aria-label="Company credit pool">
       {(had !== undefined || team) && (
         <p role="status" className={`rounded-lg px-3 py-2 text-sm font-medium ${landed ? 'bg-[var(--ok-bg)] text-[var(--ok-fg)]' : 'bg-[var(--subtle)]'}`}>
-          {landed && team ? `You're on Team: ${pool.seats ?? 3} seats, ${credits(pool.monthlyUsd ?? 0)} pooled credits a month.` : landed ? `Top-up added. The pool has ${credits(pool.leftUsd)} credits left.` : slow ? 'Payment received. The pool is taking longer than usual to update: reload this page in a minute.' : 'Payment received. Updating the pool…'}
+          {landed && team ? `You're on Team: ${company.seats.max ?? 3} seats, ${credits(company.monthlyUsd)} pooled credits a month.` : landed ? `Top-up added. The pool has ${credits(company.leftUsd)} credits left.` : slow ? 'Payment received. The pool is taking longer than usual to update: reload this page in a minute.' : 'Payment received. Updating the pool…'}
         </p>
       )}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="label">Company pool · {PLAN_NAMES[pool.plan]}{pool.plan === 'team' && pool.seats ? ` · ${pool.seats} seats` : ''}</p>
-          <h2 className="text-xl font-semibold">{name}</h2>
-          <p className="muted text-[13px]">While you're on Team, people linked to your company use these credits, for all of their agents.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="label">Company pool · {PLAN_NAMES[company.plan]}</p>
+          <h2 className="text-xl font-semibold">{company.name}</h2>
+          <p className="muted text-[13px]">While you're on Team, your company's people use these credits, for all of their agents.</p>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 sm:text-right">
           <p className="label">Balance</p>
-          <p className="text-xl font-semibold">{credits(pool.leftUsd)}</p>
-          <p className="muted text-[13px]">credits left{pool.monthlyUsd ? ` · ${credits(pool.monthlyUsd)} a month` : ''}{pool.extraUsd > 0 ? ` · ${credits(pool.extraUsd)} from top-ups` : ''}</p>
+          <p className="text-xl font-semibold">{credits(company.leftUsd)}</p>
+          <p className="muted text-[13px]">credits left{company.monthlyUsd ? ` · ${credits(company.monthlyUsd)} a month` : ''}{company.extraUsd > 0 ? ` · ${credits(company.extraUsd)} from top-ups` : ''}</p>
         </div>
       </div>
       {/* Remounts when the saved budget changes, closing the form. */}
-      <PoolBudget key={String(pool.budgetCredits)} pool={pool} />
-      {pool.members.length > 0 && (
-        <ul className="divide-y divide-[var(--border)] text-sm">
-          {pool.members.map((m) => (
-            <li key={m.id} className="flex justify-between py-1.5">
-              <span>{m.name}</span>
-              <span className="muted">{credits(m.spentUsd)} this month</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {pool.plan === 'team' ? (
-        pool.buyer &&
-        pool.managed && (
-        <form action={openPoolPortal}>
-          <input type="hidden" name="workspaceId" value={pool.workspaceId} />
-          <PendingButton className="btn">Manage Team</PendingButton>
-        </form>
-        )
-      ) : pool.plan !== 'enterprise' && teamPrice ? (
-        pool.buyer ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm">
-            Seats{' '}
-            <input type="number" min={3} value={seatsInput} onChange={(e) => setSeatsInput(e.target.value)} onBlur={() => setSeatsInput(String(seats))} className="input w-20" />
-          </label>
-          <button type="button" disabled={!paddle} onClick={() => buy(teamPrice, seats, 'team')} className="btn-primary">
-            Buy Team · ${25 * seats}/month
-          </button>
-          <span className="muted text-[13px]">{credits(15 * seats)} pooled credits a month; your team gets Pro limits.</span>
-        </div>
-        ) : (
-          <p className="muted text-[13px]">Only a company owner can buy Team for it.</p>
-        )
-      ) : (
-        pool.plan !== 'enterprise' && (
-          // ponytail: no Team price configured yet; the ask lands in Admin → Leads as an Enterprise lead.
-          <form action={askEnterprise} className="flex flex-wrap items-center gap-2">
-            <input type="hidden" name="company" value={name} />
-            <input type="hidden" name="message" value="Team plan" />
-            <span className="muted text-[13px]">Team ($25/seat/month, pooled credits): coming soon.</span>
-            <PendingButton className="btn">Ask about Team</PendingButton>
-          </form>
-        )
-      )}
+      <PoolBudget key={String(company.budgetCredits)} company={company} />
+      {company.plan === 'team'
+        ? company.managed && (
+            <form action={openPoolPortal}>
+              <input type="hidden" name="companyId" value={company.id} />
+              <PendingButton className="btn">Manage Team</PendingButton>
+            </form>
+          )
+        : company.plan !== 'enterprise' &&
+          teamPrice && (
+            <div className="flex flex-wrap items-center gap-2">
+              {seatsField}
+              <button type="button" disabled={!paddle} onClick={() => buy(company.id, teamPrice, seats, 'team')} className="btn-primary">
+                Buy Team · ${25 * seats}/month
+              </button>
+              <span className="muted text-[13px]">{credits(15 * seats)} pooled credits a month; your team gets Pro limits.</span>
+            </div>
+          )}
       {Object.keys(topups).length > 0 && (
         <div className="flex flex-wrap gap-2">
           {Object.entries(topups)
             .sort(([a], [b]) => Number(a) - Number(b))
             .map(([usd, priceId]) => (
-              <button key={priceId} type="button" disabled={!paddle} onClick={() => buy(priceId)} className="btn">
+              <button key={priceId} type="button" disabled={!paddle} onClick={() => buy(company.id, priceId, 1, 'pool', company.extraUsd)} className="btn">
                 Add {credits(Number(usd))} credits · ${usd}
               </button>
             ))}
@@ -294,8 +322,8 @@ export function PoolCard({
   );
 }
 
-/** The owners' monthly budget for a pool: spent against it this month, and set, edit or remove it. Only owners get a PoolView. */
-function PoolBudget({ pool }: { pool: PoolView }) {
+/** The owner's monthly budget for the company: spent against it this month, and set, edit or remove it. */
+function PoolBudget({ company: pool }: { company: CompanyOwnerView }) {
   const budget = pool.budgetCredits ?? null;
   const spent = pool.spentCredits ?? 0;
   const [editing, setEditing] = useState(false);
@@ -319,7 +347,7 @@ function PoolBudget({ pool }: { pool: PoolView }) {
       {pool.blockedBy === 'budget' && <p className="text-[13px] font-medium text-[var(--bad-fg)]">The budget is reached: agents on this pool stop until next month or until you raise it.</p>}
       {editing ? (
         <form action={setPoolBudget} className="space-y-2">
-          <input type="hidden" name="workspaceId" value={pool.workspaceId} />
+          <input type="hidden" name="companyId" value={pool.id} />
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-sm">
               Credits a month{' '}
@@ -335,7 +363,7 @@ function PoolBudget({ pool }: { pool: PoolView }) {
           <button type="button" onClick={() => setEditing(true)} className="btn">{budget === null ? 'Set budget' : 'Edit budget'}</button>
           {budget !== null && (
             <form action={setPoolBudget}>
-              <input type="hidden" name="workspaceId" value={pool.workspaceId} />
+              <input type="hidden" name="companyId" value={pool.id} />
               <input type="hidden" name="credits" value="" />
               <PendingButton className="btn">Remove budget</PendingButton>
             </form>

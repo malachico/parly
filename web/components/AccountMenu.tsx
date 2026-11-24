@@ -82,9 +82,11 @@ export function WorkspaceMenu({ ws, workspaceName, workspaces }: { ws: string; w
 }
 
 /** Personal settings, billing and sign out. */
-export function AccountMenu({ me, logout, tour = true, billing }: { me: { id: string; name: string; avatar?: string; admin?: boolean }; logout: () => Promise<void>; tour?: boolean; billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd: number } }) {
+export function AccountMenu({ me, logout, tour = true, billing }: { me: { id: string; name: string; avatar?: string; admin?: boolean }; logout: () => Promise<void>; tour?: boolean; billing?: { plan: 'free' | 'pro' | 'team' | 'enterprise'; leftUsd?: number; billedTo?: { name: string } } }) {
   const plan = billing && `${billing.plan[0].toUpperCase()}${billing.plan.slice(1)}`;
-  const planLine = billing && `${plan} · ${credits(billing.leftUsd)} credits`;
+  // A company pays: its balance isn't mine to show.
+  const left = billing && (billing.leftUsd === undefined ? `covered by ${billing.billedTo?.name ?? 'your company'}` : `${credits(billing.leftUsd)} credits`);
+  const planLine = billing && `${plan} · ${left}`;
   return (
     <CanvasMenu
       label={`${me.name}: your account${planLine ? `, ${planLine}` : ''}`}
@@ -97,7 +99,7 @@ export function AccountMenu({ me, logout, tour = true, billing }: { me: { id: st
         <Avatar who={{ ...me, kind: 'human' }} className="size-9 shrink-0" />
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-sm font-semibold">{me.name}</span>
-          {billing && <span className="truncate text-xs text-[var(--muted)]">{credits(billing.leftUsd)} credits</span>}
+          {billing && <span className="truncate text-xs text-[var(--muted)]">{left}</span>}
         </span>
       </div>
       <Link href="/account" className={row}>Your account and avatar</Link>

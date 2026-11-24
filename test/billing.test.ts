@@ -499,6 +499,38 @@ describe('Team plan', () => {
       server.close();
     }
   });
+  it("cancels the owner's Pro at period end when their Team activates; a failed cancel is retried by Paddle", async () => {
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    let paddleStatus = 500;
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push({ url, method: init.method ?? 'GET', body: JSON.parse(String(init.body ?? '{}')) });
+      return new Response('{}', { status: paddleStatus });
+    }) as typeof fetch;
+    const db = testDb();
+    const { app, hub } = createApp({ db, config: testConfig({ paddle: { ...PADDLE, prices: { ...PADDLE.prices, team: 'pri_team' }, fetchImpl }, cloudAgents: CLOUD }) });
+    const server = app.listen(0);
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/billing/paddle`;
+    const post = (event: object) => {
+      const body = JSON.stringify(event);
+      return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'paddle-signature': sign(body) }, body });
+    };
+    try {
+      const owner = await testPerson(hub.registry, 'Owner');
+      const ws = await hub.registry.createWorkspace(owner, 'Acme');
+      await db.collection('billing').doc(owner.id).set({ plan: 'pro', paddleSubscriptionId: 'sub_pro' });
+      const event = { event_id: 't1', event_type: 'subscription.created', data: { id: 'sub_t1', status: 'active', customer_id: 'ctm_t1', custom_data: { ownerId: owner.id, billingAccountId: ws.id }, items: [{ price: { id: 'pri_team' }, quantity: 3 }] } };
+      expect((await post(event)).ok).toBe(false);
+      // The event's seen marker is already committed; the retry still does the outstanding cancel.
+      expect((await db.collection('paddleEvents').doc('t1').get()).exists).toBe(true);
+      paddleStatus = 200;
+      expect((await post(event)).ok).toBe(true);
+      expect(calls.map((c) => c.url)).toEqual(Array(2).fill('https://sandbox-api.paddle.com/subscriptions/sub_pro/cancel'));
+      expect(calls[1]).toMatchObject({ method: 'POST', body: { effective_from: 'next_billing_period' } });
+      expect(await hub.billing.get(ws.id)).toMatchObject({ plan: 'team' });
+    } finally {
+      server.close();
+    }
+  });
 });
 
 describe('Enterprise leads', () => {
@@ -526,7 +558,7 @@ describe('Enterprise leads', () => {
   });
 });
 
-describe('workspace budget', () => {
+describe('company budget (legacy workspace-keyed company)', () => {
   it('company owners set it, co-owners, members and outsiders cannot, bad values are refused, and it shows in billing', async () => {
     const { app, hub } = createApp({ db: testDb(), config: testConfig({ cloudAgents: CLOUD }) });
     const server = app.listen(0);
@@ -538,30 +570,30 @@ describe('workspace budget', () => {
       const ws = await hub.registry.createWorkspace(ownerRec, 'Acme', { unchecked: true });
       for (const p of [co, member]) expect((await call(owner.token, 'POST', `/workspaces/${ws.id}/invites`, { email: p.agent.email })).status).toBe(200);
       await hub.registry.addWorkspaceOwner(ownerRec, ws.id, co.agent.id);
-      const put = (token: string, body: unknown) => call(token, 'PUT', `/workspaces/${ws.id}/budget`, body);
+      const put = (token: string, body: unknown) => call(token, 'PUT', `/companies/${ws.id}/budget`, body);
 
-      expect((await put(owner.token, { credits: 5 })).json).toEqual({ workspaceId: ws.id, budgetCredits: 5 });
-      expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: 5, spentCredits: 0 });
+      expect((await put(owner.token, { credits: 5 })).json).toEqual({ companyId: ws.id, budgetCredits: 5 });
+      expect((await call(owner.token, 'GET', `/companies/${ws.id}`)).json).toMatchObject({ budgetCredits: 5, spentCredits: 0 });
       expect((await put(co.token, { credits: 7.5 })).status).toBe(403);
       expect((await put(member.token, { credits: 100 })).status).toBe(403);
-      expect((await call(member.token, 'GET', `/workspaces/${ws.id}/billing`)).status).toBe(403);
-      expect((await put(outsider.token, { credits: 100 })).status).toBe(404);
+      expect((await call(member.token, 'GET', `/companies/${ws.id}`)).status).toBe(403);
+      expect((await put(outsider.token, { credits: 100 })).status).toBe(403);
       for (const credits of [-1, '5', Number.MAX_VALUE, undefined]) expect((await put(owner.token, { credits })).status).toBe(400);
-      expect((await call(co.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: 5, buyer: false });
+      expect((await call(co.token, 'GET', `/companies/${ws.id}`)).status).toBe(403);
 
       await put(owner.token, { credits: 0 });
-      expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json.blockedBy).toBe('budget');
+      expect((await call(owner.token, 'GET', `/companies/${ws.id}`)).json.blockedBy).toBe('budget');
       // People the pool pays (it is on Team) see why on /me/billing; company owners are flagged, co-owners are not.
       await hub.billing.store.setPlan(ws.id, { plan: 'team' });
       for (const p of [ownerRec.id, co.agent.id, member.agent.id]) await hub.registry.agentStore.update(p, { billingAccountId: ws.id });
       const mine = async (token: string) => (await call(token, 'GET', '/me/billing')).json;
-      expect(await mine(member.token)).toMatchObject({ blockedBy: 'budget', billedTo: { workspaceId: ws.id, name: 'Acme' } });
+      expect(await mine(member.token)).toMatchObject({ blockedBy: 'budget', plan: 'team', ownPlan: 'free', billedTo: { workspaceId: ws.id, name: 'Acme' }, company: { id: ws.id, name: 'Acme', owner: false } });
       expect((await mine(member.token)).billedTo.owner).toBeUndefined();
       expect((await mine(co.token)).billedTo.owner).toBeUndefined();
-      expect(await mine(owner.token)).toMatchObject({ blockedBy: 'budget', billedTo: { owner: true } });
+      expect(await mine(owner.token)).toMatchObject({ blockedBy: 'budget', billedTo: { owner: true }, company: { owner: true } });
       expect((await put(owner.token, { credits: null })).json.budgetCredits).toBeNull();
       expect((await mine(member.token)).blockedBy).toBeUndefined(); // nothing spent: removing the budget unblocks
-      expect((await call(owner.token, 'GET', `/workspaces/${ws.id}/billing`)).json).toMatchObject({ budgetCredits: null });
+      expect((await call(owner.token, 'GET', `/companies/${ws.id}`)).json).toMatchObject({ budgetCredits: null });
     } finally {
       server.close();
     }

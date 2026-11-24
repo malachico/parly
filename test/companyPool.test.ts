@@ -13,6 +13,7 @@ const PADDLE = { apiKey: 'k', webhookSecret: 's', clientToken: 't', environment:
 function billing(workspaces: string[]) {
   const b = new Billing({} as Database, PADDLE);
   vi.spyOn(b.store, 'isWorkspace').mockImplementation(async (id) => workspaces.includes(id));
+  vi.spyOn(b.store, 'getBilling').mockResolvedValue(undefined);
   const topup = vi.spyOn(b.store, 'handleTopupTransaction').mockResolvedValue('done');
   const sub = vi.spyOn(b.store, 'handleSubscriptionEvent').mockResolvedValue('done');
   vi.spyOn(b.store, 'ownerOfSubscription').mockResolvedValue('sub-owner');
@@ -37,7 +38,7 @@ describe('pool top-up webhook', () => {
   it('credits a real workspace pool without setting its paddleCustomerId, naming it and owning it by the workspace creator only (not the unverified buyer, not co-owners)', async () => {
     const { b, topup } = billing(['ws']);
     await b.handle(topupEvent('ws') as never);
-    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'ws', 'txn', undefined, 10_000_000, expect.any(String), { name: 'Acme', owners: ['o'] });
+    expect(topup).toHaveBeenCalledWith('evt', 'transaction.completed', 'ws', 'txn', undefined, 10_000_000, expect.any(String), { kind: 'company', name: 'Acme', owners: ['o'] });
   });
 
   it('ignores billingAccountId on anything but a top-up', async () => {
@@ -49,9 +50,9 @@ describe('pool top-up webhook', () => {
 
 describe('company metadata', () => {
   it('names a company after its workspace, else a domain, else its id; owned by the buyer, else the workspace creator', () => {
-    expect(companyFields('ws', { name: ' Acme ', ownerId: 'o', ownerIds: ['o', 'co'] })).toEqual({ name: 'Acme', owners: ['o'] });
-    expect(companyFields('ws', { name: '', domains: ['acme.com'], ownerId: 'o' }, 'buyer')).toEqual({ name: 'acme.com', owners: ['buyer'] });
-    expect(companyFields('ws', undefined)).toEqual({ name: 'ws' });
+    expect(companyFields('ws', { name: ' Acme ', ownerId: 'o', ownerIds: ['o', 'co'] })).toEqual({ kind: 'company', name: 'Acme', owners: ['o'] });
+    expect(companyFields('ws', { name: '', domains: ['acme.com'], ownerId: 'o' }, 'buyer')).toEqual({ kind: 'company', name: 'acme.com', owners: ['buyer'] });
+    expect(companyFields('ws', undefined)).toEqual({ kind: 'company', name: 'ws' });
   });
 
   it('only fills what is missing: idempotent, never overwrites, never writes an empty owners', () => {

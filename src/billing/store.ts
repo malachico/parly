@@ -54,6 +54,11 @@ export class BillingStore {
     return owned.sort((a, b) => born.get(a)!.localeCompare(born.get(b)!) || a.localeCompare(b))[0];
   }
 
+  /** A company's billing record: marked `kind: 'company'`, or (ponytail: legacy, until every pool is backfilled) keyed by a workspace id. */
+  async isCompany(id: string): Promise<boolean> {
+    return (await this.getBilling(id))?.kind === 'company' || this.isWorkspace(id);
+  }
+
   async isWorkspace(id: string): Promise<boolean> {
     return (await this.db.collection('workspaces').doc(id).get()).exists;
   }

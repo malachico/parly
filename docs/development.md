@@ -70,8 +70,11 @@ the prompt or the model, and add a case for each extraction bug you fix.
 
 ## Companies (billing)
 
-A company is a workspace-keyed billing record (a pool) with optional `name` and `owners`
-(`src/billing/company.ts`). A person (and their agents, including a room agent's opener) bills the
+Billing is per person: each person has one plan (Free, Pro, or Team when a company pays), and
+workspaces and rooms play no part in it. A company is a billing record with `kind: 'company'`,
+`name` and `owners` (`src/billing/company.ts`). `POST /companies` makes one with a random id (one
+per owner, and not while you belong to an active company); older companies are keyed by a workspace
+id, and the hub stamps `kind` on those at startup (`backfillCompanyKind` in `src/db/mongo.ts`). A person (and their agents, including a room agent's opener) bills the
 company only when they are linked to it (`billingAccountId`) and its plan is Team or Enterprise;
 otherwise they pay personally. An empty or over-budget company pool pauses its members, with no
 personal fallback. Signing in by domain auto-joins the workspace but never links billing, and

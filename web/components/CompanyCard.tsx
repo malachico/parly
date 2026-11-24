@@ -25,7 +25,7 @@ function Owner({ company }: { company: CompanyOwnerView }) {
       <ul className="divide-y divide-[var(--border)] text-sm">
         {company.members.map((m) => (
           <li key={m.id} className="flex items-center justify-between gap-2 py-1.5">
-            <span className="min-w-0 flex-1 truncate">{m.name}{m.email ? <span className="muted"> · {m.email}</span> : null}</span>
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{m.name}{m.email ? <span className="muted"> · {m.email}</span> : null}</span>
             <span className="muted">{credits(m.spentUsd)} this month</span>
             {!m.owner && (
               <form action={removeCompanyMember}>
@@ -38,7 +38,7 @@ function Owner({ company }: { company: CompanyOwnerView }) {
         ))}
         {company.invites.map((i) => (
           <li key={i.email} className="flex items-center justify-between gap-2 py-1.5">
-            <span className="min-w-0 flex-1 truncate">{i.email}</span>
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{i.email}</span>
             <span className="muted">invited</span>
             <form action={dropCompanyInvite}>
               <Hidden name="companyId" value={company.id} />

@@ -152,6 +152,52 @@ export class Billing {
     return ((await res.json()) as { data: { urls: { general: { overview: string } } } }).data.urls.general.overview;
   }
 
+  /**
+   * Pro ends at its period's end (Paddle then sends the update): for a person a company now covers. No-op without Paddle or a
+   * subscription; `force` sends it even if a webhook already marked it cancelled (an undo since may not have reached us yet).
+   */
+  async cancelAtPeriodEnd(ownerId: string, force = false): Promise<boolean> {
+    const rec = await this.get(ownerId);
+    if (!this.paddle || rec?.plan !== 'pro' || !rec.paddleSubscriptionId || (rec.cancelAtPeriodEnd && !force)) return false;
+    const res = await this.fetchImpl(`${this.apiBase()}/subscriptions/${encodeURIComponent(rec.paddleSubscriptionId)}/cancel`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${this.paddle.apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ effective_from: 'next_billing_period' }),
+    });
+    if (!res.ok) throw new HubError('unavailable', `Paddle answered HTTP ${res.status}`);
+    return true;
+  }
+
+  /** Undoes cancelAtPeriodEnd (the join it was for failed): Paddle drops the scheduled cancel. */
+  async resumePro(ownerId: string): Promise<void> {
+    const rec = await this.get(ownerId);
+    if (!this.paddle || !rec?.paddleSubscriptionId) return;
+    const res = await this.fetchImpl(`${this.apiBase()}/subscriptions/${encodeURIComponent(rec.paddleSubscriptionId)}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${this.paddle.apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ scheduled_change: null }),
+    });
+    if (!res.ok) throw new HubError('unavailable', `Paddle answered HTTP ${res.status}`);
+  }
+
+  /**
+   * People left a Team: its subscription drops to `quantity` (the caller counts who's left, never under the minimum) from the
+   * next invoice, no proration. Only ever lowers. No-op without Paddle or a Team subscription. Throws if Paddle refuses, so the
+   * caller keeps the member. Returns the new quantity, or undefined when nothing was sent.
+   */
+  async lowerSeats(companyId: string, quantity: number): Promise<number | undefined> {
+    const rec = await this.get(companyId);
+    if (!this.paddle?.prices.team || rec?.plan !== 'team' || !rec.paddleSubscriptionId) return undefined;
+    if (quantity >= (rec.seats ?? 0)) return undefined;
+    const res = await this.fetchImpl(`${this.apiBase()}/subscriptions/${encodeURIComponent(rec.paddleSubscriptionId)}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${this.paddle.apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ items: [{ price_id: this.paddle.prices.team, quantity }], proration_billing_mode: 'do_not_bill' }),
+    });
+    if (!res.ok) throw new HubError('unavailable', `Paddle answered HTTP ${res.status}`);
+    return quantity;
+  }
+
   private apiBase(): string {
     return this.paddle?.environment === 'production' ? 'https://api.paddle.com' : 'https://sandbox-api.paddle.com';
   }
@@ -175,7 +221,7 @@ export class Billing {
     const pool = !poolId
       ? undefined
       : event.event_type === 'transaction.completed'
-        ? (await this.store.isWorkspace(poolId)) ? poolId : undefined
+        ? (await this.store.isCompany(poolId)) ? poolId : undefined
         : teamItem && d.custom_data?.ownerId && isCompanyOwner(await this.store.getBilling(poolId), await this.store.workspace(poolId), d.custom_data.ownerId)
           ? poolId
           : undefined;
@@ -183,10 +229,10 @@ export class Billing {
 
     if (isSub) {
       const known = d.id ? await this.store.ownerOfSubscription(d.id) : undefined;
-      const knownPool = known && (await this.store.isWorkspace(known)) ? known : undefined;
+      const knownPool = known && (await this.store.isCompany(known)) ? known : undefined;
       const toPool = knownPool ?? pool;
       const person = toPool || teamItem ? undefined : (d.custom_data?.ownerId ?? known);
-      if (person && (await this.store.isWorkspace(person))) return this.store.markEventSeen(event.event_id, event.event_type, now);
+      if (person && (await this.store.isCompany(person))) return this.store.markEventSeen(event.event_id, event.event_type, now);
       const seats = toPool ? Number((teamItem ?? d.items?.[0])?.quantity) || 0 : 0;
       if (toPool && seats < TEAM_MIN_SEATS && ['active', 'trialing', 'past_due'].includes(d.status ?? '')) {
         console.warn(`billing: ignoring ${event.event_type} ${d.id}: Team needs ${TEAM_MIN_SEATS}+ seats, got ${seats}`);
@@ -195,7 +241,13 @@ export class Billing {
       // Company metadata, set only where missing: a buyer checkout verified (pool, not an existing one) owns it, else the workspace's creator.
       const buyer = pool && !knownPool ? d.custom_data?.ownerId : undefined;
       const company = toPool ? companyFields(toPool, await this.store.workspace(toPool), buyer) : undefined;
-      return this.store.handleSubscriptionEvent(event.event_id, event.event_type, toPool ?? person, d, event.occurred_at, now, toPool ? { seats } : undefined, company);
+      const outcome = await this.store.handleSubscriptionEvent(event.event_id, event.event_type, toPool ?? person, d, event.occurred_at, now, toPool ? { seats } : undefined, company);
+      // Team covers its owners now, so their own Pro ends at its period's end. Runs on redeliveries too ('seen'), so a
+      // Paddle failure here throws, the webhook answers 5xx and Paddle's retry finishes it; cancelAtPeriodEnd skips done ones.
+      if (toPool && ['active', 'trialing'].includes(d.status ?? '')) {
+        for (const o of (await this.store.getBilling(toPool))?.owners ?? []) await this.cancelAtPeriodEnd(o);
+      }
+      return outcome;
     }
     const ownerId: string | undefined =
       pool ??

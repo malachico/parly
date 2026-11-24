@@ -174,7 +174,7 @@ export function PlanStrip({ billing }: { billing: BillingView }) {
         <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--subtle)]">
           <span className={`block h-full rounded-full ${pct >= 100 ? 'bg-[var(--bad-fg)]' : pct >= 80 ? 'bg-amber-500' : 'bg-[var(--accent)]'}`} style={{ width: `${pct}%` }} />
         </span>
-        {pct}% of {credits(billing.monthlyUsd + billing.extraUsd)} credits
+        {billing.monthlyUsd === undefined ? `Team · covered by ${billing.billedTo?.name ?? 'your company'}` : `${pct}% of ${credits(billing.monthlyUsd + (billing.extraUsd ?? 0))} credits`}
       </span>
       {billing.plan === 'free' && (
         <Link href={upgradeHref} className="ml-auto font-semibold text-[var(--accent)] hover:underline">

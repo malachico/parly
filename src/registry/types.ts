@@ -136,6 +136,8 @@ export interface AgentRecord {
   payerId?: string;
   /** Company credit pool: the workspace id whose billing record pays for this person (set by accepting a company invite at `POST /companies/:id/accept`). */
   billingAccountId?: string;
+  /** When an owner started removing this member from billingAccountId (a claim against duplicate removals). */
+  removingAt?: string;
   githubId?: string;
   /** Self-hosted password sign-in (registry/password.ts): never leaves the hub. */
   passwordHash?: string;

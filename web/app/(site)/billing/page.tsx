@@ -1,11 +1,11 @@
 import { ErrorNote, PageHeader } from '@/components/ui';
-import { BillingCard, PoolCard } from '@/components/BillingCard';
+import { BillingCard, CompanyPool, StartTeam } from '@/components/BillingCard';
 import { RedeemVoucherForm } from '@/components/Vouchers';
 import { redeemCreditVoucher } from '@/lib/actions/vouchers';
 import { UsageCard } from '@/components/UsageCard';
 import { CompanyCard } from '@/components/CompanyCard';
 import Link from 'next/link';
-import { currentWorkspace, hub, hubOrLogin, myBilling, type CompanyInviteView, type CompanyView, type Me, type PoolView, type UsageAllowance } from '@/lib/hub';
+import { currentWorkspace, hub, hubOrLogin, myBilling, type CompanyInviteView, type CompanyView, type Me, type UsageAllowance } from '@/lib/hub';
 import { wsHref } from '@/lib/routes';
 
 type Props = { searchParams: Promise<{ error?: string; asked?: string; paid?: string; had?: string; pool?: string }> };
@@ -40,14 +40,6 @@ export default async function Billing({ searchParams }: Props) {
     hub<CompanyInviteView[]>('/me/company/invites').catch(() => []),
   ]);
   const ws = await currentWorkspace(user);
-  // A workspace owner manages its company credit pool here: every workspace of theirs.
-  const pools = (
-    await Promise.all(
-      user.workspaces
-        .filter((w) => w.owner && !w.archived)
-        .map(async (w) => ({ w, pool: await hub<PoolView>(`/workspaces/${w.id}/billing`).catch(() => undefined) })),
-    )
-  ).filter((p) => p.pool);
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <PageHeader
@@ -56,17 +48,17 @@ export default async function Billing({ searchParams }: Props) {
       />
       <ErrorNote error={error} />
       <CompanyCard company={company} invites={invites} me={{ id: user.id, email: user.email }} />
-      {billing?.billedTo && !company?.member && (
+      {billing?.billedTo && !billing.company && !company?.member && (
         <p role="status" className="rounded-lg bg-[var(--subtle)] px-3 py-2 text-sm">
           Billed to {billing.billedTo.name}: your agents use your company&apos;s credits.
         </p>
       )}
       {billing &&
-        pools.map(({ w, pool }) => (
-          <PoolCard key={w.id} pool={pool!} name={w.name} billing={billing} me={{ id: user.id, email: user.email }} had={paid === 'pool' && paidPool === w.id ? had : undefined} team={paid === 'team' && paidPool === w.id} />
+        company?.owned.map((c) => (
+          <CompanyPool key={c.id} company={c} billing={billing} me={{ id: user.id, email: user.email }} had={paid === 'pool' && paidPool === c.id ? had : undefined} team={paid === 'team' && paidPool === c.id} />
         ))}
-      {billing?.paddle?.prices.team && !pools.length && !billing.billedTo && (
-        <p className="muted text-sm">Team plan for your company: create a workspace for it, then buy Team here.</p>
+      {billing && !billing.company && !company?.member && !company?.owned.length && (
+        <StartTeam billing={billing} me={{ id: user.id, email: user.email, name: user.name }} />
       )}
       {billing ? (
         <BillingCard billing={billing} me={{ id: user.id, email: user.email }} asked={asked} paid={paid === 'pool' || paid === 'team' ? undefined : paid} had={had} />

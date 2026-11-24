@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db/db.js';
+import { retryBilling } from './rest/companies.js';
 import { makeShutdown } from './shutdown.js';
 
 const config = loadConfig();
@@ -18,6 +19,8 @@ const sweep = setInterval(() => {
   void hub.wakeService.wakeSweep().catch((err) => console.error('wake sweep failed', err));
   // Scheduled messages too; POST /tick (a scheduler job) covers the minutes no instance is awake.
   void hub.scheduleService.runSchedules().catch((err) => console.error('scheduled messages failed', err));
+  // Seat recounts and Pro cancel undos that Paddle refused (retryBilling logs its own errors).
+  void retryBilling(hub);
 }, config.wakeSweepMs);
 sweep.unref();
 

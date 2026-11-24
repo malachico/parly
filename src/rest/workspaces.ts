@@ -2,8 +2,6 @@ import { Router } from 'express';
 import type { HubService } from '../hub/hubService.js';
 import { agentOf, requireAgent } from '../lib/auth.js';
 import { HubError } from '../lib/errors.js';
-import { CREDIT_MICROS } from '../lib/plans.js';
-import { isCompanyOwner } from '../billing/company.js';
 import { agentView, channelView, workspaceView } from '../lib/present.js';
 import { json, roomSetup, str } from './helpers.js';
 
@@ -157,74 +155,6 @@ export function workspacesRoutes(router: Router, hub: HubService): void {
       const me = agentOf(req)!;
       const domains = (req.body ?? {}).domains;
       return workspaceView(await hub.registry.setWorkspaceDomains(me, String(req.params.id), Array.isArray(domains) ? domains : []), me);
-    }),
-  );
-
-  /**
-   * Owner only: the company credit pool (the workspace's own billing record, which people whose billingAccountId names it bill
-   * while it is on Team or Enterprise), its balance, and this month's model spend per member.
-   */
-  router.get(
-    '/workspaces/:id/billing',
-    requireAgent,
-    json(async (req) => {
-      const ws = await hub.registry.requireWorkspaceOwner(agentOf(req)!, String(req.params.id));
-      const [limits, { spentMicros, capMicros, budgetMicros }, rows, rec, blockedBy] = await Promise.all([
-        hub.llm.limits(ws.id),
-        hub.llm.balance(ws.id),
-        hub.llm.agentSpend(ws.id),
-        hub.billing.get(ws.id),
-        hub.llm.blockedBy(ws.id),
-      ]);
-      // ponytail: model spend (agentUsage) only, metered tools aren't per agent. Rows are per payer, so only the company's part shows; a legacy (pre-split) row keeps its last payer's whole month.
-      const agents = await hub.registry.workspaceStore.getAgentsByIds([...new Set(rows.map((r) => r.agentId))]);
-      const personOf = new Map(agents.map((a) => [a.id, a.ownerId ?? a.id]));
-      const byPerson = new Map<string, number>();
-      for (const r of rows) {
-        const p = personOf.get(r.agentId) ?? r.agentId;
-        byPerson.set(p, (byPerson.get(p) ?? 0) + r.micros);
-      }
-      const people = await hub.registry.workspaceStore.getAgentsByIds([...byPerson.keys()]);
-      const names = new Map(people.map((a) => [a.id, a.name]));
-      return {
-        workspaceId: ws.id,
-        plan: limits.plan,
-        seats: rec?.seats,
-        // Only a company owner may buy or manage Team: the webhook accepts a Team subscription only when ownerId owns it.
-        buyer: isCompanyOwner(rec, ws, agentOf(req)!.id),
-        managed: !!rec?.paddleSubscriptionId,
-        monthlyUsd: limits.monthlyMicros / 1e6,
-        extraUsd: limits.extraMicros / 1e6,
-        leftUsd: Math.max(0, capMicros - spentMicros) / 1e6,
-        budgetCredits: budgetMicros === undefined ? null : budgetMicros / CREDIT_MICROS,
-        spentCredits: spentMicros / CREDIT_MICROS,
-        ...(blockedBy ? { blockedBy } : {}),
-        members: [...byPerson].map(([id, micros]) => ({ id, name: names.get(id) ?? id, spentUsd: micros / 1e6 })).sort((a, b) => b.spentUsd - a.spentUsd),
-      };
-    }),
-  );
-
-  /** Company owner only: set the pool's monthly budget (this UTC month's spend past it stops work): `{credits}`, or `{credits: null}` to remove it. */
-  router.put(
-    '/workspaces/:id/budget',
-    requireAgent,
-    json(async (req) => {
-      const ws = await hub.registry.requireWorkspaceOwner(agentOf(req)!, String(req.params.id));
-      if (!isCompanyOwner(await hub.billing.get(ws.id), ws, agentOf(req)!.id)) throw new HubError('forbidden', "Only the company's owners set its budget");
-      await hub.billing.setBudget(ws.id, (req.body ?? {}).credits);
-      const { budgetMicros } = await hub.llm.balance(ws.id);
-      return { workspaceId: ws.id, budgetCredits: budgetMicros === undefined ? null : budgetMicros / CREDIT_MICROS };
-    }),
-  );
-
-  /** Company owner only (the Team buyer): Paddle's customer portal for the pool's Team subscription: `{url}`. */
-  router.post(
-    '/workspaces/:id/billing/portal',
-    requireAgent,
-    json(async (req) => {
-      const ws = await hub.registry.requireWorkspaceOwner(agentOf(req)!, String(req.params.id));
-      if (!isCompanyOwner(await hub.billing.get(ws.id), ws, agentOf(req)!.id)) throw new HubError('forbidden', "Only the company's owners manage its Team subscription");
-      return { url: await hub.billing.portalUrl(ws.id) };
     }),
   );
 

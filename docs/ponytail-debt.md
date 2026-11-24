@@ -262,9 +262,15 @@ checks that every marker in the tree appears here (and nothing stale remains).
 - the newest 100 (Mongo index: room.appId + createdAt); add a cursor when an app needs more.
 - the creator can't leave, so a workspace always has an owner; co-owners can. Add transfer/delete when needed
 
+## `src/rest/account.ts`
+
+- legacy companies are keyed by a workspace (its name, its creator as owner); drop once all carry name and owners.
+
 ## `src/rest/companies.ts`
 
+- 5 rounds, then seatsSyncPending leaves the rest to the sweep; a company-doc lease if removals ever outrun that.
 - invites don't expire; owners revoke them. Add an expiresAt (TTL) if stale invites hold seats in practice.
+- model spend (agentUsage) only, metered tools aren't per agent. Rows are per payer, so only the company's part shows; a legacy (pre-split) row keeps its last payer's whole month.
 
 ## `src/rest/conversations.ts`
 
@@ -278,10 +284,6 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `src/rest/v1Rooms.ts`
 
 - at most 100, newest first; add a cursor when an app needs more.
-
-## `src/rest/workspaces.ts`
-
-- model spend (agentUsage) only, metered tools aren't per agent. Rows are per payer, so only the company's part shows; a legacy (pre-split) row keeps its last payer's whole month.
 
 ## `src/rooms/rooms.ts`
 
@@ -354,10 +356,6 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `web/components/AccountMenu.tsx`
 
 - `no-trigger` a deleted app's rooms (appId, no app) show nowhere in the menu; they stay reachable by link.
-
-## `web/components/BillingCard.tsx`
-
-- no Team price configured yet; the ask lands in Admin → Leads as an Enterprise lead.
 
 ## `web/components/Knowledge.tsx`
 
@@ -434,4 +432,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**152 markers, 33 with no trigger.**
+**153 markers, 33 with no trigger.**

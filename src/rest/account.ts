@@ -7,6 +7,7 @@ import { GITHUB_CLOUD_TOOLS, GITHUB_NATIVE_LOGO, GITHUB_NATIVE_NAME } from '../h
 import { isSuperAdmin } from '../lib/admin.js';
 import { agentView } from '../lib/present.js';
 import { isCompanyOwner } from '../billing/company.js';
+import { limitsOf } from '../lib/plans.js';
 import { MAX_LIVE_BOTS } from '../registry/registry.js';
 import type { AgentRecord } from '../registry/types.js';
 import { json, myWorkspaces, str } from './helpers.js';
@@ -153,18 +154,22 @@ export function accountRoutes(router: Router, hub: HubService): void {
       const owned = await hub.registry.ownedWorkspaceUsage(me, me);
       // Whoever actually pays (payerOf): a company on Team or Enterprise shows by name; the pool's balance is its owners' to see.
       const payer = await hub.llm.payerOf(me);
+      const companyRec = payer !== me.id ? await hub.billing.get(payer) : undefined;
+      // ponytail: legacy companies are keyed by a workspace (its name, its creator as owner); drop once all carry name and owners.
       const pool = payer !== me.id ? await hub.registry.workspaceDoc(payer) : undefined;
+      const company = payer !== me.id ? { id: payer, name: companyRec?.name ?? pool?.name ?? payer, owner: isCompanyOwner(companyRec, pool, me.id) } : undefined;
       // A company pays: its credit is what runs out, so `used` is its ratio (never its dollars).
-      const used = pool ? Math.min(1, await hub.llm.used(payer)) : capMicros > 0 ? spentMicros / capMicros : 1;
+      const used = company ? Math.min(1, await hub.llm.used(payer)) : capMicros > 0 ? spentMicros / capMicros : 1;
       // Why work stops, if it does: the payer's credits ran out, or its owners' monthly budget was reached (no amounts).
       const blockedBy = await hub.llm.blockedBy(payer);
       const p = hub.billing.paddle;
       return {
-        plan: limits.plan,
-        monthlyUsd: limits.monthlyMicros / 1e6,
-        extraUsd: limits.extraMicros / 1e6,
+        // The plan I'm on: the company's when it pays; ownPlan is my own (a Pro ending at periodEnd once Team covers me).
+        plan: company ? limitsOf(companyRec, 0).plan : limits.plan,
+        ownPlan: limits.plan,
+        // Dollar amounts only when I pay: a company's balance is its owners' (GET /companies/:id), never shown as mine.
+        ...(company ? {} : { monthlyUsd: limits.monthlyMicros / 1e6, extraUsd: limits.extraMicros / 1e6, leftUsd: Math.max(0, capMicros - spentMicros) / 1e6 }),
         used: Math.min(1, used),
-        leftUsd: Math.max(0, capMicros - spentMicros) / 1e6,
         workspaces: { count: owned.count, max: owned.max },
         // Legacy, for one release: bot counts against the flat per-person bot guard.
         hired,
@@ -172,7 +177,7 @@ export function accountRoutes(router: Router, hub: HubService): void {
         connected,
         maxConnected: MAX_LIVE_BOTS,
         referrals: rec?.referrals ?? 0,
-        ...(pool ? { billedTo: { workspaceId: pool.id, name: pool.name, ...(isCompanyOwner(await hub.billing.get(pool.id), pool, me.id) ? { owner: true } : {}) } } : {}),
+        ...(company ? { company, billedTo: { workspaceId: company.id, name: company.name, ...(company.owner ? { owner: true } : {}) } } : {}),
         ...(blockedBy ? { blockedBy } : {}),
         ...(rec?.periodEnd ? { periodEnd: rec.periodEnd } : {}),
         ...(rec?.cancelAtPeriodEnd ? { cancelAtPeriodEnd: true } : {}),

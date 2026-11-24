@@ -491,11 +491,12 @@ export type MyTools = { available: boolean; searchable?: boolean; triggers?: boo
 /** GET /me/billing: your plan, what it gives you and what you've used; with `paddle`, the hub takes payments. */
 export type BillingView = {
   plan: 'free' | 'pro' | 'team' | 'enterprise';
-  monthlyUsd: number;
-  extraUsd: number;
+  /** Your own dollars; absent when a company pays (its balance is on GET /companies/:id, for its owners). */
+  monthlyUsd?: number;
+  extraUsd?: number;
   used: number;
-  /** Dollars of AI use left: this month's allowance plus top-ups, less what's been spent. */
-  leftUsd: number;
+  /** Dollars of AI use left: this month's allowance plus top-ups, less what's been spent. Absent when a company pays. */
+  leftUsd?: number;
   /** Workspaces you own vs plan cap; max null on self-host / unlimited. */
   workspaces?: { count: number; max: number | null };
   /** @deprecated Prefer `workspaces`. Kept one release for older hubs. */
@@ -514,28 +515,13 @@ export type BillingView = {
   /** Your company pays: you joined its workspace by email domain, so your agents spend its credit pool. */
   /** `owner`: you own that workspace, so you set its budget. */
   billedTo?: { workspaceId: string; name: string; owner?: boolean };
+  /** Your own plan when a company pays (`plan` is then the company's). */
+  ownPlan?: 'free' | 'pro' | 'team' | 'enterprise';
+  /** The company that pays for you (Team); `owner`: you own it. */
+  company?: { id: string; name: string; owner?: boolean };
   /** Why work stops when `used` reaches 1: the pool's monthly budget, or credits ran out. */
   blockedBy?: 'budget' | 'credits';
   paddle?: { clientToken: string; environment: 'sandbox' | 'production'; prices: { pro?: string; proYearly?: string; team?: string; topups?: Record<string, string> } };
-};
-
-/** GET /workspaces/:id/billing (owners): the company credit pool and what each member's agents spent this month. */
-export type PoolView = {
-  workspaceId: string;
-  plan: 'free' | 'pro' | 'team' | 'enterprise';
-  seats?: number;
-  /** You created the workspace: only you can buy or manage its Team subscription. */
-  buyer: boolean;
-  /** The pool has a Paddle subscription to manage. */
-  managed: boolean;
-  monthlyUsd?: number;
-  extraUsd: number;
-  leftUsd: number;
-  members: { id: string; name: string; spentUsd: number }[];
-  /** Owners' monthly cap in credits (null: none); this UTC month's spend counts against it. */
-  budgetCredits?: number | null;
-  spentCredits?: number;
-  blockedBy?: 'budget' | 'credits';
 };
 
 /** GET /me/apps: a connected app with each of your agents, whether it may use it, and how it has. */

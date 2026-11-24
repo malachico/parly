@@ -5,6 +5,7 @@ import { hasGitHubToolkit } from '../hub/cloudAgent.js';
 import { HubError } from '../lib/errors.js';
 import { channelView } from '../lib/present.js';
 import { timingSafeEqual } from 'node:crypto';
+import { retryBilling } from './companies.js';
 import { hookText, json, publicMessageView, publicPeople, str, webhookView } from './helpers.js';
 
 /** The scheduler tick, Slack, webhooks (incoming and managed), public threads. */
@@ -379,6 +380,7 @@ export function integrationsRoutes(router: Router, hub: HubService): void {
         hub.slack?.sweep() ?? 0,
         hub.telegram?.sweep() ?? 0,
         hub.appEvents.sweep(),
+        retryBilling(hub),
       ]);
       return { ran, woken, slept, appEvents, ...(hub.slack ? { slack } : {}), ...(hub.telegram ? { telegram } : {}) };
     }),

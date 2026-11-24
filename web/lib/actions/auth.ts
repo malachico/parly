@@ -152,21 +152,30 @@ export async function openBillingPortal() {
   redirect(url);
 }
 
-/** Opens Paddle's customer portal for a company pool's Team subscription (workspace owners): seats, cards, cancelling. */
+/** Opens Paddle's customer portal for a company's Team subscription (its owner): seats, cards, cancelling. */
 export async function openPoolPortal(form: FormData) {
-  const id = field(form, 'workspaceId');
-  const { url } = await attempt('/billing', () => hub<{ url: string }>(`/workspaces/${encodeURIComponent(id)}/billing/portal`, { method: 'POST' }));
+  const id = field(form, 'companyId');
+  const { url } = await attempt('/billing', () => hub<{ url: string }>(`/companies/${encodeURIComponent(id)}/billing/portal`, { method: 'POST' }));
   redirect(url);
 }
 
-/** Owner or co-owner: sets a company pool's monthly budget in credits; an empty `credits` removes it. */
+/** Company owner: sets its monthly budget in credits; an empty `credits` removes it. */
 export async function setPoolBudget(form: FormData) {
-  const id = field(form, 'workspaceId');
+  const id = field(form, 'companyId');
   const credits = budgetCredits(field(form, 'credits'));
   // NaN/Infinity would serialize to null and remove the budget, so reject them here.
   if (credits === undefined) redirect(`/billing?error=${encodeURIComponent(BUDGET_INVALID)}#company`);
-  await attempt('/billing#company', () => hub(`/workspaces/${encodeURIComponent(id)}/budget`, { method: 'PUT', body: { credits } }));
+  await attempt('/billing#company', () => hub(`/companies/${encodeURIComponent(id)}/budget`, { method: 'PUT', body: { credits } }));
   revalidatePath('/billing');
+}
+
+/** Before a Team checkout: creates your company (or returns the one you own) so Paddle bills it, not you. */
+export async function createCompany(name: string): Promise<{ id: string } | { error: string }> {
+  try {
+    return await hub<{ id: string }>('/companies', { method: 'POST', body: { name } });
+  } catch (e) {
+    return { error: e instanceof HubError ? e.message : 'Could not create the company. Try again.' };
+  }
 }
 
 /** Asks about Enterprise or joins the Pro waitlist from Plan & billing: the Parly team gets an email, and it's listed in Admin → Leads. */
