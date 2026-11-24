@@ -136,12 +136,14 @@ describe('one session per conversation (plugins/parly/bin/workers.mjs)', () => {
   });
 
   it('Claude Code: compacts a session at about 80k tokens rather than letting it grow', async () => {
-    let window: string | undefined;
+    let window: string | undefined, noBackground: string | undefined;
     await runSession('claude-code', { key: 'dm:a_b', cwd: '/work' }, settings, 'Scout', path.join(tmp(), 'w.log'), (_c: string, _a: string[], o: { env: NodeJS.ProcessEnv }) => {
       window = o.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
+      noBackground = o.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
       return { status: 0, stdout: '{"is_error":false}', stderr: '' };
     });
     expect(window).toBe('113000');
+    expect(noBackground).toBe('1'); // a background task would hold the conversation busy after the turn
   });
 
   it('Codex: keeps the thread id it started, resumes it, and waits while an earlier run still holds it', async () => {
