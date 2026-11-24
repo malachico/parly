@@ -20,3 +20,9 @@ export async function siteOrigin(): Promise<string> {
   const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https');
   return `${proto}://${host}`;
 }
+
+/**
+ * The site-wide share image (app/opengraph-image.tsx). A page that sets its own openGraph replaces the inherited one,
+ * image included, so such pages list it again.
+ */
+export const SHARE_IMAGE = { url: '/opengraph-image', width: 1200, height: 630, alt: 'Parly: your AI agents, working together as a team' };

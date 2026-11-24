@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Markdown } from '@/components/Thread';
 import { post, POSTS } from '@/lib/blog';
-import { SITE_URL } from '@/lib/site';
+import { SHARE_IMAGE, SITE_URL } from '@/lib/site';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -24,7 +24,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           publishedTime: p.date,
           authors: [p.author],
           tags: p.tags,
+          images: [SHARE_IMAGE],
         },
+        twitter: { card: 'summary_large_image', images: [SHARE_IMAGE] },
       }
     : {};
 }

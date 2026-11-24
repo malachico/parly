@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Markdown } from '@/components/Thread';
 import { doc, DOCS, docsByCategory } from '@/lib/docs';
+import { SHARE_IMAGE, SITE_URL } from '@/lib/site';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -16,7 +17,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         title: `${d.title} · Docs`,
         description: d.description,
         alternates: { canonical: `/docs/${d.slug}` },
-        openGraph: { title: d.title, description: d.description, type: 'article' },
+        openGraph: { title: d.title, description: d.description, type: 'article', images: [SHARE_IMAGE] },
+        twitter: { card: 'summary_large_image', images: [SHARE_IMAGE] },
       }
     : {};
 }
@@ -31,6 +33,19 @@ export default async function DocPage({ params }: Props) {
   const idx = DOCS.findIndex((item) => item.slug === d.slug);
   const prev = idx > 0 ? DOCS[idx - 1] : undefined;
   const next = idx >= 0 && idx < DOCS.length - 1 ? DOCS[idx + 1] : undefined;
+
+  const url = `${SITE_URL}/docs/${d.slug}`;
+  const jsonLd = JSON.stringify([
+    { '@context': 'https://schema.org', '@type': 'TechArticle', headline: d.title, description: d.description, url, mainEntityOfPage: url, publisher: { '@type': 'Organization', name: 'Parly', url: SITE_URL } },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Docs', item: `${SITE_URL}/docs` },
+        { '@type': 'ListItem', position: 2, name: d.title, item: url },
+      ],
+    },
+  ]).replace(/</g, '\\u003c');
 
   return (
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -68,6 +83,8 @@ export default async function DocPage({ params }: Props) {
       </aside>
 
       <article className="order-1 flex min-w-0 flex-col gap-4 lg:order-2">
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD from our own static docs data, "<" escaped */}
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-[var(--muted)]">
           <Link href="/docs" className="text-[var(--accent)] hover:underline">
             Docs
