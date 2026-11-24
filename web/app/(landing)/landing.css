@@ -1,0 +1,534 @@
+/* The landing page only. Every class is `fb-` prefixed: Next keeps a route's stylesheet after navigation.
+   Everything fails open: with no JS, no scroll timelines or reduced motion, all content is simply there. */
+
+.fb {
+  --fb-ink: #0c0a14;
+  --fb-ink2: #18142b;
+  --fb-paper: #f6f5f2;
+  --fb-text: #f4f1ea;
+  --fb-soft: #bdb8cb;
+  --fb-lime: #c6ff3d;
+  --fb-coral: #ff5a3c;
+  --fb-violet: #7c5cff;
+  --fb-deep: #4530d0;
+  --fb-sky: #5ad1ff;
+  --fb-sh: var(--fb-text);
+  background: var(--fb-ink);
+  color: var(--fb-text);
+}
+.fb a:focus-visible,
+.fb button:focus-visible {
+  outline: 3px solid var(--fb-violet);
+  outline-offset: 3px;
+}
+.fb-mono {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+}
+.fb-wrap {
+  width: 100%;
+  max-width: 76rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+@media (min-width: 640px) {
+  .fb-wrap {
+    padding-inline: 2rem;
+  }
+}
+.fb-sec {
+  padding-block: clamp(4.5rem, 9vw, 8.5rem);
+}
+.fb-paper {
+  --fb-sh: var(--fb-ink);
+  background: var(--fb-paper);
+  color: var(--fg);
+}
+.fb-deep {
+  background: var(--fb-deep);
+}
+.fb-coral {
+  --fb-sh: var(--fb-ink);
+  background: var(--fb-coral);
+  color: var(--fb-ink);
+}
+
+/* Header: sticks to the top of the page's own scroller, with a reading-progress bar. */
+.fb-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--fb-ink) 82%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #ffffff1a;
+}
+.fb-head nav a:not(.fb-btn) {
+  color: var(--fb-soft);
+}
+.fb-head nav a:not(.fb-btn):hover {
+  color: var(--fb-text);
+}
+.fb-progress {
+  position: absolute;
+  inset: auto 0 -2px 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--fb-lime), var(--fb-sky), var(--fb-violet), var(--fb-coral));
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+}
+
+/* Buttons and sticker cards: the brand's ink outline and hard offset shadow. */
+.fb-btn {
+  display: inline-block;
+  width: fit-content;
+  border: 2px solid var(--fb-ink);
+  border-radius: 999px;
+  background: var(--fb-lime);
+  color: var(--fb-ink);
+  font-weight: 700;
+  box-shadow: 4px 5px 0 var(--fb-sh);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.fb-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 7px 0 var(--fb-sh);
+}
+.fb-btn:active {
+  transform: translate(2px, 3px);
+  box-shadow: 1px 1px 0 var(--fb-sh);
+}
+.fb-btn-plain {
+  background: var(--fb-paper);
+}
+.fb-card {
+  border: 2px solid var(--fb-ink);
+  border-radius: 22px;
+  box-shadow: 5px 6px 0 var(--fb-sh);
+  color: var(--fg);
+  rotate: var(--tilt, 0deg);
+}
+.fb-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.fb-kicker::before {
+  content: '';
+  width: 0.7rem;
+  height: 0.7rem;
+  background: var(--fb-k, var(--fb-lime));
+  border: 2px solid currentColor;
+  rotate: 45deg;
+}
+.fb-h2 {
+  font-size: clamp(2.1rem, 5.4vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+/* Hero. */
+.fb-hero {
+  position: relative;
+  isolation: isolate;
+  padding-block: clamp(2.5rem, 6vw, 5rem) clamp(4rem, 8vw, 7rem);
+}
+.fb-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(42rem 26rem at 88% 8%, #7c5cff59, transparent 70%),
+    radial-gradient(34rem 24rem at 4% 70%, #ff5a3c33, transparent 70%),
+    radial-gradient(circle, #ffffff24 1px, transparent 1.5px) 0 0 / 26px 26px;
+}
+.fb-pill {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #ffffff38;
+  border-radius: 999px;
+  background: #ffffff12;
+  padding: 0.3rem 0.85rem;
+  font-size: 13px;
+  color: var(--fb-text);
+}
+.fb-pill:hover {
+  border-color: var(--fb-lime);
+}
+.fb-live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #3ddc84;
+}
+.fb-h1 {
+  font-size: clamp(2.2rem, 10.4vw, 8.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+  font-weight: 700;
+}
+.fb-line {
+  display: block;
+}
+.fb-hl {
+  position: relative;
+  width: fit-content;
+  color: var(--fb-lime);
+}
+.fb-hl svg {
+  position: absolute;
+  left: 0;
+  bottom: -0.16em;
+  width: 100%;
+  height: 0.16em;
+  color: var(--fb-coral);
+}
+.fb-works {
+  border-radius: 16px;
+  background: var(--fb-paper);
+  padding: 0.6rem 0.9rem;
+}
+
+/* The simulated channel: a fixed-height log with the newest message at the bottom, so playing it never moves the page. */
+.fb-demo {
+  background: var(--surface);
+  overflow: hidden;
+}
+.fb-demo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--fb-ink);
+  background: var(--av-1);
+  padding: 0.55rem 0.9rem;
+  font-size: 14px;
+}
+.fb-tag {
+  border: 1.5px solid var(--fb-ink);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 0 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+}
+.fb-demo-btn {
+  margin-left: auto;
+  border: 1.5px solid var(--fb-ink);
+  border-radius: 999px;
+  background: var(--fb-ink);
+  color: var(--fb-text);
+  padding: 0.1rem 0.7rem;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fb-rail {
+  display: flex;
+  gap: 0.3rem;
+  border-bottom: 2px solid var(--fb-ink);
+  background: var(--fb-ink);
+  padding: 0.5rem 0.6rem;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@media (max-width: 420px) {
+  .fb-rail {
+    font-size: 9px;
+    letter-spacing: 0;
+  }
+}
+.fb-rail li {
+  flex: 1;
+  border-radius: 999px;
+  padding: 0.2rem 0;
+  text-align: center;
+  color: var(--fb-soft);
+  background: #ffffff14;
+  transition:
+    background 0.3s,
+    color 0.3s;
+}
+.fb-rail li[data-on] {
+  background: var(--fb-lime);
+  color: var(--fb-ink);
+}
+.fb-log {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.85rem;
+  height: 27rem;
+  padding: 1rem;
+  overflow: hidden;
+  mask-image: linear-gradient(transparent, #000 2.25rem);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fb-log {
+    height: auto;
+    mask-image: none;
+  }
+}
+.fb-msg {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.65rem;
+  font-size: 14.5px;
+  line-height: 1.35;
+}
+.fb-msg[data-s='typing'] .fb-msg-text {
+  visibility: hidden;
+}
+.fb-dots3 {
+  position: absolute;
+  left: 2.9rem;
+  top: 1.45rem;
+  display: flex;
+  gap: 4px;
+}
+.fb-dots3 i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.fb-needs {
+  margin-left: 0.4rem;
+  border-radius: 999px;
+  background: var(--fb-coral);
+  color: var(--fb-ink);
+  padding: 0 0.45rem;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* The band between hero and cast. */
+.fb-band {
+  overflow: hidden;
+  border-block: 2px solid var(--fb-ink);
+  background: var(--fb-lime);
+  color: var(--fb-ink);
+  padding-block: 0.5rem;
+  rotate: -1.2deg;
+  margin-inline: -1rem;
+}
+.fb-band p {
+  width: max-content;
+  font-size: clamp(2.2rem, 7vw, 5.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.fb-band span span {
+  color: transparent;
+  -webkit-text-stroke: 2px var(--fb-ink);
+}
+
+/* The network: six teammates wired to one hub. Decorative; the cards beside it say the same in words. */
+.fb-net {
+  position: relative;
+  aspect-ratio: 1;
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+}
+.fb-net > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.fb-net line {
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 12;
+  vector-effect: non-scaling-stroke;
+}
+.fb-node {
+  position: absolute;
+  translate: -50% -50%;
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  width: 6.5rem;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.fb-node > span:first-child {
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--fb-ink);
+  border-radius: 50%;
+  box-shadow: 3px 4px 0 var(--fb-text);
+  padding: 0.35rem;
+}
+.fb-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  width: 26%;
+  aspect-ratio: 1;
+  border: 2px solid var(--fb-ink);
+  border-radius: 50%;
+  background: var(--fb-lime);
+  color: var(--fb-ink);
+  font-weight: 700;
+  box-shadow: 0 0 0 10px #c6ff3d2e, 0 0 0 24px #c6ff3d14;
+}
+
+/* Steps: giant outlined numerals. */
+.fb-num {
+  font-size: clamp(5rem, 11vw, 9rem);
+  font-weight: 700;
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  color: transparent;
+  -webkit-text-stroke: 2.5px var(--fb-ink);
+}
+.fb-step:hover .fb-num {
+  color: var(--fb-lime);
+}
+
+.fb-foot a:hover {
+  color: var(--fb-lime);
+  text-decoration: underline;
+}
+
+/* Motion: only for people who haven't asked for less, and only as from-states, so the resting page is the page. */
+@media (prefers-reduced-motion: no-preference) {
+  .fb-line {
+    animation: fb-line 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  }
+  .fb-line + .fb-line {
+    animation-delay: 0.14s;
+  }
+  .fb-hl path {
+    stroke-dasharray: 320;
+    animation: fb-draw 0.8s 0.75s ease-out both;
+  }
+  .fb-fade {
+    animation: fb-fade 0.8s 0.35s both;
+  }
+  .fb-live-dot,
+  .fb-hub {
+    animation: fb-pulse 2.2s ease-in-out infinite;
+  }
+  .fb-msg[data-s='shown'] {
+    animation: fb-msg 0.32s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+  }
+  .fb-dots3 i {
+    animation: fb-dot 0.9s infinite;
+  }
+  .fb-dots3 i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .fb-dots3 i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  .fb-net line {
+    animation: fb-flow 1.1s linear infinite;
+  }
+  .fb-net line:nth-child(even) {
+    animation-direction: reverse;
+  }
+  .fb-card {
+    transition:
+      rotate 0.2s,
+      translate 0.2s;
+  }
+  .fb-wiggle:hover {
+    rotate: 0deg;
+    translate: 0 -4px;
+  }
+  @supports (animation-timeline: view()) {
+    .fb-progress {
+      animation: fb-grow linear both;
+      animation-timeline: scroll(nearest);
+    }
+    .fb-rise {
+      animation: fb-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+    .fb-band p {
+      animation: fb-slide linear both;
+      animation-timeline: view();
+    }
+  }
+}
+@keyframes fb-line {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(0.45em) skewY(4deg);
+  }
+}
+@keyframes fb-draw {
+  from {
+    stroke-dashoffset: 320;
+  }
+}
+@keyframes fb-fade {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes fb-pulse {
+  50% {
+    scale: 1.12;
+  }
+}
+@keyframes fb-msg {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+@keyframes fb-dot {
+  30% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes fb-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+@keyframes fb-grow {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes fb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(46px) scale(0.94);
+  }
+}
+@keyframes fb-slide {
+  from {
+    transform: translateX(2%);
+  }
+  to {
+    transform: translateX(-28%);
+  }
+}
