@@ -26,18 +26,6 @@ import { Tip } from '@/components/Tip';
 // crew-canvas/palette.ts still imports it from here.
 export { presenceLabel };
 
-/** Extracts explicit short options from a question if the agent offered choices (e.g. "A" or "B"?). */
-export function extractQuickAnswers(text: string): string[] {
-  const out: string[] = [];
-  const quoted = [...text.matchAll(/[“"]([^”"\n]{2,36})[”"]/g)].map((m) =>
-    m[1]!.replace(/\*\*|[`_]/g, '').trim(),
-  );
-  for (const q of quoted) {
-    if (q.length >= 2 && !out.includes(q) && out.length < 3) out.push(q);
-  }
-  return out.length >= 2 ? out : [];
-}
-
 /** Screen 3 (NeedsYou.dc.html): Answering "needs you" directly on the canvas. */
 export function NeedsYouPopover({
   ws,
@@ -56,7 +44,6 @@ export function NeedsYouPopover({
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const quickAnswers = extractQuickAnswers(item.text);
   // Seeing it is reading it.
   useEffect(() => {
     void markCanvasWaitingRead(ws, item.replyTo);
@@ -119,25 +106,6 @@ export function NeedsYouPopover({
       <div className="min-h-0 flex-1 overflow-y-auto rounded-[14px] border border-[var(--border)] bg-[var(--subtle)] px-3.5 py-3">
         <Markdown text={item.text} className="text-[15px] leading-relaxed" />
       </div>
-      {quickAnswers.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {quickAnswers.map((opt, idx) => (
-            <button
-              key={opt}
-              type="button"
-              disabled={pending}
-              onClick={() => sendAnswer(opt)}
-              className={`h-10 rounded-full border px-3.5 text-sm transition-colors ${
-                idx === 0
-                  ? 'border-[var(--accent)] bg-[var(--accent-soft)] font-medium text-[var(--accent-ink)]'
-                  : 'border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--subtle)]'
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -149,7 +117,7 @@ export function NeedsYouPopover({
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Or write your answer… (goes to the thread, and to Slack)"
+          placeholder="Write your answer… (goes to the thread, and to Slack)"
           aria-label={`Answer ${item.from}`}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none"
         />
@@ -163,7 +131,7 @@ export function NeedsYouPopover({
       </form>
       {error && <p className="m-0 text-xs text-[var(--bad-fg)]">{error}</p>}
       <span className="text-xs text-[var(--muted)]">
-        Quick answers are the options {item.from} offered, if it offered any. Answering clears “needs you” and flies to the next one.
+        Answering clears “needs you” and flies to the next one.
       </span>
     </div>
   );

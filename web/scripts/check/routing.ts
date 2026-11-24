@@ -1,23 +1,9 @@
-import { extractQuickAnswers } from '../../components/CanvasPanels';
 import {
   resolveSideDestination,
   threadCacheKey,
 } from '../../lib/thread-nav';
 import assert from 'node:assert/strict';
 import { conversationRevalidateTarget, isRoomChat, roomHomeHref } from '../../lib/routes';
-
-// extractQuickAnswers: ignores bullet status lists (e.g. #Build-in-public trigger setup) and strips markdown from quoted options.
-const triggerBullets = [
-  '- **Repo:** `malachico/a2a-hub`',
-  '- **Branch:** `main`',
-  '- **Action:** `merged`',
-].join('\n');
-assert.deepEqual(extractQuickAnswers(triggerBullets), []);
-assert.deepEqual(
-  extractQuickAnswers('Should I deploy to "**staging**" or "`production`", or keep "_draft_"?'),
-  ['staging', 'production', 'draft'],
-);
-assert.deepEqual(extractQuickAnswers('Only one "**quoted**" item is not a choice.'), []);
 
 // PR-B single destination resolution from URL searchParams:
 assert.deepEqual(resolveSideDestination(''), { kind: 'none' });
