@@ -75,15 +75,6 @@ export interface AdminLogEntry {
   detail?: string;
 }
 
-export interface ClientRequest {
-  id: string;
-  text: string;
-  email: string;
-  name: string;
-  agentId: string;
-  at: string;
-}
-
 export const adminAgentHref = (id: string) => `/admin/agents/${encodeURIComponent(id)}`;
 
 /** GET from the admin API; a 404 (not an admin, or no such agent) is this site's 404 too. */
@@ -94,15 +85,4 @@ export async function adminGet<T>(path: string, next: string): Promise<T> {
     if (err instanceof HubError && err.status === 404) notFound();
     throw err;
   }
-}
-
-/** Someone on the Pro waitlist (GET /admin/leads). */
-export interface PlanLead {
-  id: string;
-  agentId: string;
-  name: string;
-  email: string;
-  /** `pro-monthly` or `pro-yearly`; old leads may have none. */
-  plan?: string;
-  at: string;
 }

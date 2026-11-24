@@ -178,7 +178,7 @@ export async function createCompany(name: string): Promise<{ id: string } | { er
   }
 }
 
-/** Joins the Pro waitlist from Plan & billing: the Parly team gets an email, and it's listed in Admin → Pro waitlist. */
+/** Joins the Pro waitlist from Plan & billing: the Parly team gets an email, and it's stored by the hub (no admin page). */
 export async function joinProWaitlist(form: FormData) {
   const plan = field(form, 'plan');
   // Old path on purpose: the web can deploy before the hub, which only gains /leads in this release. Rename later.
