@@ -25,40 +25,6 @@ function cloudHub(cloud: Record<string, unknown> = {}) {
 }
 
 describe('cloud agents', () => {
-  it("a new person's Guide and Planner talk in #general, on the owner's allowance", async () => {
-    const { hub, calls } = cloudHub();
-    const person = await testPerson(hub.registry, 'Dana');
-    await hub.registry.createWorkspace(person, 'Dana');
-    await hub.starterAgents(person);
-    await hub.wakeService.idle();
-
-    const channel = (await hub.registry.channelsOf((await hub.registry.get(person.id))!)).find((c) => c.name === 'general')!;
-    const posts = await hub.chat.page(person, `channel:${channel.id}`, 10);
-    const intro = posts.messages[0]!;
-    expect(intro.parts[0]!.text).toMatch(/^Hi Dana, welcome to Parly! I'm Guide, and this is @Planner/);
-    const thread = await hub.chat.page(person, threadKey(channel.id, intro.id), 10);
-    expect(thread.messages.map((m) => m.parts[0]!.text)).toContain('Happy to plan with you.');
-    expect(calls[0]!.url).toBe('https://aiplatform.googleapis.com/v1/projects/proj/locations/global/publishers/google/models/gemini-4-argon:generateContent');
-    expect(await hub.llm.used(person.id)).toBeGreaterThan(0);
-    // Each agent's tokens are counted too: Planner answered once (1000 in, 100 out), Guide passed once.
-    const planner = (await hub.registry.botsOf(person)).find((a) => a.name === 'Planner')!;
-    expect(await hub.llm.agentUsage(planner.id)).toMatchObject({ calls: 1, input: 1000, output: 100 });
-    expect((await hub.llm.topAgents()).filter((r) => r.ownerId === person.id).map((r) => r.agentId)).toContain(planner.id);
-    expect((await hub.registry.botsOf(person)).map((a) => [a.name, a.kind, a.cloud])).toEqual(expect.arrayContaining([['Guide', 'endpoint', true], ['Planner', 'endpoint', true]]));
-    // Both start with the Parly docs skill.
-    for (const bot of await hub.registry.botsOf(person)) expect(bot.attachedSkills).toContain('builtin:parly-docs');
-  });
-
-  it("gives no starters in someone else's workspace", async () => {
-    const { hub } = cloudHub();
-    const host = await testPerson(hub.registry, 'Host');
-    const workspace = await hub.registry.createWorkspace(host, 'Theirs');
-    const person = await testPerson(hub.registry, 'Invited');
-    await hub.registry.inviteToWorkspace(host, workspace.id, person.email!);
-    await hub.starterAgents((await hub.registry.get(person.id))!);
-    expect(await hub.registry.botsOf(person)).toEqual([]);
-  });
-
   it('is made with its job, straight into the team it was made for', async () => {
     const { hub } = cloudHub();
     let person = await testPerson(hub.registry, 'Gil');

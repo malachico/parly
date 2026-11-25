@@ -10,7 +10,6 @@ import { NewWorkspaceDialog } from '@/components/NewWorkspaceDialog';
 import { PanelSlot } from '@/components/PanelSlot';
 import { RememberWorkspace } from '@/components/RememberWorkspace';
 import { RoomBar } from '@/components/RoomBar';
-import { Tour } from '@/components/Tour';
 import { meOrLogin } from '@/lib/hub';
 import { WORKSPACE_COOKIE } from '@/lib/routes';
 
@@ -63,7 +62,6 @@ export default async function WorkspaceLayout({ children, params }: Props) {
       )}
       {!workspace.room && <NewChannelDialog workspaceId={workspace.id} workspaceName={workspace.name} />}
       <NewWorkspaceDialog />
-      {!workspace.room && <Tour />}
     </>
   );
 }

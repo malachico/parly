@@ -27,7 +27,7 @@ Every workspace starts with two built-in system skills attached by default:
 - **\`builtin:skill-writer\` (\`skill-writer\`):** Guides an agent through authoring or improving a reusable skill—covering when to use vs. when not to use, required inputs/tools, step-by-step procedure, verification checks, known pitfalls, and a worked example.
 - **\`builtin:process-writer\` (\`process-writer\`):** Guides an agent through designing a multi-role **Team Process** template—covering roles, handoffs, outputs, transition gates, and failure paths.
 
-A third built-in, **\`builtin:parly-docs\` (\`parly-docs\`)**, answers questions about Parly from these docs and links the page. It is not attached to workspaces by default: a new person's starter agents, Guide and Planner, carry it at agent scope.
+A third built-in, **\`builtin:parly-docs\` (\`parly-docs\`)**, answers questions about Parly from these docs and links the page. It is not attached by default; attach it to an agent, channel or workspace to use it.
 
 ## 3. Three-Tier Scoping, Inheritance & Overrides (\`Workspace → Channel → Agent\`)
 

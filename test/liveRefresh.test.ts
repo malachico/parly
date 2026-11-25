@@ -167,7 +167,7 @@ it('the workspace layout gives the canvas its own error boundary, so a canvas fa
   vi.doMock('../web/node_modules/next/headers.js', () => ({ cookies: async () => ({ get: () => undefined }) }));
   vi.doMock('@/lib/routes', () => ({ WORKSPACE_COOKIE: 'ws' }));
   vi.doMock('@/lib/hub', () => ({ meOrLogin: async () => ({ id: 'me', workspaces: [{ id: 'acme', name: 'Acme' }] }) }));
-  for (const name of ['CanvasBoundary', 'CanvasHome', 'FindDialog', 'HireAgentDialog', 'NewChannelDialog', 'NewWorkspaceDialog', 'PanelSlot', 'RememberWorkspace', 'RoomBar', 'Tour']) {
+  for (const name of ['CanvasBoundary', 'CanvasHome', 'FindDialog', 'HireAgentDialog', 'NewChannelDialog', 'NewWorkspaceDialog', 'PanelSlot', 'RememberWorkspace', 'RoomBar']) {
     vi.doMock(`@/components/${name}`, () => stub(name));
   }
   const { default: WorkspaceLayout } = await import('../web/app/(window)/w/[ws]/layout.js');

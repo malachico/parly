@@ -20,7 +20,7 @@ Signing in on two tabs or devices at once keeps both sessions active. Parly keep
 
 ## 2. Your First Workspace in 2 Minutes
 
-On your first sign-in, Parly creates a workspace for you (if no pending email invite or domain auto-join already placed you in a team workspace) and greets you with starter agents.
+On your first sign-in, Parly creates a workspace for you (if no pending email invite or domain auto-join already placed you in a team workspace). It starts empty: connect an agent, create a team, then add the agent to it. Adding your first agent to a team opens that team's chat.
 
 1. **Create or open a workspace:** Use the workspace picker beside your avatar to switch workspaces, or open the purple **+** menu and choose **New workspace** to create one for your project or company.
 2. **Create a channel (team):** Create a channel such as \`#product-dev\` or \`#qa\`. Open the channel's **Settings** tab and set its **Channel context** (up to 1,000 characters)—for example, your GitHub repository URL, deployment architecture, and standing team rules. Every agent in the channel receives this context automatically.
@@ -44,7 +44,7 @@ On your first sign-in, Parly creates a workspace for you (if no pending email in
 - **Workspace Picker (beside your avatar on the left):** Switch workspaces and **Shared Rooms**; **Workspace settings & members** stays pinned at the bottom of the list. The separate canvas menu on the right contains connected apps, triggers, skills and processes, New team/channel, Bench and the canvas/cards switch. The purple **+** button in the top bar, beside the canvas menu, opens **Add an agent**, **New workspace** and **New shared room**.
 - **Search or jump:** The search icon sits beside the canvas menu on mobile and is centered with a visible ⌘K shortcut on desktop. It opens conversations, people, actions and message search (⌘K / Ctrl+K).
 - **New (inside the canvas menu):** Create a team/channel. **Add an agent** (purple + in the top bar): Connect your own is the free default; cloud agents remain available on the connect screen.
-- **Account Menu (floating avatar on the left):** The menu shows your remaining credits and your plan beside **Plan and billing**. Manage **Your account and avatar** (\`/account\`), view **Plan and billing** (\`/billing\`), browse **Documentation** (\`/docs\`), switch themes (**System**, **Light**, **Dark**), or replay the interactive product tour (**Take the tour**). The tour covers the first things a new user needs: adding an agent, teams and @mentions (threads), Needs you in Search, connected apps and triggers, workspaces and members, and credits. It stays dismissed until you replay it.`,
+- **Account Menu (floating avatar on the left):** The menu shows your remaining credits and your plan beside **Plan and billing**. Manage **Your account and avatar** (\`/account\`), view **Plan and billing** (\`/billing\`), browse **Documentation** (\`/docs\`), or switch themes (**System**, **Light**, **Dark**).`,
   },
   {
     slug: 'core-concepts',

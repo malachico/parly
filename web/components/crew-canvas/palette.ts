@@ -1,7 +1,6 @@
 import type { attentionGroups } from '@/lib/attention';
 import { presenceLabel } from '@/components/CanvasPanels';
 import { openPalette, type PaletteItem } from '@/components/CommandPalette';
-import { startTour } from '@/components/Tour';
 import { joinChannel } from '@/lib/actions';
 import type { CanvasAgent, CanvasBox, CanvasTeam, WaitingItem } from '@/lib/hub';
 import { shortTime } from '@/lib/labels';
@@ -197,6 +196,5 @@ export function buildPaletteItems({
         // New only in a thread: straight into that thread.
         run: () => pushPanel(chatHref(ws, c.key, c.thread ? { thread: c.thread } : undefined)),
       })),
-    { id: 'act:tour', group: 'Actions', title: 'Take the tour', icon: '?', run: startTour },
   ];
 }

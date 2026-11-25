@@ -6,23 +6,22 @@ import { revalidatePath } from 'next/cache';
 import { adminAgentHref } from '../admin';
 import { BUDGET_INVALID, budgetCredits } from '../labels';
 import { hub, HubError, safeNext, type EndpointCheck } from '../hub';
-import { channelHref, WORKSPACE_COOKIE } from '../routes';
+import { WORKSPACE_COOKIE } from '../routes';
 import { attempt, clearToken, field, setToken } from './helpers';
 
 /** Signs in with a Google ID token (from the Google button); the hub creates the person on first sign-in. `next` is where to go afterwards. */
 export async function googleLogin(idToken: string, next?: string) {
   const back = safeNext(next);
   const loginBack = `/login${back ? `?next=${encodeURIComponent(back)}` : ''}`;
-  const { token, first } = await attempt(loginBack, () =>
-    hub<{ token: string; first?: { workspaceId: string; channelId: string } }>('/auth/google', {
+  const { token } = await attempt(loginBack, () =>
+    hub<{ token: string }>('/auth/google', {
       method: 'POST',
       body: { idToken },
       as: '',
     }),
   );
   await setToken(token);
-  // A new person lands where Guide just said hello.
-  redirect(back ?? (first ? channelHref(first.workspaceId, first.channelId) : '/'));
+  redirect(back ?? '/');
 }
 
 /**
@@ -39,11 +38,11 @@ export async function passwordLogin(form: FormData) {
     ...(mode !== 'login' ? { name: field(form, 'name') } : {}),
     ...(mode === 'setup' ? { setupSecret: field(form, 'setupSecret') } : {}),
   };
-  const { token, first } = await attempt(mode === 'setup' ? '/setup' : `/login${back ? `?next=${encodeURIComponent(back)}` : ''}`, () =>
-    hub<{ token: string; first?: { workspaceId: string; channelId: string } }>(path, { method: 'POST', body, as: '' }),
+  const { token } = await attempt(mode === 'setup' ? '/setup' : `/login${back ? `?next=${encodeURIComponent(back)}` : ''}`, () =>
+    hub<{ token: string }>(path, { method: 'POST', body, as: '' }),
   );
   await setToken(token);
-  redirect(back ?? (first ? channelHref(first.workspaceId, first.channelId) : '/'));
+  redirect(back ?? '/');
 }
 
 /** Local testing only: the hub accepts "dev:<email>" when it runs with GOOGLE_AUTH_DEV=1. */

@@ -527,6 +527,8 @@ export function CrewCanvas({
     const fromTeam = p.fromTeamId ? teams.find((t) => t.channelId === p.fromTeamId) : undefined;
     const removeId = moveInstead && p.fromTeamId ? p.fromTeamId : undefined;
     const roleVal = dropRole.trim() || undefined;
+    // Onboarding's last step: the first agent on any team takes the person into that team's chat.
+    const firstAgent = !teams.some((t) => t.members.some((m) => memberAgents.get(m)?.kind !== 'human'));
 
     setTeams((prev) =>
       prev.map((t) => {
@@ -560,6 +562,7 @@ export function CrewCanvas({
       try {
         const result = await canvasMembershipChange({ ws, agentId: p.agentId, addChannelId: p.toTeamId, removeChannelId: removeId, role: roleVal });
         if (!result.ok) throw new Error(result.error);
+        if (firstAgent && agent.kind !== 'human') pushPanel(channelHref(ws, p.toTeamId));
       } catch (error) {
         showToast({ text: error instanceof Error ? error.message : 'Could not add this member', agentId: '' });
         setTeams((current) => current.map((team) => {

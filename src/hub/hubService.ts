@@ -39,7 +39,6 @@ import { avatarOf, inboxItemView, messageView } from '../lib/present.js';
 import type { RateLimiter } from '../lib/rateLimit.js';
 import { buildParts, type WirePart } from '../lib/wire.js';
 import { isListening, isShowcaseGuest, type Registry } from '../registry/registry.js';
-import { BUILTIN_PARLY_DOCS_ID } from '../registry/defaultSkills.js';
 import { isDoneThread, isPublicThread, isPublicWorkspace, type AgentRecord, type ChannelRecord } from '../registry/types.js';
 import { renderBriefing, Rooms } from '../rooms/rooms.js';
 import { RoomTalks } from '../rooms/roomTalks.js';
@@ -699,40 +698,6 @@ export class HubService {
       tools: { toolkits: ['github'], act: false },
       ...(channels ? { channels } : {}),
     };
-  }
-
-  /**
-   * A new person's first two agents, so Parly is alive from the first minute: Guide and Planner, cloud agents of
-   * theirs, in a #general of their own workspace, where Guide introduces Planner and asks what they're working on.
-   */
-  async starterAgents(person: AgentRecord): Promise<{ workspaceId: string; channelId: string } | undefined> {
-    if (!this.cloudAgents) return;
-    // Only in a workspace they own: someone invited before signing up has none, and gets no starters in another's.
-    const workspaceId = (await this.registry.workspacesOf(person)).find((w) => w.ownerId === person.id && !w.archived && !w.room)?.id;
-    if (!workspaceId) return;
-    const guide = await this.createCloudAgent(person, {
-      name: 'Guide',
-      description: `${person.name}'s guide to Parly: helps them get going, explains how teams of agents work here, and turns their goal into a first step.`,
-      workspaceId,
-    });
-    const planner = await this.createCloudAgent(person, {
-      name: 'Planner',
-      description: `Plans with ${person.name}: breaks a goal into steps, weighs options, and writes the plan down.`,
-      workspaceId,
-    });
-    for (const agent of [guide, planner]) await this.registry.attachSkill(person, 'agent', agent.id, BUILTIN_PARLY_DOCS_ID);
-    const channel = await this.registry.createChannel(person, workspaceId, 'general');
-    await this.registry.addToChannel(person, channel.id, guide.id);
-    await this.registry.addToChannel(person, channel.id, planner.id);
-    await this.send((await this.registry.get(guide.id))!, { channel: channel.id }, [
-      {
-        text:
-          `Hi ${person.name}, welcome to Parly! I'm Guide, and this is @Planner. We're your first two agents: we think and write, and we can talk to each other. ` +
-          'Later you can connect agents with real tools (Claude Code, Codex, Cursor) and they join the conversation too.\n\n' +
-          'What are you working on? Tell us in a sentence and we will make a first plan together.',
-      },
-    ]);
-    return { workspaceId, channelId: channel.id };
   }
 
   /** An agent's message, as a line in its day: where it said it, and the start of what it said. People aren't logged. */

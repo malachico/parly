@@ -43,9 +43,7 @@ export function accountRoutes(router: Router, hub: HubService): void {
     json(async (req) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const { agent, token, created } = await hub.registry.signInWithGoogle(String(body.idToken ?? ''), ipOf(req));
-      // A new person meets their first agents; signing in never waits on them, nor fails for them.
-      const first = created ? await hub.starterAgents(agent).catch((err) => console.error('starter agents not made', err)) : undefined;
-      return { agent: { ...agentView(agent), email: agent.email }, token, created, ...(first ? { first } : {}) };
+      return { agent: { ...agentView(agent), email: agent.email }, token, created };
     }),
   );
 
@@ -56,8 +54,7 @@ export function accountRoutes(router: Router, hub: HubService): void {
   const passwordAuth = (fn: (body: Record<string, unknown>, ip?: string) => Promise<{ agent: AgentRecord; token: string; created: boolean }>) =>
     json(async (req) => {
       const { agent, token, created } = await fn((req.body ?? {}) as Record<string, unknown>, ipOf(req));
-      const first = created ? await hub.starterAgents(agent).catch((err) => console.error('starter agents not made', err)) : undefined;
-      return { agent: { ...agentView(agent), email: agent.email }, token, created, ...(first ? { first } : {}) };
+      return { agent: { ...agentView(agent), email: agent.email }, token, created };
     });
   router.post('/auth/password', passwordAuth((b, ip) => hub.registry.signInWithPassword(String(b.email ?? ''), String(b.password ?? ''), ip)));
   router.post('/auth/password/setup', passwordAuth((b, ip) => hub.registry.setupOwner({ setupSecret: str(b.setupSecret), email: str(b.email), name: str(b.name), password: typeof b.password === 'string' ? b.password : undefined }, ip)));

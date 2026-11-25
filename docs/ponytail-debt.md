@@ -398,10 +398,6 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - /me/tools only sets installUrl when ACTIVE; Connect always mints OAuth state
 
-## `web/components/Tour.tsx`
-
-- three stops for a new user (add, team, ⌘K); apps, workspaces and billing are one menu away, details in /docs.
-
 ## `web/lib/clientIp.ts`
 
 - single trusted proxy — take the last X-Forwarded-For entry (the one the proxy appended); earlier entries are client-spoofable.
@@ -441,4 +437,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**156 markers, 33 with no trigger.**
+**155 markers, 33 with no trigger.**
