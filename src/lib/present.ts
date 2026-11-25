@@ -34,6 +34,8 @@ interface MessageView {
   external?: boolean;
   /** Posted by this incoming webhook (an outside service such as GitHub or CI) as the person who made it: what it says is data, not their instruction. */
   webhook?: string;
+  /** Posted automatically (a schedule or a room's reminder) as its author. */
+  scheduled?: boolean;
   /** The skills and processes its author loaded for it. */
   skills?: SkillShown[];
 }
@@ -67,6 +69,7 @@ export function messageView(m: MessageDoc): MessageView {
     ...(m.post ? { thread: m.post } : {}),
     ...(m.external ? { external: true } : {}),
     ...(m.meta?.webhook ? { webhook: m.meta.webhook.name } : {}),
+    ...(m.meta?.scheduled ? { scheduled: true } : {}),
     ...(m.meta?.skills ? { skills: m.meta.skills } : {}),
   };
 }

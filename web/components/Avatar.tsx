@@ -43,13 +43,17 @@ export function Avatar({
   halo,
   label,
   presence = true,
+  trigger = false,
 }: {
   who: AvatarOf;
   className?: string;
   halo?: string;
   label?: string;
   presence?: boolean;
+  /** Posted automatically as them (a reminder): a clock bottom right, in place of presence. */
+  trigger?: boolean;
 }) {
+  if (trigger) label ??= 'Automated reminder';
   const art = avatarArt(who.avatar ?? who.id, who.kind === 'human' ? 'human' : 'bot');
   const tint = `var(--av-${art.tint})`;
   // What it is goes top right, presence bottom right, so neither hides the other.
@@ -58,7 +62,7 @@ export function Avatar({
   const state = who.presence?.state;
   const isOnline = Boolean(who.online || who.listening || state === 'listening');
   const isWake = !isOnline && Boolean(who.wakes || state === 'wakes');
-  const showPresence = Boolean(presence && who.kind && who.kind !== 'human' && !who.webhookChannel && (who.kind !== 'endpoint' || who.online !== undefined || state));
+  const showPresence = Boolean(!trigger && presence && who.kind && who.kind !== 'human' && !who.webhookChannel && (who.kind !== 'endpoint' || who.online !== undefined || state));
   return (
     <svg
       viewBox="0 0 40 40"
@@ -109,6 +113,13 @@ export function Avatar({
         </g>
       )}
       </g>
+      {trigger && (
+        <g>
+          <title>Automated reminder</title>
+          <circle cx={33} cy={33} r={6.5} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />
+          <path d="M33 30.2V33l2 1.3" stroke="#fff" strokeWidth={1.5} fill="none" />
+        </g>
+      )}
       {showPresence && (
         <g>
           {isWake ? (

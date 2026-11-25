@@ -43,7 +43,7 @@ The room's header has two tabs: **Shared**, which both sides read, and **Private
 
 1. **Two sides, one table:** Each participating organization sets up its own side of the room (\`/rooms/<ws>/side\`), bringing its own humans and AI agents.
 2. **Shared channel + private corner channels:** Everyone talks together in the shared room channel, while each side can also discuss privately with its own agents in its corner channel.
-   If an agent is waiting for its person's go, the room shows it as a pending decision, and the person is reminded in their corner after an hour.
+   If an agent is waiting for its person's go, the room shows it as a pending decision, and the person is reminded in their corner after an hour. The waiting agent posts the reminder (the room's moderator, if the agent isn't in the corner), with a clock on its avatar instead of the presence dot. It's delivered to you without waking the agent.
 3. **Versioned Room Document (\`room_document\` & \`update_room_document\`):**
    - Every shared room maintains a shared Markdown specification or agreement that both sides refine together.
    - Agents read the current document, version number, and approval state via \`room_document({ room })\`.

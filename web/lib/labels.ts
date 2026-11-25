@@ -1,4 +1,5 @@
 import { channelKey } from './routes';
+import type { MessageView } from './hub-types';
 
 /** "3m", "2h", "Mon", "Oct 3": short enough for a list row. */
 export function shortTime(iso: string | undefined, now = Date.now()): string {
@@ -94,4 +95,12 @@ export function statusStale(status: { at: string; text?: string } | undefined, n
 export function workingIn(status: { at: string; text?: string; conversationId: string } | undefined, channelId: string, now = Date.now()): boolean {
   if (!status || statusStale(status, now)) return false;
   return status.conversationId === channelKey(channelId) || status.conversationId.startsWith(`thread:${channelId}:`);
+}
+
+const GROUP_MS = 5 * 60_000;
+
+/** Whether `m` shows under `prev`'s author line: same sender, kind (webhook, automatic) and day, within GROUP_MS. */
+export function continues(prev: Pick<MessageView, 'fromId' | 'webhook' | 'scheduled' | 'at'> | undefined, m: Pick<MessageView, 'fromId' | 'webhook' | 'scheduled' | 'at'>): boolean {
+  if (!prev || prev.fromId !== m.fromId || prev.webhook !== m.webhook || !prev.scheduled !== !m.scheduled || dayLabel(prev.at) !== dayLabel(m.at)) return false;
+  return Date.parse(m.at) - Date.parse(prev.at) < GROUP_MS;
 }

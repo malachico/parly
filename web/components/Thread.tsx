@@ -10,7 +10,7 @@ import { ImagePreview } from '@/components/ImagePreview';
 import type { ActivityItem, MessageView } from '@/lib/hub';
 import { seenMarks } from '@/lib/receipts';
 import { DayLabel, LocalTime } from '@/components/LocalTime';
-import { dayLabel, shortTime, formatSize } from '@/lib/labels';
+import { continues, dayLabel, shortTime, formatSize } from '@/lib/labels';
 import { agentHref, dmHref, skillsHref } from '@/lib/routes';
 import { PendingButton } from '@/components/PendingButton';
 import { plural } from '@/lib/plural';
@@ -21,7 +21,6 @@ const whoOf = (people: People, id: string): AvatarOf => people[id] ?? { id };
 type ThreadSummary = { count: number; lastAt: string; people: string[]; unread?: number; done?: boolean; doneAt?: string; doneBy?: string };
 
 /** Two messages from one sender this close together share one name and avatar, like Slack. */
-const GROUP_MS = 5 * 60_000;
 
 /**
  * A conversation's messages, oldest first. In a channel each post links to its thread (with a summary of its
@@ -345,10 +344,10 @@ function MessageRow({
           </span>
         ) : authorHref ? (
           <Link href={authorHref} title={authorTitle} aria-label={authorTitle} className="block rounded-full">
-            <Avatar who={who} className="size-9" />
+            <Avatar who={who} className="size-9" trigger={m.scheduled} />
           </Link>
         ) : (
-          <Avatar who={who} className="size-9" />
+          <Avatar who={who} className="size-9" trigger={m.scheduled} />
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -361,6 +360,7 @@ function MessageRow({
             ) : (
               <bdi className="font-semibold">{m.webhook ?? (mine ? 'You' : m.from)}</bdi>
             )}
+            {m.scheduled && <span className="sr-only">(sent automatically)</span>}
             {m.webhook ? <span className="chip">{mine ? 'set up by you' : `set up by ${m.from}`}</span> : people[m.fromId]?.role && <span className="chip">{people[m.fromId]!.role}</span>}
             <LocalTime iso={m.at} className="text-xs text-[var(--muted)]" />
           </p>
@@ -400,11 +400,6 @@ function SeenBy({ ids, people, ws }: { ids?: string[]; people: People; ws?: stri
       })}
     </span>
   );
-}
-
-function continues(prev: MessageView | undefined, m: MessageView): boolean {
-  if (!prev || prev.fromId !== m.fromId || prev.webhook !== m.webhook || dayLabel(prev.at) !== dayLabel(m.at)) return false;
-  return Date.parse(m.at) - Date.parse(prev.at) < GROUP_MS;
 }
 
 function Body({ m, mentioned = [] }: { m: MessageView; mentioned?: Mentioned[] }) {

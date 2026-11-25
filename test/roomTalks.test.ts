@@ -3,6 +3,7 @@ import { createHub } from '../src/app.js';
 import type { InboxItem } from '../src/chat/chatService.js';
 import type { ForwardResult } from '../src/hub/forward.js';
 import type { HubService } from '../src/hub/hubService.js';
+import { messageView } from '../src/lib/present.js';
 import { textOf, type WireMessage } from '../src/lib/wire.js';
 import type { AgentRecord } from '../src/registry/types.js';
 import { renderBriefing, ROOM_REMIND_MS, ROOM_TURNS } from '../src/rooms/rooms.js';
@@ -398,12 +399,31 @@ describe("a room's agents negotiate by themselves", () => {
       const reminders = await inbox(g.owner);
       expect(reminders.map((i) => said(i))).toEqual([expect.stringContaining('The room is still waiting for you')]);
       expect(reminders[0]!.message.channelId).toBe(g.corner.corner);
+      // Sent as the waiting agent, marked automatic: it doesn't wake the agent or answer the decision.
+      expect(reminders[0]!.message.fromId).toBe(g.tools[0]!.id);
+      expect(reminders[0]!.message.meta?.scheduled).toBe(true);
+      expect(messageView(reminders[0]!.message).scheduled).toBe(true);
+      expect(await inbox(g.tools[0]!)).toHaveLength(0);
+      expect((await g.view()).waiting).toBeDefined();
       await hub.talks.remind(new Date(later.getTime() + ROOM_REMIND_MS));
       expect(await inbox(g.owner)).toHaveLength(0);
       // Answered at the top level of the corner, the same as an ask.
       await hub.send(g.owner, { channel: g.corner.corner }, [{ text: 'go' }]);
       expect((await g.view()).waiting).toBeUndefined();
       expect(await inbox(g.tools[0]!)).toHaveLength(1);
+    });
+
+    it("reminds from the moderator when the agent isn't in the corner", async () => {
+      const g = await gated('go-remind-mod');
+      await g.mention(g.tools[0]!.name);
+      await inbox(g.owner);
+      await hub.registry.leaveChannel(g.tools[0]!, g.corner.corner);
+      await hub.talks.remind(new Date(Date.now() + ROOM_REMIND_MS + 1000));
+      const [reminder] = await inbox(g.owner);
+      expect(said(reminder)).toContain('The room is still waiting for you');
+      expect(reminder!.message.fromId).not.toBe(g.tools[0]!.id);
+      expect(reminder!.message.meta?.scheduled).toBe(true);
+      expect(messageView(reminder!.message).scheduled).toBe(true);
     });
   });
 });

@@ -171,12 +171,15 @@ export class RoomTalks implements RoomHooks {
   async remind(now = new Date()): Promise<void> {
     const overdue = await this.rooms.claimOverdue(now);
     const sent = await Promise.allSettled(
-      overdue.map(async ({ workspaceId, corner, question }) => {
+      overdue.map(async ({ workspaceId, corner, question, agent }) => {
         const moderator = await this.rooms.moderator(workspaceId);
-        const people = (await this.registry.search(moderator, { channel: corner })).filter((a) => a.kind === 'human').map((a) => a.id);
+        const members = await this.registry.search(moderator, { channel: corner });
+        const people = members.filter((a) => a.kind === 'human').map((a) => a.id);
         if (!people.length) return;
         const note = `The room is still waiting for you: ${question}\n\nAnswer here or on the room's page, and your agent goes on.`;
-        await this.chat.post(moderator, { channelId: corner }, { parts: [{ text: note }], to: people });
+        // From the waiting agent (the moderator if it isn't in the corner), always marked automatic (meta.scheduled).
+        const waiting = members.find((a) => a.id === agent && !a.archived);
+        await this.chat.post(waiting ?? moderator, { channelId: corner }, { parts: [{ text: note }], to: people, meta: { scheduled: true } });
       }),
     );
     for (const s of sent) if (s.status === 'rejected') console.error('room reminder failed', s.reason);

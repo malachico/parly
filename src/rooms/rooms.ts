@@ -171,7 +171,7 @@ export class Rooms {
    * Decisions sitting since before `now - ROOM_REMIND_MS` in open rooms, each claimed so only one caller reminds.
    * ponytail: reads already-reminded ones again on every tick; add a remindAt field if that grows.
    */
-  async claimOverdue(now: Date): Promise<{ workspaceId: string; corner: string; question: string }[]> {
+  async claimOverdue(now: Date): Promise<{ workspaceId: string; corner: string; question: string; agent: string }[]> {
     const cutoff = new Date(now.getTime() - ROOM_REMIND_MS).toISOString();
     const due = await this.store.overdue(cutoff);
     const claimed = await Promise.all(
@@ -182,7 +182,7 @@ export class Rooms {
         if (!room || room.closed || !corner) return undefined;
         if (isAgreed(room, await this.store.document(workspaceId))) return undefined;
         const won = await this.store.claimReminder(workspaceId, waiting.at, now.toISOString());
-        return won ? { workspaceId, corner, question: waiting.question } : undefined;
+        return won ? { workspaceId, corner, question: waiting.question, agent: waiting.agent } : undefined;
       }),
     );
     return claimed.filter((c) => !!c);

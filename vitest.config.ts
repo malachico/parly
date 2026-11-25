@@ -57,6 +57,7 @@ const pureTests = [
   'test/workers.test.ts',
   'test/cloudAgentShrink.test.ts',
   'test/channelLoaderFallback.test.ts',
+  'test/threadGrouping.test.ts',
 ];
 
 const shared = {

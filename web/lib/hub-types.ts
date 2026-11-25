@@ -238,6 +238,8 @@ export interface MessageView {
   thread?: string;
   /** Posted by an incoming webhook or an app trigger (as its maker): its name, shown instead of theirs. */
   webhook?: string;
+  /** Posted automatically (a schedule or a room's reminder) as its author: a clock on their avatar. */
+  scheduled?: boolean;
   /** The skills and processes its author loaded for it. */
   skills?: { id: string; name: string; type: SkillType }[];
 }
