@@ -31,6 +31,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - about 80k tokens; Claude Code fires 33k under this window (its 20k output and 13k summary reserves), so recheck if those move
 - busy (an older Codex run still holds the thread) retries every retryWaitMs with no ceiling; back off if that ever spins
+- resets on that failure only; add a size/age cap if sessions start thrashing unnoticed.
 
 ## `plugins/parly/cline-plugin/shell.js`
 
@@ -440,4 +441,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**155 markers, 33 with no trigger.**
+**156 markers, 33 with no trigger.**

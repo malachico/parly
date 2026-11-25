@@ -135,6 +135,19 @@ describe('one session per conversation (plugins/parly/bin/workers.mjs)', () => {
     expect(failed).toEqual({ ok: false, problem: 'Credit balance is too low' });
   });
 
+  it('Claude Code: a session too big to compact starts over and answers from a fresh one', async () => {
+    const calls: string[][] = [];
+    const meta: { key: string; cwd: string; session?: string; siblings?: string } = { key: 'dm:a_b', cwd: '/work', session: 'old', siblings: 'x' };
+    const exec = (_c: string, a: string[]) => (calls.push(a), a.includes('--resume')
+      ? { status: 1, stdout: JSON.stringify({ is_error: true, result: 'Error: autocompact_thrashing' }), stderr: '' }
+      : { status: 0, stdout: JSON.stringify({ is_error: false }), stderr: '' });
+    expect(await runSession('claude-code', meta, settings, 'Scout', path.join(tmp(), 'w.log'), exec)).toEqual({ ok: true });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain('--session-id');
+    expect(calls[1]!.at(-1)).toContain('conversation "dm:a_b"'); // the full prompt, not the resume nudge
+    expect(meta.session).not.toBe('old');
+  });
+
   it('Claude Code: compacts a session at about 80k tokens rather than letting it grow', async () => {
     let window: string | undefined, noBackground: string | undefined;
     await runSession('claude-code', { key: 'dm:a_b', cwd: '/work' }, settings, 'Scout', path.join(tmp(), 'w.log'), (_c: string, _a: string[], o: { env: NodeJS.ProcessEnv }) => {
