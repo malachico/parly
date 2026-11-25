@@ -163,7 +163,8 @@ function unreadOf(viewer: Pick<AgentRecord, 'id' | 'kind'>, messages: MessageDoc
 export function isFor(agent: Pick<AgentRecord, 'id' | 'kind'>, m: MessageDoc): boolean {
   // A webhook's post in a channel is news to its maker too; a trigger's event in their DM with an agent is for the
   // agent (24 "branch changed" in your own conversation aren't news to you; what the agent says about them is).
-  if (m.fromId === agent.id && (!m.meta?.webhook || m.conversationId.startsWith('dm:'))) return false;
+  // An agent's own trigger (⏰) is its cue to work, like a webhook's post.
+  if (m.fromId === agent.id && !(m.meta?.scheduled && agent.kind !== 'human') && (!m.meta?.webhook || m.conversationId.startsWith('dm:'))) return false;
   if (m.external && agent.kind !== 'human') return false;
   // Addressed (a room's turn): the room keeps its own count of turns.
   if (m.to) return m.to.includes(agent.id);
@@ -224,7 +225,9 @@ export class ChatService {
     // A room's moderator only speaks; nothing is sent to it.
     const members = (await this.registry.search(from, { channel: channel.id })).filter((a) => !a.archived && a.id !== workspace?.room?.moderator);
     // A webhook can @mention (and notify) its maker; anyone else doesn't hear their own post.
-    const others = members.filter((a) => a.id !== senderId || input.meta?.webhook);
+    // An agent's trigger wakes that agent: it hears its own ⏰ post.
+    const self = input.meta?.scheduled && from.kind !== 'human' ? from : undefined;
+    const others = members.filter((a) => a.id !== senderId || input.meta?.webhook || self);
     const mentions = mentionsIn(input.parts.map((p) => p.text ?? '').join('\n'), others);
 
     let conversation: NewConversation;
@@ -253,7 +256,7 @@ export class ChatService {
         reopened = true;
       }
       // Those it's addressed to (in a room) and those it mentions join the thread.
-      join = [...mentions, ...(input.to ?? [])];
+      join = [...mentions, ...(input.to ?? []), ...(self ? [self.id] : [])];
       if ((existing?.agentRun ?? 0) < ROUTE_FALLBACK_RUN) fallback = (existing?.participants ?? [post.fromId]).filter((id) => id !== senderId);
       const participants = new Set([...(existing?.participants ?? [post.fromId]), ...join]);
       // The first reply to your own post, with nobody mentioned: the channel hears it and joins the thread.
@@ -296,9 +299,11 @@ export class ChatService {
       if (wake) recipients = recipients.filter((a) => a.kind === 'human' || a.webhookChannel || wake.includes(a.id));
     }
     // Kickoff always wins: a pitch into a process channel starts the process even if the router dropped everyone.
-    if (kickoff && !recipients.includes(kickoff)) recipients = [...recipients, kickoff];
+    // So does a trigger's own agent.
+    const cue = kickoff ?? self;
+    if (cue && !recipients.some((a) => a.id === cue.id)) recipients = [...recipients, cue];
     // ...and it's addressed to the first-step agent, so it answers instead of being told it "may pass".
-    const addressed = kickoff && !mentions.includes(kickoff.id) ? [...mentions, kickoff.id] : mentions;
+    const addressed = cue && !mentions.includes(cue.id) ? [...mentions, cue.id] : mentions;
 
     // Narrowed (by its mentions or the router): it's only in the inbox of the agents it's for.
     const forAgents = recipients !== heard ? recipients.filter((a) => a.kind !== 'human').map((a) => a.id) : undefined;

@@ -21,7 +21,7 @@ export default async function Triggers({ params, searchParams }: Props) {
     hub<Agent[]>('/agents/bots').catch(() => [] as Agent[]),
   ]);
   const channelName = new Map(user.workspaces.flatMap((w) => (w.channels ?? []).map((c) => [c.id, c.name] as const)));
-  const where = (s: Schedule) => (s.channelId ? `in #${channelName.get(s.channelId) ?? 'a channel'}` : `to ${bots.find((b) => b.id === s.to)?.name ?? 'an agent'}, in your DM`);
+  const where = (s: Schedule) => (s.channelId ? `${s.agentId ? `${bots.find((b) => b.id === s.agentId)?.name ?? 'An agent'} ` : ''}in #${channelName.get(s.channelId) ?? 'a channel'}` : `to ${bots.find((b) => b.id === s.to)?.name ?? 'an agent'}, in your DM`);
   const sorted = [...triggers.filter((t) => !t.archivedAt), ...triggers.filter((t) => t.archivedAt)];
 
   return (

@@ -31,9 +31,9 @@ export class ScheduleService {
   }
 
   /**
-   * Schedules a message in a channel the caller is in (a person, or an agent for its owner): posted as that person,
-   * with ⏰ in front, when its time comes. `@Name` in it wakes that agent like any post. (No bot: a schedule is a
-   * message waiting for its time, not a member of the team.)
+   * Schedules a message in a channel the caller is in, with ⏰ in front, when its time comes. It belongs to an agent
+   * (the caller, or `body.agent`, one of the person's agents there): posted as that agent, and it wakes it. A person's
+   * without `agent` is posted as them. `@Name` in it wakes that agent like any post.
    */
   async createSchedule(caller: AgentRecord, channelId: string, body: Record<string, unknown>): Promise<ScheduleRecord> {
     const person = await this.personOf(caller);
@@ -46,8 +46,15 @@ export class ScheduleService {
     const spec = parseSpec(body);
     if (!(person.channels ?? []).includes(channel.id)) throw new HubError('forbidden', `${person.name} isn't in #${channel.name}, so a message can't be scheduled there as them`);
     const thread = typeof body.thread === 'string' && body.thread ? body.thread : undefined;
+    const agentId = caller.kind !== 'human' ? caller.id : typeof body.agent === 'string' && body.agent ? body.agent : undefined;
+    if (agentId && agentId !== caller.id) {
+      const agent = await this.registry.get(agentId);
+      if (!agent || agent.archived || agent.ownerId !== person.id || agent.webhookChannel || !(agent.channels ?? []).includes(channel.id)) {
+        throw new HubError('invalid', `agent: one of your agents in #${channel.name}`);
+      }
+    }
     // The person it's for owns it, also when their agent made it: they change it in the panel, their agents with the tools.
-    return this.schedules.create({ ...spec, channelId: channel.id, ...(thread ? { thread } : {}), text, ownerId: person.id });
+    return this.schedules.create({ ...spec, channelId: channel.id, ...(thread ? { thread } : {}), text, ownerId: person.id, ...(agentId ? { agentId } : {}) });
   }
 
   /**
@@ -113,8 +120,10 @@ export class ScheduleService {
   /** Posts the scheduled messages that are due (POST /tick every minute, and each instance's sweep). */
   async runSchedules(now = new Date()): Promise<number> {
     const posted = await this.schedules.runDue(async (s) => {
-      // As whoever scheduled it, marked ⏰: to an agent (its answer lands in their conversation with it), or in a channel.
-      const person = await this.registry.get(s.ownerId);
+      // As its agent (which it wakes), else whoever scheduled it, marked ⏰: to an agent (its answer lands in their
+      // conversation with it), or in a channel.
+      const agent = s.agentId ? await this.registry.get(s.agentId) : undefined;
+      const person = agent && !agent.archived ? agent : await this.registry.get(s.ownerId);
       if (!person) throw new Error('Whoever scheduled it is gone');
       const text = [{ text: `⏰ ${s.text}` }];
       const to = s.to ? { dm: s.to } : { channelId: s.channelId!, ...(s.thread ? { thread: s.thread } : {}) };

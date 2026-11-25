@@ -114,6 +114,8 @@ export interface Schedule {
   /** A channel post, or else a direct message `to` this agent. */
   channelId?: string;
   to?: string;
+  /** Channel triggers: the agent it belongs to (posted as it). */
+  agentId?: string;
   thread?: string;
   text: string;
   repeat: 'once' | 'daily' | 'weekdays' | 'weekly' | 'interval';

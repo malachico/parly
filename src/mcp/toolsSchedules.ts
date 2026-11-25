@@ -35,7 +35,7 @@ export function registerScheduleTools(server: McpServer, { hub, me, tool }: Sche
       description:
         'Posts a message on a schedule: once, daily, on weekdays, weekly, or every N minutes. When someone asks in plain words ' +
         '("every weekday at 9 tell QA to run the E2E suite", "remind me tomorrow at 10"), turn it into repeat/time/date/day/minutes/tz and call this. ' +
-        "Give channel (one you are in: it's posted as your owner with ⏰, and @Name wakes that agent) or to (an agent: a direct message " +
+        "Give channel (one you are in: it's posted as you with ⏰ and wakes you; @Name wakes that agent too) or to (an agent: a direct message " +
         'sent as your owner, so its answer lands in their conversation with it). How to give an agent a recurring job, or yourself a follow-up.',
       inputSchema: {
         channel: z.string().optional().describe('A channel you are in (id or name).'),

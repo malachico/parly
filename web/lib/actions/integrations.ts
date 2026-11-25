@@ -363,7 +363,7 @@ export async function addTrigger(ws: string, slug: string, form: FormData) {
 
 /**
  * Triggers → On a schedule: wakes an agent at set times with what to do, in its DM with you (sent as you) or in a
- * channel (posted as you, mentioning it).
+ * channel (the agent's own trigger: posted as it, with ⏰).
  */
 export async function addScheduleTrigger(ws: string, form: FormData) {
   const back = `${triggersHref(ws)}/new?type=schedule`;
@@ -371,13 +371,8 @@ export async function addScheduleTrigger(ws: string, form: FormData) {
   if (!agentId) redirect(`${back}&error=${encodeURIComponent('Pick the agent to wake')}`);
   const channelId = field(form, 'channelId');
   const body = scheduleBody(form);
-  if (channelId) {
-    const agent = await hub<Agent>(`/agents/${encodeURIComponent(agentId)}`).catch(() => undefined);
-    const mention = `@${agent?.name ?? ''}`;
-    if (agent && !body.text.startsWith(mention)) body.text = `${mention} ${body.text}`;
-  }
   await attempt(back, () =>
-    hub(channelId ? `/channels/${encodeURIComponent(channelId)}/schedules` : `/agents/${encodeURIComponent(agentId)}/schedules`, { method: 'POST', body }),
+    hub(channelId ? `/channels/${encodeURIComponent(channelId)}/schedules` : `/agents/${encodeURIComponent(agentId)}/schedules`, { method: 'POST', body: channelId ? { ...body, agent: agentId } : body }),
   );
   revalidatePath(triggersHref(ws), 'layout');
   redirect(triggersHref(ws));

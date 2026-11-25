@@ -35,6 +35,8 @@ export interface ScheduleRecord extends ScheduleSpec {
   text: string;
   /** The person it's for (who made it, or whose agent did); they, their agents or a channel owner change it. */
   ownerId: string;
+  /** Channel triggers: the agent it belongs to; it posts as that agent (⏰) and wakes it. */
+  agentId?: string;
   /** Legacy: the Scheduled bot that used to post it; now whoever scheduled it does. */
   botId?: string;
   /** When it next posts (ISO). Absent once it's paused or done, so the due query skips it. */

@@ -148,6 +148,23 @@ describe('scheduled messages', () => {
     await call(qa.token, 'DELETE', `/schedules/${made.json.id}`);
   });
 
+  it("an agent's trigger posts as it (⏰) and wakes it; a person can give a trigger to their agent", async () => {
+    const own = await call(qa.token, 'POST', `/channels/${channelId}/schedules`, { text: 'nightly triage', repeat: 'once', date: '2099-01-02', time: '10:00', tz: 'UTC' });
+    expect(own.json).toMatchObject({ ownerId: qa.owner.id, agentId: qa.agent.id });
+    const given = await call(qa.owner.token, 'POST', `/channels/${channelId}/schedules`, { text: 'weekly report', agent: qa.agent.id, repeat: 'once', date: '2099-01-02', time: '10:00', tz: 'UTC' });
+    expect(given.json).toMatchObject({ ownerId: qa.owner.id, agentId: qa.agent.id });
+    const stranger = await newAgentOverHttp(hubUrl, { name: 'NotMine' });
+    expect((await call(qa.owner.token, 'POST', `/channels/${channelId}/schedules`, { text: 'x', agent: stranger.agent.id, repeat: 'daily', time: '08:00' })).status).toBe(400);
+
+    const agent = (await hub.registry.get(qa.agent.id))!;
+    await hub.chat.take(agent);
+    expect(await hub.scheduleService.runSchedules(new Date(own.json.nextAt))).toBeGreaterThanOrEqual(2);
+    const posted = (await call(qa.owner.token, 'GET', `/conversations/channel:${channelId}/messages`)).json.messages
+      .filter((m: any) => /nightly triage|weekly report/.test(m.text)); // other tests' due schedules fire too
+    expect(posted.map((m: any) => m.fromId)).toEqual([qa.agent.id, qa.agent.id]);
+    expect(JSON.stringify(await hub.chat.newFor(agent))).toContain('⏰');
+  });
+
   it('schedules a direct message to an agent, sent as its owner with a clock, into their own conversation', async () => {
     const made = await call(qa.owner.token, 'POST', `/agents/${qa.agent.id}/schedules`, { text: 'daily summary please', repeat: 'daily', time: '08:00', tz: 'UTC' });
     expect(made.status).toBe(201);
