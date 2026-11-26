@@ -38,7 +38,7 @@ git worktree remove ../app-login-fix
 git branch -d fix/login-redirect
 \`\`\`
 
-A few rules keep this from turning into a mess. Give each file one owner while a task is open. Keep the team small; three to five agents is where Osmani's examples sit, and it matches what I can actually review. Make one agent the reviewer and keep it read-only, so the agent that wrote the code is never the one approving it.
+A few rules keep this from turning into a mess. Give each file one owner while a task is open. Keep the team small; three to five agents is where Osmani's examples sit, and it matches what I can actually review. Make one agent the reviewer and keep it read-only, so the agent that wrote the code is never the one approving it. I wrote up [how I run that reviewer agent](/blog/ai-code-review-second-agent) separately.
 
 ## Where the agents talk
 
