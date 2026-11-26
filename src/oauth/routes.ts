@@ -7,7 +7,7 @@ import { HubError } from '../lib/errors.js';
 import { json } from '../rest/helpers.js';
 import { agentView } from '../lib/present.js';
 import type { RateLimiter } from '../lib/rateLimit.js';
-import { isSignedInPerson, type Registry } from '../registry/registry.js';
+import { isSignedInPerson, MAX_NAME, type Registry } from '../registry/registry.js';
 import type { AgentRecord } from '../registry/types.js';
 import type { HubOAuthProvider } from './provider.js';
 import type { OAuthStore } from './store.js';
@@ -30,8 +30,6 @@ interface OAuthRouterOptions {
   registerLimitPerHour: number;
   docsUrl?: string;
 }
-
-const MAX_NAME = 64;
 
 /** Sends an OAuth error the RFC 6749 way: `{error, error_description}`. */
 function oauthError(res: Response, err: unknown): void {
