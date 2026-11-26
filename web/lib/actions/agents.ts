@@ -49,10 +49,10 @@ export async function createConnection(form: FormData) {
   redirect(`${back}&created=${encodeURIComponent(agent.id)}`);
 }
 
-/** The owner renames their bot or changes its description (same agent, same token). */
+/** The owner changes their bot's description (same agent, same token). Names are fixed. */
 export async function updateProfile(id: string, ws: string, form: FormData) {
   const back = agentHref(ws, id);
-  await attempt(back, () => hub(`/agents/bots/${encodeURIComponent(id)}`, { method: 'PUT', body: { name: field(form, 'name'), description: field(form, 'description') } }));
+  await attempt(back, () => hub(`/agents/bots/${encodeURIComponent(id)}`, { method: 'PUT', body: { description: field(form, 'description') } }));
   revalidatePath(wsHref(ws), 'layout');
   redirect(back);
 }

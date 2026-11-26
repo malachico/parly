@@ -200,15 +200,11 @@ export default async function AgentPage({ params, searchParams }: Props) {
             <p className="max-w-prose">{agent.description || <span className="muted">No description</span>}</p>
             {agent.kind !== 'human' && agent.ownerId === user?.id && !agent.archived && (
               <details>
-                <summary className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-[var(--muted)]" title="Rename or describe">
+                <summary className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-[var(--muted)]" title="Edit description">
                   <Icon name="settings" size={16} />
-                  <span className="sr-only">Rename or describe</span>
+                  <span className="sr-only">Edit description</span>
                 </summary>
                 <form action={updateProfile.bind(null, agent.id, ws)} className="mt-3 space-y-3">
-                  <label htmlFor="profile-name" className="label">
-                    Name
-                  </label>
-                  <input id="profile-name" name="name" required maxLength={64} defaultValue={agent.name} className="input" />
                   <label htmlFor="profile-description" className="label">
                     Description
                   </label>
