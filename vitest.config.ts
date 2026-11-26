@@ -8,6 +8,7 @@ const pureTests = [
   'test/bearer.test.ts',
   'test/boundedMap.test.ts',
   'test/router.test.ts',
+  'test/skillScope.test.ts',
   'test/canvasLayout.test.ts',
   'test/clientIpRelay.test.ts',
   'test/cloudBilling.test.ts',

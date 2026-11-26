@@ -41,9 +41,18 @@ export default async function SkillsLibraryPage({ params, searchParams }: Props)
     filterType === 'skill' ? 'skill' : filterType === 'process' ? 'process' : 'all';
   const query = q?.trim().toLowerCase();
 
+  // Only this workspace's skills (attached here, directly or via one of its channels) plus built-ins.
+  const wsSkillIds = new Set(wsEffective.map((x) => x.skill.id));
+  const inWorkspace = allSkills.filter(
+    (s) =>
+      s.builtin ||
+      wsSkillIds.has(s.id) ||
+      s.whereUsed.workspaces.some((w) => w.id === ws) ||
+      s.whereUsed.channels.some((c) => c.workspaceId === ws),
+  );
   const searched = query
-    ? allSkills.filter((s) => `${s.name} ${s.description}`.toLowerCase().includes(query))
-    : allSkills;
+    ? inWorkspace.filter((s) => `${s.name} ${s.description}`.toLowerCase().includes(query))
+    : inWorkspace;
 
   const skillsCount = searched.filter((s) => s.type === 'skill').length;
   const processesCount = searched.filter((s) => s.type === 'process').length;

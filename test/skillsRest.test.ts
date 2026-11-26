@@ -133,6 +133,29 @@ describe('skills & processes REST API', () => {
     expect((await call(memberToken, 'PATCH', `/me/skills/${procId}`, { name: 'Hijack' })).status).toBe(403);
   });
 
+  it('lets any workspace member create and edit a workspace skill; non-members cannot', async () => {
+    const { owner, workspace } = await crew(hub.registry, 'rest-skills-ws-member', []);
+    const { agent: memberBot, token: memberToken } = await hub.registry.createBot(await testPerson(hub.registry, 'rest-skills-ws-m1'), { name: 'rest-skills-ws-m1-bot', public: true });
+    await hub.registry.addToWorkspace(owner, workspace.id, memberBot.id);
+    const { agent: mateBot, token: mateToken } = await hub.registry.createBot(await testPerson(hub.registry, 'rest-skills-ws-m2'), { name: 'rest-skills-ws-m2-bot', public: true });
+    await hub.registry.addToWorkspace(owner, workspace.id, mateBot.id);
+    const { token: outsiderToken } = await hub.registry.createBot(await testPerson(hub.registry, 'rest-skills-ws-out'), { name: 'rest-skills-ws-out-bot', public: true });
+
+    const created = await call(memberToken, 'POST', '/me/skills', { name: 'ws-shared', description: 'Shared', instructions: 'Do it.', scope: 'workspace', id: workspace.id });
+    expect(created.status).toBe(201);
+    const effective = await call(memberToken, 'GET', `/workspaces/${workspace.id}/skills`);
+    expect(effective.body.some((x: any) => x.skill.id === created.body.id)).toBe(true);
+
+    const mateView = (await call(mateToken, 'GET', '/me/skills')).body.find((s: any) => s.id === created.body.id);
+    expect(mateView?.readOnly).toBe(false);
+    expect((await call(mateToken, 'PATCH', `/me/skills/${created.body.id}`, { instructions: 'Do it better.' })).status).toBe(200);
+
+    expect((await call(outsiderToken, 'POST', '/me/skills', { name: 'ws-x', description: 'x', instructions: 'x', scope: 'workspace', id: workspace.id })).status).toBe(404);
+    expect((await call(outsiderToken, 'PATCH', `/me/skills/${created.body.id}`, { instructions: 'nope' })).status).not.toBe(200);
+    expect((await call(mateToken, 'DELETE', `/me/skills/${created.body.id}`)).status).toBe(403);
+    expect((await call(memberToken, 'DELETE', `/me/skills/${created.body.id}`)).status).toBe(200);
+  });
+
   it('returns effective scope skills with source (builtin | workspace | channel | direct) and enabled state for detached opt-outs', async () => {
     const { owner, workspace, channel } = await crew(hub.registry, 'rest-skills-scopes', []);
     const { agent: ownerBot, token: ownerToken } = await hub.registry.createBot(owner, { name: 'rest-scope-owner-bot', follow: true });

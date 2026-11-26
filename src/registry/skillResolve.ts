@@ -9,7 +9,7 @@ import {
   withDefaultWorkspaceSkills,
 } from './defaultSkills.js';
 import { validDocId } from './fields.js';
-import type { Registry } from './registry.js';
+import { isShowcaseGuest, type Registry } from './registry.js';
 import { canAccessSkill, isSkillOwner, requireOwnerChannel, requireOwnerWorkspace } from './skills.js';
 import {
   isPublicWorkspace,
@@ -280,7 +280,7 @@ function computeWhereUsedAndReadOnly(
     if (skill.scope) {
       if (skill.scope.kind === 'workspace') {
         const w = wsById.get(skill.scope.id);
-        if (w && isOwner(w, ctx.self)) canEdit = true;
+        if (w && !isShowcaseGuest(w, ctx.self)) canEdit = true; // any member (not a showcase guest) can edit a workspace skill
       } else if (skill.scope.kind === 'channel') {
         const c = ctx.channels.find((ch) => ch.id === skill.scope!.id);
         if (c && canManageChannel(c, wsById.get(c.workspaceId), ctx.self)) canEdit = true;

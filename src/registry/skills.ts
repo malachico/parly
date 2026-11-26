@@ -9,7 +9,7 @@ import {
   withDefaultWorkspaceSkills,
 } from './defaultSkills.js';
 import { cleanSkillDescription, cleanSkillInstructions, cleanSkillName, cleanStepField, validDocId } from './fields.js';
-import type { Registry } from './registry.js';
+import { isShowcaseGuest, type Registry } from './registry.js';
 import type { AgentRecord, ChannelRecord, ProcessStep, SkillRecord, SkillScope, SkillType, WorkspaceRecord } from './types.js';
 
 const MAX_PROCESS_STEPS = 50;
@@ -73,6 +73,7 @@ export async function createSkill(
   }
 
   let resolvedScope: { kind: SkillScope; id: string } | undefined;
+  let workspaceForScope: WorkspaceRecord | undefined;
   if (input.scope) {
     const targetId = input.id ?? (input.scope === 'agent' ? owner.id : '');
     if (!targetId) throw new HubError('invalid', `id is required when scope is "${input.scope}"`);
@@ -83,8 +84,11 @@ export async function createSkill(
       const ch = await requireOwnerChannel(registry, owner, targetId);
       resolvedScope = { kind: 'channel', id: ch.id };
     } else if (input.scope === 'workspace') {
-      const ws = await requireOwnerWorkspace(registry, owner, targetId);
+      // Any member can create a workspace skill; it's attached to the workspace on creation.
+      const ws = await registry.resolveMemberWorkspace(owner, targetId);
+      if (isShowcaseGuest(ws, owner)) throw new HubError('forbidden', 'Guests of a public workspace cannot create workspace skills');
       resolvedScope = { kind: 'workspace', id: ws.id };
+      workspaceForScope = ws;
     } else {
       throw new HubError('invalid', `Unsupported skill scope "${String(input.scope)}"`);
     }
@@ -106,7 +110,9 @@ export async function createSkill(
     updatedAt: now,
   };
   await registry.skillStore.saveSkill(skill);
-  if (resolvedScope) {
+  if (workspaceForScope) {
+    await attachSkillToWorkspaceRecord(registry, workspaceForScope, skill.id);
+  } else if (resolvedScope) {
     await attachSkill(registry, owner, resolvedScope.kind, resolvedScope.id, skill.id);
   }
   await registry.syncGraph?.({ skill });
@@ -223,7 +229,7 @@ export async function deleteSkill(registry: Registry, caller: AgentRecord, skill
     throw new HubError('forbidden', 'Built-in skills are read-only and cannot be deleted; use detach_skill to remove a built-in skill from a workspace');
   }
   const skill = await requireSkill(registry, skillId);
-  await requireSkillOwner(registry, caller, skill);
+  await requireSkillOwner(registry, caller, skill, false);
   await registry.skillStore.deleteSkillAndDetach(skill.id);
   await registry.syncGraph?.({ deletedSkillId: skill.id });
   if (caller.attachedSkills?.includes(skill.id)) {
@@ -330,18 +336,22 @@ export async function attachSkill(
   }
   if (scope === 'workspace') {
     const workspace = await requireOwnerWorkspace(registry, caller, id);
-    const isDefault = DEFAULT_WORKSPACE_SKILL_IDS.includes(skill.id);
-    const detachedSkills = (workspace.detachedSkills ?? []).filter((s) => s !== skill.id);
-    const attachedSkills = effectiveWorkspaceSkillIds({
-      attachedSkills: [...new Set([...(workspace.attachedSkills ?? []), skill.id])],
-      detachedSkills,
-    });
-    await registry.skillStore.attachSkillToWorkspace(workspace.id, skill.id, attachedSkills, isDefault);
-    workspace.attachedSkills = attachedSkills;
-    workspace.detachedSkills = detachedSkills;
-    return { scope, id: workspace.id, attachedSkills, ...(detachedSkills.length ? { detachedSkills } : {}) };
+    return { scope, ...(await attachSkillToWorkspaceRecord(registry, workspace, skill.id)) };
   }
   throw new HubError('invalid', `Unsupported skill scope "${String(scope)}"`);
+}
+
+async function attachSkillToWorkspaceRecord(registry: Registry, workspace: WorkspaceRecord, skillId: string) {
+  const isDefault = DEFAULT_WORKSPACE_SKILL_IDS.includes(skillId);
+  const detachedSkills = (workspace.detachedSkills ?? []).filter((s) => s !== skillId);
+  const attachedSkills = effectiveWorkspaceSkillIds({
+    attachedSkills: [...new Set([...(workspace.attachedSkills ?? []), skillId])],
+    detachedSkills,
+  });
+  await registry.skillStore.attachSkillToWorkspace(workspace.id, skillId, attachedSkills, isDefault);
+  workspace.attachedSkills = attachedSkills;
+  workspace.detachedSkills = detachedSkills;
+  return { id: workspace.id, attachedSkills, ...(detachedSkills.length ? { detachedSkills } : {}) };
 }
 
 /** Detaches an existing skill from an agent, channel, or workspace the caller is allowed to manage. */
@@ -459,12 +469,12 @@ async function validateAndCleanSteps(
   return cleaned.sort((a, b) => a.order - b.order);
 }
 
-async function requireSkillOwner(registry: Registry, caller: AgentRecord, skill: SkillRecord): Promise<void> {
+async function requireSkillOwner(registry: Registry, caller: AgentRecord, skill: SkillRecord, memberCanEdit = true): Promise<void> {
   if (skill.builtin || isBuiltinSkillId(skill.id)) {
     throw new HubError('forbidden', 'Built-in skills are read-only');
   }
   if (isSkillOwner(skill, caller)) return;
-  if (skill.scope && (await canManageSkillScope(registry, caller, skill.scope.kind, skill.scope.id))) return;
+  if (skill.scope && (await canManageSkillScope(registry, caller, skill.scope.kind, skill.scope.id, memberCanEdit))) return;
   const { channels, workspaces, agents } = await registry.skillStore.listScopesWithAttachedSkill(skill.id);
   for (const w of workspaces) {
     if (isOwner(w, caller)) return;
@@ -478,7 +488,7 @@ async function requireSkillOwner(registry: Registry, caller: AgentRecord, skill:
   throw new HubError('forbidden', 'Unauthorized: only the skill owner or scope owner can modify or delete this skill');
 }
 
-async function canManageSkillScope(registry: Registry, caller: AgentRecord, scope: SkillScope, id: string): Promise<boolean> {
+async function canManageSkillScope(registry: Registry, caller: AgentRecord, scope: SkillScope, id: string, memberCanEdit = false): Promise<boolean> {
   if (scope === 'agent') {
     if (id === caller.id || id === 'me') return true;
     const target = await registry.get(id);
@@ -489,8 +499,10 @@ async function canManageSkillScope(registry: Registry, caller: AgentRecord, scop
     return !!ch && canManageChannel(ch, await registry.workspaceDoc(ch.workspaceId), caller);
   }
   if (scope === 'workspace') {
+    // Workspace skills are shared: any member (not a showcase guest) can edit them; only owners delete others' skills.
     const ws = await registry.workspaceDoc(id);
-    return !!ws && isOwner(ws, caller);
+    if (!ws) return false;
+    return isOwner(ws, caller) || (memberCanEdit && (caller.workspaces ?? []).includes(ws.id) && !isShowcaseGuest(ws, caller));
   }
   return false;
 }

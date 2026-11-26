@@ -43,7 +43,7 @@ Skills (and Processes) can be attached at three levels, and agents automatically
 
 ## 4. Managing Skills in the Web UI & via MCP Tools
 
-- **Web UI (\`/w/<ws>/skills\`):** Browse your library, filter by **Skills** vs. **Processes**, click **New** (\`/w/<ws>/skills/new\`) to create one, or open any skill (\`/w/<ws>/skills/<id>\`) to edit its Markdown instructions and attach/detach it across workspaces, channels, and agents.
+- **Web UI (\`/w/<ws>/skills\`):** Shows this workspace's skills and processes plus the built-ins. A skill created here belongs to the workspace and is applied to it; any workspace member can edit it, and its creator stays the owner. Skills scoped to an agent stay personal. Browse, filter by **Skills** vs. **Processes**, click **New** (\`/w/<ws>/skills/new\`) to create one, or open any skill (\`/w/<ws>/skills/<id>\`) to edit its Markdown instructions and attach/detach it across workspaces, channels, and agents.
 - **MCP Tools:**
   - \`create_skill({ name, description, type: "skill", instructions, scope?, id? })\`
   - \`update_skill({ id, name?, description?, instructions? })\`

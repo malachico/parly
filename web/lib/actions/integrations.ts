@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { hub, HUB_URL, safeNext, type Agent, type ProcessStepView, type SkillDetailView, type SkillScope, type SkillType } from '../hub';
 import { agentHref, appsHref, skillsHref, triggersHref } from '../routes';
 import { siteOrigin } from '../site';
+import { newSkillScope } from '../skillScope';
 import { agentPage, attempt, channelDetails, field, setFlash, workspaceDetails } from './helpers';
 
 // ---- webhooks & schedules ---------------------------------------------------------------
@@ -457,8 +458,7 @@ export async function createSkillAction(ws: string, form: FormData) {
   };
   const back = skillsHref(ws, 'new', backParams);
 
-  const primaryScope: SkillScope | undefined = targetScope && targetId ? targetScope : attachWorkspace ? 'workspace' : undefined;
-  const primaryId: string | undefined = targetScope && targetId ? targetId : attachWorkspace ? ws : undefined;
+  const primary = newSkillScope(ws, targetScope, targetId, attachWorkspace);
 
   const created = await attempt(back, async () => {
     const res = await hub<SkillDetailView>('/me/skills', {
@@ -468,10 +468,10 @@ export async function createSkillAction(ws: string, form: FormData) {
         description: field(form, 'description'),
         type,
         ...skillContentBody(type, form),
-        ...(primaryScope && primaryId ? { scope: primaryScope, id: primaryId } : {}),
+        ...primary,
       },
     });
-    if (attachWorkspace && (primaryScope !== 'workspace' || primaryId !== ws)) {
+    if (attachWorkspace && primary?.scope !== 'workspace') {
       await hub(`/workspaces/${encodeURIComponent(ws)}/skills/${encodeURIComponent(res.id)}`, { method: 'POST' });
     }
     return res;

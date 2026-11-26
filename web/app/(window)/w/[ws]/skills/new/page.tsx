@@ -124,13 +124,13 @@ export default async function NewSkillPage({ params, searchParams }: Props) {
                   <span>Attach immediately to <strong>{targetLabel}</strong></span>
                 </label>
               )}
-              {canManageWorkspace ? (
+              {canManageWorkspace && validScope && validScope !== 'workspace' ? (
                 <label className="flex items-center gap-2.5 text-sm">
-                  <input type="checkbox" name="attachWorkspace" defaultChecked={validScope === 'workspace'} className="size-4" />
-                  <span>Apply to entire workspace (<strong>{workspace?.name ?? 'this workspace'}</strong>)</span>
+                  <input type="checkbox" name="attachWorkspace" className="size-4" />
+                  <span>Also apply to entire workspace (<strong>{workspace?.name ?? 'this workspace'}</strong>)</span>
                 </label>
               ) : (
-                !validScope && <p className="text-xs text-[var(--muted)]">Saved to your library; you can attach it to any of your agents or channels on the next screen.</p>
+                !validScope && <p className="text-xs text-[var(--muted)]">Shared with everyone in <strong>{workspace?.name ?? 'this workspace'}</strong>; any member can edit it.</p>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">

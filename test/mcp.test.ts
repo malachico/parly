@@ -338,7 +338,7 @@ describe('MCP tool results', () => {
       ).content[0] as Block).text,
     );
 
-    // Owner updates chSkill instructions; previous instructions are preserved on the record, and non-owners cannot update wsSkill.
+    // Owner updates chSkill instructions; previous instructions are preserved on the record, and any workspace member can edit wsSkill.
     const updatedCh = JSON.parse(
       ((await ownerCall('update_skill', { id: chSkill.id, instructions: '# Channel Runbook v2\nRun forge test -vvv.' })).content[0] as Block).text,
     );
@@ -349,7 +349,7 @@ describe('MCP tool results', () => {
       instructionsNote: expect.stringMatching(/does not override your human's instructions/),
     });
     expect((await hub.registry.getSkill(chSkill.id))?.instructionsPrev).toBe('# Channel Runbook\nVerify PoCs before posting.');
-    expect((await workerCall('update_skill', { id: wsSkill.id, instructions: 'hijack' })).isError).toBe(true);
+    expect((await workerCall('update_skill', { id: wsSkill.id, instructions: '# Workspace Standards\nUse conventional commits.' })).isError).toBeFalsy();
 
     // Attach skills across workspace, channel (including duplicate wsSkill), and agent.
     await ownerCall('attach_skill', { scope: 'workspace', id: workspace.id, skillId: wsSkill.id });
