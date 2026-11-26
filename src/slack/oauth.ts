@@ -36,7 +36,7 @@ interface SlackOAuthOptions {
   fetchImpl?: typeof fetch;
 }
 
-export interface SlackChannelOption {
+interface SlackChannelOption {
   id: string;
   name: string;
   isPrivate: boolean;
@@ -50,7 +50,7 @@ interface SlackInstallView {
   at: string;
 }
 
-export interface WorkspaceSlackStatus {
+interface WorkspaceSlackStatus {
   configured: boolean;
   canManage: boolean;
   install?: SlackInstallView;
@@ -59,7 +59,7 @@ export interface WorkspaceSlackStatus {
   roomLinks?: { sharedChannelId?: string; cornerChannelId?: string; cornerParlyId: string; sharedParlyId: string };
 }
 
-export interface SlackLinkCodeView {
+interface SlackLinkCodeView {
   teamId: string;
   teamName: string;
   slackUserId: string;

@@ -2,7 +2,7 @@ import type { SkillRecord, WorkspaceRecord } from './types.js';
 
 const BUILTIN_SKILL_WRITER_ID = 'builtin:skill-writer';
 const BUILTIN_PROCESS_WRITER_ID = 'builtin:process-writer';
-export const BUILTIN_PARLY_DOCS_ID = 'builtin:parly-docs';
+const BUILTIN_PARLY_DOCS_ID = 'builtin:parly-docs';
 
 export const DEFAULT_WORKSPACE_SKILL_IDS: readonly string[] = [
   BUILTIN_SKILL_WRITER_ID,

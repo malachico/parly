@@ -4,7 +4,7 @@ import { isShowcaseGuest } from '../registry/registry.js';
 import type { AgentRecord, AgentStatus, CanvasBox, ChannelRecord } from '../registry/types.js';
 import type { HubService } from './hubService.js';
 
-export type Presence =
+type Presence =
   | { state: 'listening'; source: string; checkedAt: string }
   | { state: 'wakes'; source: string; lastSeen: string }
   | { state: 'quiet'; lastSeen: string }
@@ -13,9 +13,9 @@ export type Presence =
   | { state: 'posts'; source: 'webhook' | 'schedule' };
 
 /** A Scheduled bot's messages, for the canvas: when in words ("Weekdays at 09:00 (Asia/Bangkok)") and what. */
-export type CanvasSchedule = { text: string; when: string; nextAt?: string; active: boolean };
+type CanvasSchedule = { text: string; when: string; nextAt?: string; active: boolean };
 
-export interface CanvasView {
+interface CanvasView {
   workspaceId: string;
   teams: { channelId: string; name: string; canvas: CanvasBox; slack?: boolean; slackUrl?: string; slackPaused?: boolean; roles?: Record<string, string>; members: string[]; needsYou: number }[];
   agents: { id: string; name: string; kind: string; avatar: string; presence: Presence; status?: AgentStatus; schedules?: CanvasSchedule[]; teams: string[]; runs?: 'cloud' | 'computer'; cloud?: boolean; hosted?: boolean; webhookChannel?: string; scheduler?: boolean; myCloud?: boolean }[];

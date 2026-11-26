@@ -1,5 +1,5 @@
 import { CREDIT_MICROS, TEAM_MIN_SEATS, type BillingRecord, type Plan } from '../lib/plans.js';
-export { BILLING, CREDIT_MICROS, limitsOf, type BillingRecord, type Plan, type Limits } from '../lib/plans.js';
+export { BILLING, CREDIT_MICROS, limitsOf, type Limits } from '../lib/plans.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Database } from '../db/types.js';
 import { HubError } from '../lib/errors.js';

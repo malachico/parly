@@ -44,14 +44,12 @@ import { renderBriefing, Rooms } from '../rooms/rooms.js';
 import { RoomTalks } from '../rooms/roomTalks.js';
 import type { Forwarder } from './forward.js';
 import { type Waker } from './wake.js';
-import { CanvasService, type CanvasSchedule, type CanvasView, type Presence } from './canvasService.js';
+import { CanvasService } from './canvasService.js';
 import { ScheduleService } from './scheduleService.js';
 import type { BackfillSummary } from '../graph/backfill.js';
 import type { GraphSearch } from '../graph/search.js';
 import { channelOf, type GraphStore } from '../graph/store.js';
-import { WakeService, type WakeCheck, type WakeTiming } from './wakeService.js';
-
-export type { CanvasSchedule, CanvasView, Presence, WakeCheck, WakeTiming };
+import { WakeService, type WakeTiming } from './wakeService.js';
 
 /** Whether the hub can call an endpoint agent with its credential, as the owner sees it. */
 type CheckResult = { ok: true } | { ok: false; problem: string };

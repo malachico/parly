@@ -16,7 +16,7 @@ import {
 } from './wake.js';
 
 /** How a fire of an agent's Routine went, as its owner sees it: the session it started, or why not. */
-export type WakeCheck = { ok: true; sessionUrl?: string } | { ok: false; problem: string };
+type WakeCheck = { ok: true; sessionUrl?: string } | { ok: false; problem: string };
 
 /** How long a Routine's setup code works: the fire's session uses it in its first minutes. */
 const ROUTINE_SETUP_MS = 60 * 60_000;

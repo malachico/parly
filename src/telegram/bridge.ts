@@ -165,7 +165,7 @@ export function parseTelegramLinkInput(input: {
   return { chatId: rawChatId, ...(topicId !== undefined ? { topicId } : {}) };
 }
 
-export interface WorkspaceTelegramStatus {
+interface WorkspaceTelegramStatus {
   configured: boolean;
   canManage: boolean;
   chats: Array<{
