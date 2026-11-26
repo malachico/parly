@@ -51,10 +51,12 @@ export default async function Consent({ searchParams }: Props) {
   const bots = allBots.filter((b) => b.followsOwner && !b.archived);
   const first = user.name.trim().split(/\s+/)[0] || 'My';
   const suggested = `${first}'s ${req.client.name}`.slice(0, 64);
-  // Reconnecting the same tool usually means the same agent: preselect one named like it. Never for a
-  // typed code: the client's name is self-declared, and a phisher would name theirs after your tool.
+  // Reconnecting the same tool usually means the same agent: preselect the one with the name we'd suggest,
+  // else one named like the tool. Never for a typed code: the client's name is self-declared, and a phisher
+  // would name theirs after your tool.
   const clientName = req.client.name.toLowerCase();
-  const preselect = req.kind === 'code' ? (bots.find((b) => b.name.toLowerCase().includes(clientName))?.id ?? 'new') : 'new';
+  const same = (b: Agent) => b.name.trim().toLowerCase() === suggested.toLowerCase();
+  const preselect = req.kind === 'code' ? ((bots.find(same) ?? bots.find((b) => b.name.toLowerCase().includes(clientName)))?.id ?? 'new') : 'new';
 
   return (
     <Frame title={`${req.client.name} wants to connect as you`}>
