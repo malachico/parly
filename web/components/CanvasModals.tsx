@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { wsHref } from '@/lib/routes';
 import { Avatar, type AvatarOf } from '@/components/Avatar';
-import { addMyAgentHere, createCanvasTeam } from '@/lib/actions';
+import { addMyAgentHere, createCanvasTeam, joinChannel } from '@/lib/actions';
 import type { CanvasAgent, CanvasBox, CanvasTeam, CanvasView, SlackChannelOption } from '@/lib/hub';
 import { PendingButton } from '@/components/PendingButton';
 import { plural } from '@/lib/plural';
@@ -392,10 +392,12 @@ export function NewTeamDialog({
 }
 
 /** Screen 7 (Empty.dc.html): First-run empty state on the canvas. */
-export function EmptyCanvasCard({ ws, me, hasAgents, onCreateTeam }: {
+export function EmptyCanvasCard({ ws, me, hasAgents, canJoin, onCreateTeam }: {
   ws: string;
   me: AvatarOf;
   hasAgents: boolean;
+  /** Open channels are listed below; point the newcomer at them. */
+  canJoin?: boolean;
   onCreateTeam: () => void;
 }) {
   const action = 'inline-flex min-h-12 items-center justify-center rounded-xl bg-[var(--accent)] px-5 text-base font-semibold text-white';
@@ -405,11 +407,28 @@ export function EmptyCanvasCard({ ws, me, hasAgents, onCreateTeam }: {
       <Avatar who={me} className="size-20 rounded-full" />
       <h1 className="m-0 text-2xl font-bold tracking-tight">{hasAgents ? 'Create your first team' : "This is your crew's home"}</h1>
       <p className="m-0 max-w-md text-base leading-relaxed text-[var(--fg-soft)]">
+        {canJoin && 'Your workspace already has channels. Join one below, or start your own. '}
         {hasAgents ? 'Your agents are connected. Create a team, then choose who works together. You can also message agents directly without a team.' : 'Add an agent to get started. Connect one you already use for free, or choose an agent Parly runs for you.'}
       </p>
       {hasAgents ? <button type="button" onClick={onCreateTeam} className={action}>Create your first team</button>
         : <Link href={`${wsHref(ws)}/connect`} scroll={false} className={action}>Add an agent</Link>}
     </section>
+  );
+}
+
+/** Bottom row of the home: the workspace's open channels I'm not in yet, each with a Join button. */
+export function JoinableChannelsBar({ ws, channels }: { ws: string; channels: { id: string; name: string }[] }) {
+  return (
+    <nav aria-label="Channels you can join" onPointerDown={(e) => e.stopPropagation()}
+      className="pointer-events-auto absolute inset-x-0 bottom-4 z-10 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-2 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 shadow-md">
+      <span className="shrink-0 text-sm font-semibold text-[var(--fg-soft)]">Channels you can join</span>
+      {channels.map((c) => (
+        <form key={c.id} action={joinChannel.bind(null, c.id, ws)} className="flex shrink-0 items-center gap-1.5 rounded-xl bg-[var(--bg)] py-1 pl-3 pr-1">
+          <span className="text-sm">#{c.name}</span>
+          <PendingButton className="min-h-8 rounded-lg bg-[var(--accent)] px-3 text-sm font-semibold text-white">Join</PendingButton>
+        </form>
+      ))}
+    </nav>
   );
 }
 

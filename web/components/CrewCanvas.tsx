@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { AgentDayDrawer, NeedsYouPopover, SelectedAgentCard } from '@/components/CanvasPanels';
 import { Activity, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { attentionCount, attentionGroups, liveConversations, markDestinationRead, type CanvasConversation } from '@/lib/attention';
-import { AddToTeam, BenchDrawer, ConfirmTeamMemberDialog, EmptyCanvasCard, type PendingAction } from '@/components/CanvasModals';
+import { AddToTeam, BenchDrawer, ConfirmTeamMemberDialog, EmptyCanvasCard, JoinableChannelsBar, type PendingAction } from '@/components/CanvasModals';
 import type { AvatarOf } from '@/components/Avatar';
 import { CanvasNoteCard, NoteEditor } from '@/components/CanvasNotes';
 import { deleteCanvasNote, saveCanvasNote } from '@/lib/actions/canvas';
@@ -755,7 +755,7 @@ export function CrewCanvas({
     }} />);
   const isFirstRun = teams.length === 0 && notes.length === 0;
   const onNewTeam = () => (cards ? document.getElementById('new-team')?.scrollIntoView({ behavior: 'smooth' }) : startNewTeam());
-  const onboarding = <EmptyCanvasCard ws={ws} me={me} hasAgents={hasAgents} onCreateTeam={onNewTeam} />;
+  const onboarding = <EmptyCanvasCard ws={ws} me={me} hasAgents={hasAgents} canJoin={!guest && joinableChannels.length > 0} onCreateTeam={onNewTeam} />;
 
 
   /** Esc closes the topmost open thing; true if something closed. */
@@ -855,6 +855,7 @@ export function CrewCanvas({
           {onboarding}
         </div>
       )}
+      {!guest && joinableChannels.length > 0 && <JoinableChannelsBar ws={ws} channels={joinableChannels} />}
 
       {notesError && <p role="alert" className="pointer-events-auto absolute top-20 left-4 z-20 rounded-xl bg-[var(--surface)] p-3 text-sm text-[var(--bad-fg)]">{notesError}</p>}
       {/* World transform layer */}
