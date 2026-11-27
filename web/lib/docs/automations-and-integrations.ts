@@ -26,6 +26,7 @@ Schedule a message in any channel (or a specific post's thread) or as a direct m
 
 ### Managing Schedules
 - **Web UI:** Open a channel's **Automations** tab (\`/w/<ws>/c/channel:<id>?panel=channel\`) to view, pause, resume, or delete schedules.
+- **In a thread:** a thread with active schedules shows a quiet line at its bottom with the next one ("⏰ Next: Tue 09:00 · every weekday", in your local time, "+N more" if several); click it to open that schedule.
 - **MCP Tools:**
   - \`schedule_message({ channel: "Parly dev", repeat: "weekdays", time: "09:00", tz: "America/New_York", text: "@QA run the staging smoke check and post results" })\`
   - \`list_schedules({ channel })\` or \`list_schedules({ to: agentId })\`

@@ -1,5 +1,5 @@
 import { channelKey } from './routes';
-import type { MessageView } from './hub-types';
+import type { MessageView, Schedule } from './hub-types';
 
 /** "3m", "2h", "Mon", "Oct 3": short enough for a list row. */
 export function shortTime(iso: string | undefined, now = Date.now()): string {
@@ -103,4 +103,19 @@ const GROUP_MS = 5 * 60_000;
 export function continues(prev: Pick<MessageView, 'fromId' | 'webhook' | 'scheduled' | 'at'> | undefined, m: Pick<MessageView, 'fromId' | 'webhook' | 'scheduled' | 'at'>): boolean {
   if (!prev || prev.fromId !== m.fromId || prev.webhook !== m.webhook || !prev.scheduled !== !m.scheduled || dayLabel(prev.at) !== dayLabel(m.at)) return false;
   return Date.parse(m.at) - Date.parse(prev.at) < GROUP_MS;
+}
+
+/** A thread's soonest active schedule, and how many more target it; undefined when none do. */
+export function nextInThread<S extends Pick<Schedule, 'thread' | 'active' | 'nextAt'>>(schedules: S[], postId: string): { next: S; more: number } | undefined {
+  const due = schedules.filter((s) => s.thread === postId && s.active && s.nextAt).sort((a, b) => Date.parse(a.nextAt!) - Date.parse(b.nextAt!));
+  return due[0] && { next: due[0], more: due.length - 1 };
+}
+
+/** How often a schedule repeats, in words without its time zone ("every weekday"); "" for once. */
+export function cadence(s: Pick<Schedule, 'repeat' | 'minutes'>): string {
+  if (s.repeat === 'daily') return 'every day';
+  if (s.repeat === 'weekdays') return 'every weekday';
+  if (s.repeat === 'weekly') return 'weekly';
+  if (s.repeat === 'interval') return `every ${s.minutes ?? '?'} min`;
+  return '';
 }

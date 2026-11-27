@@ -17,7 +17,7 @@ import { plural } from '@/lib/plural';
 type Props = {
   /** A showcase guest: no DMs to the showcase's agents, so their names open profiles. */
   guest?: boolean;
-  initialTab?: 'settings';
+  initialTab?: 'settings' | 'automations';
   workspaceId: string;
   channel: Channel;
   room?: Workspace['room'];

@@ -13,7 +13,7 @@ export function ScheduleList({ schedules, back, canChange, byName }: { schedules
   return (
     <ul className="flex flex-col gap-2">
       {schedules.map((s) => (
-        <li key={s.id} className="rounded-lg border border-[var(--border)] px-3 py-2">
+        <li key={s.id} id={`schedule-${s.id}`} className="scroll-mt-4 rounded-lg border border-[var(--border)] px-3 py-2">
           <p dir="auto" className="line-clamp-2 text-sm">
             {s.text}
           </p>

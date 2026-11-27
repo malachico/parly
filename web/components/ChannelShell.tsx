@@ -13,6 +13,7 @@ import { MarkRead, THREAD_READ_EVENT } from '@/components/MarkRead';
 import { PanelSkeleton } from '@/components/PanelSkeleton';
 import { JumpToLatest, LoadOlder, ScrollToBottom } from '@/components/ScrollToBottom';
 import { ThreadRelatedKnowledge } from '@/components/ChannelKnowledge';
+import { ThreadNextSchedule } from '@/components/ThreadNextSchedule';
 import { ThreadView } from '@/components/Thread';
 import { ThreadHeader } from '@/components/ThreadHeader';
 import { ErrorNote } from '@/components/ui';
@@ -391,6 +392,7 @@ export function ChannelShell({
             }
           />
           <div id="outbox-thread" />
+          <ThreadNextSchedule key={postId} ws={ws} conversationKey={conversationKey} channelId={channel.id} postId={postId} lastSeq={lastSeq} meId={me.id} people={mergedPeople} />
           <JumpToLatest target="thread-pane-scroll" />
         </div>
         <div className="px-3 pt-1 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4 sm:pb-4">

@@ -159,7 +159,7 @@ export function ChannelLoader({ ws, kind, id: channelId, initial, webhookUrl, gr
     const inChannel = new Set(members.map((m) => m.id));
     // ponytail: everyone in the workspace, in one <select>; a search box when workspaces get long
     const candidates = p.inWorkspace.filter((a) => !inChannel.has(a.id) && !a.archived && !a.webhookChannel);
-    aside = <ChannelPanel guest={guest} initialTab={section === 'settings' ? 'settings' : undefined} workspaceId={ws} channel={channel} room={workspace.room} slack={p.slack} telegram={p.telegram} meId={me.id} graph={graph} members={members} candidates={candidates} error={error} closeHref={from === 'canvas' ? wsHref(ws) : closeHref} webhookUrl={webhookUrl} schedules={p.schedules} webhooks={p.webhooks} skills={p.skills} librarySkills={p.librarySkills} />;
+    aside = <ChannelPanel guest={guest} initialTab={section === 'settings' || section === 'automations' ? section : undefined} workspaceId={ws} channel={channel} room={workspace.room} slack={p.slack} telegram={p.telegram} meId={me.id} graph={graph} members={members} candidates={candidates} error={error} closeHref={from === 'canvas' ? wsHref(ws) : closeHref} webhookUrl={webhookUrl} schedules={p.schedules} webhooks={p.webhooks} skills={p.skills} librarySkills={p.librarySkills} />;
   }
 
   const open = bundle.thread;

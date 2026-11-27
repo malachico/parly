@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { hub, HUB_URL, safeNext, type Agent, type ProcessStepView, type SkillDetailView, type SkillScope, type SkillType } from '../hub';
+import { hub, HUB_URL, safeNext, type Agent, type Schedule, type ProcessStepView, type SkillDetailView, type SkillScope, type SkillType } from '../hub';
 import { agentHref, appsHref, skillsHref, triggersHref } from '../routes';
 import { siteOrigin } from '../site';
 import { newSkillScope } from '../skillScope';
@@ -44,6 +44,11 @@ export async function updateSchedule(back: string, id: string, form: FormData) {
 export async function setScheduleActive(back: string, id: string, active: boolean) {
   await attempt(safeNext(back) ?? '/', () => hub(`/schedules/${encodeURIComponent(id)}`, { method: 'PATCH', body: { active } }));
   revalidatePath('/', 'layout');
+}
+
+/** A channel's scheduled messages (members), for a thread's next-scheduled line; [] when they can't be read. */
+export async function threadSchedules(channelId: string): Promise<Schedule[]> {
+  return hub<Schedule[]>(`/channels/${encodeURIComponent(channelId)}/schedules`).catch(() => []);
 }
 
 export async function deleteSchedule(back: string, id: string) {
