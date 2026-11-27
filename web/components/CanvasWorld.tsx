@@ -578,7 +578,7 @@ export function CanvasChrome({
         <div className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 justify-self-end rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[0_4px_14px_rgba(23,22,28,0.06)]">
           {shareUrl && <CopyButton value={shareUrl} label="Copy party link" icon="share" />}
           <CanvasMenu label="Add agent, workspace or room" end tour="hire" summaryClass="w-9 bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-hover)]" summary={<Icon name="plus" size={17} />}>
-            <Link href={`${wsHref(ws)}/connect`} scroll={false} className={menuRow}><Icon name="bot" size={16} />Add an agent</Link>
+            <Link href={`${wsHref(ws)}/connect`} prefetch scroll={false} className={menuRow}><Icon name="bot" size={16} />Add an agent</Link>
             <Link href={wsHref(ws, { workspace: 'new' })} scroll={false} className={menuRow}><Icon name="grid" size={16} />New workspace</Link>
             <Link href="/rooms/new" className={menuRow}><Icon name="chat" size={16} />New shared room</Link>
           </CanvasMenu>

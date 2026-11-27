@@ -54,3 +54,52 @@ export function ClientTabs({ initial, tabs, panels, first }: { initial: string; 
     </>
   );
 }
+
+/**
+ * The URL after a Hire/Connect click, or null to leave it (the card is already on). Connect restores the
+ * client the tabs last had (`last`), which Hire saves from the URL: ClientTabs keeps ?client= current.
+ */
+export function hireOrConnectUrl(href: string, cloud: boolean, toCloud: boolean, last: string): { href: string; last: string } | null {
+  if (toCloud === cloud) return null;
+  const url = new URL(href);
+  if (toCloud) last = url.searchParams.get('client') ?? last;
+  url.searchParams.set('client', toCloud ? 'cloud' : last);
+  return { href: url.toString(), last };
+}
+
+/**
+ * Hire (Parly runs it) or Connect your own: both rendered by the server once and both kept mounted, so
+ * switching is instant and the picked client tab survives a trip to Hire.
+ * Buttons, not links: PanelSlot would treat a link click as a navigation and show its pending bar.
+ */
+export function HireOrConnect({ initialCloud, canHire, client, hire, connect }: { initialCloud: boolean; canHire: boolean; client: string; hire: ReactNode; connect: ReactNode }) {
+  const [cloud, setCloud] = useState(initialCloud);
+  const last = useRef(client);
+  const pick = (toCloud: boolean) => {
+    const next = hireOrConnectUrl(window.location.href, cloud, toCloud, last.current);
+    if (!next) return;
+    last.current = next.last;
+    setCloud(toCloud);
+    window.history.replaceState(null, '', next.href);
+  };
+  const card = (on: boolean) =>
+    `flex flex-col gap-1 rounded-2xl p-4 text-left ${on ? 'border-2 border-[var(--accent)] bg-[var(--accent-soft)]' : 'border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)]'}`;
+  return (
+    <>
+      <nav aria-label="Hire or connect" className="grid grid-cols-2 gap-2.5">
+        {canHire && (
+          <button type="button" onClick={() => pick(true)} aria-pressed={cloud} className={card(cloud)}>
+            <span className="font-semibold">Hire an agent</span>
+            <span className="hidden text-[13px] text-[var(--muted)] sm:block">Ready in seconds. Parly runs it; nothing to install.</span>
+          </button>
+        )}
+        <button type="button" onClick={() => pick(false)} aria-pressed={!cloud} className={card(!cloud)}>
+          <span className="font-semibold">Connect your own · free</span>
+          <span className="hidden text-[13px] text-[var(--muted)] sm:block">Claude Code, Codex, Cursor, OpenClaw and more, where they run today.</span>
+        </button>
+      </nav>
+      {canHire && <div hidden={!cloud}>{hire}</div>}
+      <div hidden={cloud}>{connect}</div>
+    </>
+  );
+}

@@ -219,8 +219,9 @@ export async function createPairing(form: FormData) {
 }
 
 /** Deletes a bot the person owns; its token stops working at once. */
-export async function revokeConnection(id: string, client: string) {
-  const back = connectBack(client);
+export async function revokeConnection(ws: string, id: string, client: string) {
+  // Back into this workspace's dialog (not /connect, which remounts the whole window).
+  const back = `${wsHref(ws)}/connect?client=${encodeURIComponent(client)}`;
   await attempt(back, () => hub(`/agents/${encodeURIComponent(id)}`, { method: 'DELETE' }));
   revalidatePath('/', 'layout');
   redirect(back);

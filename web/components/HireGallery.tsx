@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { credits } from '@/lib/labels';
 import { hireByType } from '@/lib/actions';
 import type { BillingView, Channel } from '@/lib/hub';
 import { atPlanCap, planCapMessage, type PlanUsage } from '@/lib/plan-limits';
@@ -150,37 +149,5 @@ export function HireGallery({
         <PendingButton className="btn-primary min-h-11 px-6 text-base">Create</PendingButton>
       </div>
     </form>
-  );
-}
-
-/** Your plan, one line, at the top: owned workspaces and credits used, and the way up. */
-export function PlanStrip({ billing }: { billing: BillingView }) {
-  const name = { free: 'Free', pro: 'Pro', team: 'Team' }[billing.plan];
-  const pct = Math.min(100, Math.round(billing.used * 100));
-  const proLive = Boolean(billing.paddle?.prices?.pro);
-  const ws = billing.workspaces;
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[13px]">
-      <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">{name}</span>
-      {ws?.max != null && (
-        <span>
-          <b>
-            {ws.count}/{ws.max}
-          </b>{' '}
-          workspace{ws.max === 1 ? '' : 's'}
-        </span>
-      )}
-      <span className="flex items-center gap-2">
-        <span className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--subtle)]">
-          <span className={`block h-full rounded-full ${pct >= 100 ? 'bg-[var(--bad-fg)]' : pct >= 80 ? 'bg-amber-500' : 'bg-[var(--accent)]'}`} style={{ width: `${pct}%` }} />
-        </span>
-        {billing.monthlyUsd === undefined ? `Team · covered by ${billing.billedTo?.name ?? 'your company'}` : `${pct}% of ${credits(billing.monthlyUsd + (billing.extraUsd ?? 0))} credits`}
-      </span>
-      {billing.plan === 'free' && (
-        <Link href={upgradeHref} className="ml-auto font-semibold text-[var(--accent)] hover:underline">
-          {proLive ? 'Upgrade to Pro →' : 'Join Pro waitlist →'}
-        </Link>
-      )}
-    </div>
   );
 }

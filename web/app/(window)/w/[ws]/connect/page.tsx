@@ -5,7 +5,7 @@ import { Avatar } from '@/components/Avatar';
 import { ClientLogo } from '@/components/ClientLogo';
 import { Icon } from '@/components/Icon';
 import { GatewayConnect } from '@/components/GatewayConnect';
-import { ClientTabs } from '@/components/ClientTabs';
+import { ClientTabs, HireOrConnect } from '@/components/ClientTabs';
 import { ParamLink } from '@/components/ParamLink';
 import { UrlDialog } from '@/components/UrlDialog';
 import { Empty, ErrorNote, KindBadge, PageHeader } from '@/components/ui';
@@ -17,7 +17,7 @@ import {
   type Client,
 } from '@/lib/connect';
 import { hub, HUB_PUBLIC_URL, loginHref, meOrLogin, myBilling, type Agent } from '@/lib/hub';
-import { HireGallery, PlanStrip } from '@/components/HireGallery';
+import { HireGallery } from '@/components/HireGallery';
 import { wsHref } from '@/lib/routes';
 import { shortTime } from '@/lib/labels';
 import { siteOrigin } from '@/lib/site';
@@ -188,33 +188,15 @@ export default async function Connect({ params, searchParams }: Props) {
         title="Bring an agent to your crew"
         sub="A teammate Parly runs for you, or one you already use. Each gets a name and a face, and joins the team you pick."
       />
-      {billing && <PlanStrip billing={billing} />}
       <ErrorNote error={error} />
 
-      {/* Two ways in: Parly runs an agent for you, or you connect one you already use. */}
-      <nav aria-label="Hire or connect" className="grid grid-cols-2 gap-2.5">
-        {(user.cloud || user.hire) && (
-          <Link
-            href={`${base}?client=cloud`}
-            aria-current={cloud ? 'page' : undefined}
-            className={`flex flex-col gap-1 rounded-2xl p-4 ${cloud ? 'border-2 border-[var(--accent)] bg-[var(--accent-soft)]' : 'border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)]'}`}
-          >
-            <span className="font-semibold">Hire an agent</span>
-            <span className="hidden text-[13px] text-[var(--muted)] sm:block">Ready in seconds. Parly runs it; nothing to install.</span>
-          </Link>
-        )}
-        <Link
-          href={`${base}?client=${rawClient && rawClient !== 'cloud' ? client : 'claude'}`}
-          aria-current={!cloud ? 'page' : undefined}
-          className={`flex flex-col gap-1 rounded-2xl p-4 ${!cloud ? 'border-2 border-[var(--accent)] bg-[var(--accent-soft)]' : 'border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--subtle)]'}`}
-        >
-          <span className="font-semibold">Connect your own · free</span>
-          <span className="hidden text-[13px] text-[var(--muted)] sm:block">Claude Code, Codex, Cursor, OpenClaw and more, where they run today.</span>
-        </Link>
-      </nav>
-
-      {cloud ? (
-        <div id="connect-steps" className="scroll-mt-4 space-y-6">
+      {/* Two ways in: Parly runs an agent for you, or you connect one you already use. Switching stays on the client. */}
+      <HireOrConnect
+        initialCloud={cloud}
+        canHire={!!(user.cloud || user.hire)}
+        client={client}
+        hire={
+        <div className="space-y-6">
           {!user.email ? (
             signIn
           ) : (
@@ -231,7 +213,9 @@ export default async function Connect({ params, searchParams }: Props) {
             />
           )}
         </div>
-      ) : (
+        }
+        connect={
+        <>
         <ClientTabs
           // A redirect back with something to show (a token, a code, an error) starts the tabs over, so it shows.
           key={[created, paired, requested, routine].join(':')}
@@ -241,10 +225,9 @@ export default async function Connect({ params, searchParams }: Props) {
           panels={Object.fromEntries([...new Set([client, ...tabs.map((c) => c.key)])].map((k) => [k, user.email ? steps(k) : signIn]))}
           first={!user.email ? undefined : pair ? <PairInstructions client={client} pair={pair} origin={origin} /> : flash ? <Instructions flash={flash} ws={ws} /> : undefined}
         />
-      )}
 
       {/* Hiring is only that: your connections and client requests belong to Connect. */}
-      {user.email && !cloud && <section className="space-y-3">
+      {user.email && <section className="space-y-3">
         <h2 className="label">Your connections</h2>
         {owned.length === 0 ? (
           <Empty>No connections yet. Connect one above.</Empty>
@@ -289,7 +272,7 @@ export default async function Connect({ params, searchParams }: Props) {
                       </span>
                     </div>
                   </ParamLink>
-                  <form action={revokeConnection.bind(null, a.id, client)}>
+                  <form action={revokeConnection.bind(null, ws, a.id, client)}>
                     <PendingButton confirm="Yes, revoke" className="btn-ghost min-h-9 px-3" title="Delete this agent; its connection stops working">
                       Revoke
                     </PendingButton>
@@ -301,7 +284,7 @@ export default async function Connect({ params, searchParams }: Props) {
         )}
       </section>}
 
-      {user.email && !cloud && (
+      {user.email && (
         <section className="card space-y-3">
           <div>
             <h2 className="font-medium">Don&apos;t see your client?</h2>
@@ -326,12 +309,15 @@ export default async function Connect({ params, searchParams }: Props) {
           </form>
         </section>
       )}
+        </>
+        }
+      />
       </div>
       </div>
       {opened && (
         <UrlDialog param="agent" title="Profile">
           <AgentProfile agent={opened} ws={ws}>
-            <form action={revokeConnection.bind(null, opened.id, client)}>
+            <form action={revokeConnection.bind(null, ws, opened.id, client)}>
               <PendingButton confirm="Yes, revoke" className="btn-ghost" title="Delete this agent; its connection stops working">
                 Revoke
               </PendingButton>

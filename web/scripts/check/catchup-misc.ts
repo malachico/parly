@@ -7,6 +7,7 @@ import { SelectedAgentCard } from '../../components/CanvasPanels';
 import { Composer } from '../../components/Composer';
 import { Timeline, ThreadView, Markdown } from '../../components/Thread';
 import { EmptyCanvasCard } from '../../components/CanvasModals';
+import { HireOrConnect, hireOrConnectUrl } from '../../components/ClientTabs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -55,6 +56,24 @@ for (const hasAgents of [false, true]) {
 
 const connectPageSrc = readFileSync(path.resolve(import.meta.dirname, '../../app/(window)/w/[ws]/connect/page.tsx'), 'utf8');
 assert.match(connectPageSrc, /const cloud = rawClient === 'cloud' && !!\(user\.cloud \|\| user\.hire\);/, 'Connect page selects the free option by default unless client=cloud');
+// Add agent: Hire/Connect switch on the client (buttons, not links, both branches mounted, the off one hidden), no credits strip, revoke stays in the workspace.
+const hireOrConnectHtml = renderToStaticMarkup(createElement(HireOrConnect, { initialCloud: false, canHire: true, client: 'codex', hire: createElement('p', null, 'HIRE-MARKER'), connect: createElement('p', null, 'CONNECT-MARKER') }));
+assert.equal((hireOrConnectHtml.match(/<button/g) ?? []).length, 2);
+assert.doesNotMatch(hireOrConnectHtml, /href=/);
+assert.match(hireOrConnectHtml, /<div hidden="">\s*<p>HIRE-MARKER<\/p><\/div><div><p>CONNECT-MARKER<\/p><\/div>/);
+{
+  // Opened on Claude, Codex picked in the tabs (they set ?client=codex): clicking the active Connect card changes nothing.
+  const page = 'https://parly.dev/w/ws1/connect?client=codex';
+  assert.equal(hireOrConnectUrl(page, false, false, 'claude'), null);
+  // Hire, then Connect again: back on Codex, not the client the page opened with.
+  const hire = hireOrConnectUrl(page, false, true, 'claude')!;
+  assert.equal(new URL(hire.href).searchParams.get('client'), 'cloud');
+  const back = hireOrConnectUrl(hire.href, true, false, hire.last)!;
+  assert.equal(new URL(back.href).searchParams.get('client'), 'codex');
+  assert.equal(hireOrConnectUrl(back.href, false, false, back.last), null);
+}
+assert.doesNotMatch(connectPageSrc, /PlanStrip/, 'Add agent dialog has no credits strip');
+assert.doesNotMatch(agentsActionsSrc.slice(agentsActionsSrc.indexOf('export async function revokeConnection'), agentsActionsSrc.indexOf('export async function requestClient')), /connectBack\(/, 'revokeConnection returns to the workspace dialog, not /connect');
 
 
 const noteFixture = { id: 'n1', workspaceId: 'ws1', authorId: 'author', text: '**Launch**', files: [{ id: 'f1', name: 'launch.gif', mediaType: 'image/gif' }], canvas: { x: 40, y: 80, w: 320, h: 300 }, createdAt: '2026-10-28', updatedAt: '2026-10-28', version: 1 };
