@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { BackToConversations } from '@/components/BackToConversations';
 import { Avatar, type People } from '@/components/Avatar';
 import { Composer } from '@/components/Composer';
 import { Icon } from '@/components/Icon';
@@ -13,7 +14,7 @@ import { POSTS } from '@/lib/channelView';
 import type { Agent, Conversation, ConversationPage, Workspace } from '@/lib/hub';
 import { shortTime } from '@/lib/labels';
 import { conversationUnread } from '@/lib/receipts';
-import { agentHref, botActivityHref, chatHref, wsHref } from '@/lib/routes';
+import { agentHref, botActivityHref, chatHref } from '@/lib/routes';
 
 /** The hub's GET /agents/:id/open: the other side (or, when they're gone, their row in my conversations), me, the messages. */
 export type DmBundle = { me: Agent; workspace: Workspace; page: ConversationPage; agent?: Agent; gone?: NonNullable<Conversation['with']> };
@@ -107,9 +108,7 @@ export function DmConversation({ ws, conversationKey: key, bundle, postCount, pa
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]" data-main>
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 sm:px-7 sm:py-4">
-        <Link href={wsHref(ws)} aria-label="Back to conversations" className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden">
-          <Icon name="back" size={22} />
-        </Link>
+        <BackToConversations ws={ws} />
         {header}
       </header>
       <div id="thread-scroll" className="placing min-h-0 flex-1 overflow-y-auto px-3.5 py-6 sm:px-7">

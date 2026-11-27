@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { BackToConversations } from '@/components/BackToConversations';
 import { AgentConversationList } from '@/components/AgentProfile';
 import { Avatar } from '@/components/Avatar';
-import { Icon } from '@/components/Icon';
 import { Empty } from '@/components/ui';
 import { hub, HubError, me, type Agent, type Conversation } from '@/lib/hub';
-import { agentHref, dmHref, wsHref } from '@/lib/routes';
+import { agentHref, dmHref } from '@/lib/routes';
 
 type Props = { params: Promise<{ ws: string; id: string }> };
 
@@ -25,9 +25,7 @@ export default async function BotActivityPage({ params }: Props) {
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 sm:gap-3 sm:px-7 sm:py-3">
-        <Link href={wsHref(ws)} aria-label="Back to conversations" className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden">
-          <Icon name="back" size={22} />
-        </Link>
+        <BackToConversations ws={ws} />
         <Avatar who={agent} className="size-8 shrink-0 sm:size-9" />
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="truncate text-base font-semibold sm:text-lg">{agent.name}&apos;s conversations</h1>

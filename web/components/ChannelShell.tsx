@@ -1,13 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BackToConversations } from '@/components/BackToConversations';
 import type { People } from '@/components/Avatar';
 import { ChannelHeader } from '@/components/ChannelHeader';
 import { Composer } from '@/components/Composer';
 import { EscClose } from '@/components/EscClose';
-import { Icon } from '@/components/Icon';
 import { LIVE_REFRESH_EVENT } from '@/components/LiveRefresh';
 import { MarkRead, THREAD_READ_EVENT } from '@/components/MarkRead';
 import { PanelSkeleton } from '@/components/PanelSkeleton';
@@ -465,9 +464,7 @@ export function ChannelShell({
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--surface)] px-2 sm:gap-2 sm:px-5">
           {/* ponytail: hasDocument means a Shared Room, where there's no canvas to go back to. */}
           {!hasDocument && (
-            <Link href={wsHref(ws)} aria-label="Back to conversations" className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden">
-              <Icon name="back" size={22} />
-            </Link>
+            <BackToConversations ws={ws} />
           )}
           <ChannelHeader
             ws={ws}

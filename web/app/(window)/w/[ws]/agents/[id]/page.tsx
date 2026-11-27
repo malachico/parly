@@ -1,3 +1,4 @@
+import { BackToConversations } from '@/components/BackToConversations';
 import { ScheduleList } from '@/components/ScheduleList';
 import Link from 'next/link';
 import { credits, tokens } from '@/lib/labels';
@@ -7,7 +8,7 @@ import { Avatar } from '@/components/Avatar';
 import { AuthFields } from '@/components/AuthFields';
 import { Icon } from '@/components/Icon';
 import { ErrorNote, KindBadge, PageHeader } from '@/components/ui';
-import { agentHref, botActivityHref, dmHref, triggersHref, wsHref } from '@/lib/routes';
+import { agentHref, botActivityHref, dmHref, triggersHref } from '@/lib/routes';
 import { hub, HubError, me, myConversations, type Agent, type AgentTrigger, type MyTools, type Schedule, type ScopedSkillView, type SkillSummaryView, type TriggerTypeGroup } from '@/lib/hub';
 import { ToolsSection, TriggersSection } from '@/components/ToolsSection';
 import { SkillsSection } from '@/components/SkillsSection';
@@ -139,13 +140,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-        <Link
-          href={wsHref(ws)}
-          aria-label="Back to conversations"
-          className="-mt-2 -ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden"
-        >
-          <Icon name="back" size={22} />
-        </Link>
+        <BackToConversations ws={ws} inset />
         <div className="mx-auto max-w-3xl space-y-6">
           <section className="card space-y-5 p-5 sm:p-6">
             <div className="flex flex-wrap items-start gap-4">
@@ -436,13 +431,7 @@ async function GoneProfile({ ws, id }: { ws: string; id: string }) {
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-        <Link
-          href={wsHref(ws)}
-          aria-label="Back to conversations"
-          className="-mt-2 -ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-[var(--subtle)] md:hidden"
-        >
-          <Icon name="back" size={22} />
-        </Link>
+        <BackToConversations ws={ws} inset />
         <div className="mx-auto max-w-3xl space-y-6">
           <PageHeader
             title={
