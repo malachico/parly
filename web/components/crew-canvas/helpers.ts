@@ -54,6 +54,13 @@ export function bounds(items: { canvas: CanvasBox }[]) {
   };
 }
 
+/** Frames for the open channels I'm not in: a 3-wide grid below the lowest team, so the list never overflows. */
+export function joinBoxes(teams: { canvas: CanvasBox; members: string[] }[], channels: { id: string; name: string }[]) {
+  const x0 = teams.length ? Math.min(...teams.map((t) => t.canvas.x)) : 40;
+  const y0 = teams.length ? Math.max(...teams.map((t) => t.canvas.y + frameHeight(t.canvas, t.members.length))) + 80 : 40;
+  return channels.map((c, i) => ({ ...c, canvas: { x: x0 + (i % 3) * 640, y: y0 + Math.floor(i / 3) * 320, w: 580, h: 260 } }));
+}
+
 /** The zoom limits. */
 export const clampScale = (s: number) => Math.max(0.25, Math.min(2.2, s));
 

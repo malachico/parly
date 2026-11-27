@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition, type ReactNode } from 'react';
-import { createCanvasTeam } from '@/lib/actions';
+import { createCanvasTeam, joinChannel } from '@/lib/actions';
+import { PendingButton } from '@/components/PendingButton';
 import { Avatar } from '@/components/Avatar';
 import { presenceLabel } from '@/lib/presence';
 import { statusStale, workingIn } from '@/lib/labels';
@@ -17,7 +18,7 @@ import { plural } from '@/lib/plural';
  * The canvas as cards, for phones (where panning and zooming are awkward): each team a card with its members, what
  * they're doing and what needs you; a tap opens the conversation or an agent. Agents in no team come last.
  */
-export function CanvasCards({ ws, guest, teams, agentsById, meId, onLog, onAdd, onboarding, onCreated, notes }: { ws: string; guest?: boolean; teams: CanvasTeam[]; agentsById: Map<string, CanvasAgent>; meId: string; onLog: (agentId: string) => void; onAdd: (channelId: string) => void; onboarding?: ReactNode; notes?: ReactNode; onCreated?: (channelId: string) => void }) {
+export function CanvasCards({ ws, guest, teams, agentsById, meId, onLog, onAdd, onboarding, onCreated, notes, joinable = [] }: { ws: string; joinable?: { id: string; name: string }[]; guest?: boolean; teams: CanvasTeam[]; agentsById: Map<string, CanvasAgent>; meId: string; onLog: (agentId: string) => void; onAdd: (channelId: string) => void; onboarding?: ReactNode; notes?: ReactNode; onCreated?: (channelId: string) => void }) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -102,6 +103,17 @@ export function CanvasCards({ ws, guest, teams, agentsById, meId, onLog, onAdd, 
             </li>
           );
         })}
+        {joinable.map((c, i) => (
+          <li key={c.id} className="rounded-[22px] border-2 border-dashed p-4" style={{ background: `rgb(${hexRgb(TINTS[(teams.length + i) % TINTS.length]!).replaceAll(',', ' ')} / var(--tint-alpha))`, borderColor: TINTS[(teams.length + i) % TINTS.length] }}>
+            <form action={joinChannel.bind(null, c.id, ws)} className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-bold">#{c.name}</h2>
+                <p className="text-xs text-[var(--muted)]">You're not in it yet</p>
+              </div>
+              <PendingButton className="btn-primary shrink-0">Join</PendingButton>
+            </form>
+          </li>
+        ))}
         {loose.length > 0 && (
           <li className="rounded-2xl border border-dashed border-[var(--border-strong)] bg-[var(--surface)] p-4">
             <h2 className="text-base font-bold">Not in a team</h2>

@@ -4,8 +4,8 @@ import { AccountMenu, WorkspaceMenu } from '../../components/AccountMenu';
 import { menuWorkspace } from '../../lib/menuWorkspace';
 import { attentionCount, attentionGroups, markDestinationRead } from '../../lib/attention';
 import { CanvasChrome } from '../../components/CanvasWorld';
-import { byRecent, hasFrameMoved } from '../../components/crew-canvas/helpers';
-import { AddToTeam } from '../../components/CanvasModals';
+import { byRecent, hasFrameMoved, joinBoxes } from '../../components/crew-canvas/helpers';
+import { AddToTeam, EmptyCanvasCard } from '../../components/CanvasModals';
 import { workspaceRoster } from '../../components/CanvasHome';
 import { statusStale } from '../../lib/labels';
 import assert from 'node:assert/strict';
@@ -182,3 +182,12 @@ const searchContents = navHtml.match(/<button[^>]*data-tour="search"[^>]*>([\s\S
 assert.doesNotMatch(searchContents, /Search or jump/);
 assert.match(searchContents, /<kbd[^>]*>⌘K<\/kbd>/);
 assert.match(searchContents, /data-attention-count/);
+
+// First run with joinable channels: the Join cards lay out in a 3-wide grid, and the welcome panel's overlay lets
+// clicks through to them (the wrapper is pointer-events-none, only the panel itself takes clicks).
+const joinables = joinBoxes([], ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id })));
+assert.deepEqual(joinables[3]!.canvas, { x: 40, y: 360, w: 580, h: 260 });
+const welcomeHtml = renderToStaticMarkup(createElement(EmptyCanvasCard, { ws: 'ws1', me: { id: 'me', name: 'Dana' }, hasAgents: false, canJoin: true, onCreateTeam: noop }));
+assert.match(welcomeHtml, /Join one below/);
+assert.match(welcomeHtml, /class="pointer-events-auto /);
+assert.match(readFileSync(path.join(import.meta.dirname, '../../components/CrewCanvas.tsx'), 'utf8'), /ref=\{placeJoinCards\} className=\{`pointer-events-none absolute inset-0/);

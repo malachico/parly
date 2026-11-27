@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { AgentDayDrawer, NeedsYouPopover, SelectedAgentCard } from '@/components/CanvasPanels';
 import { Activity, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { attentionCount, attentionGroups, liveConversations, markDestinationRead, type CanvasConversation } from '@/lib/attention';
-import { AddToTeam, BenchDrawer, ConfirmTeamMemberDialog, EmptyCanvasCard, JoinableChannelsBar, type PendingAction } from '@/components/CanvasModals';
+import { AddToTeam, BenchDrawer, ConfirmTeamMemberDialog, EmptyCanvasCard, type PendingAction } from '@/components/CanvasModals';
 import type { AvatarOf } from '@/components/Avatar';
 import { CanvasNoteCard, NoteEditor } from '@/components/CanvasNotes';
 import { deleteCanvasNote, saveCanvasNote } from '@/lib/actions/canvas';
@@ -32,6 +32,7 @@ import {
   buildPlacedCreatures,
   bounds,
   byRecent,
+  joinBoxes,
   clampScale,
   findTeamAt,
   hasFrameMoved,
@@ -255,8 +256,35 @@ export function CrewCanvas({
     });
   };
 
+  // First run with channels to join: the welcome panel sits at the top and the Join cards, all in view, below it.
+  const onboardingRef = useRef<HTMLDivElement | null>(null);
+  const joinCardsView = () => {
+    const r = vpRect();
+    const panel = onboardingRef.current?.firstElementChild?.getBoundingClientRect();
+    const top = (panel ? panel.bottom - r.top : 320) + 24;
+    const { minX, minY, maxX, maxY } = bounds(joinBoxes([], joinableChannels));
+    const fit = Math.max(0.12, Math.min(0.85, (r.width - 48) / (maxX - minX), (r.height - top - 72) / (maxY - minY)));
+    return { s: fit, tx: (r.width - (maxX - minX) * fit) / 2 - minX * fit, ty: top - minY * fit };
+  };
+  // A ref callback, not the arrival effect: the panel can hydrate after it (it sits under a Suspense boundary).
+  const joinPlaced = useRef(false);
+  const placeJoinCards = (el: HTMLDivElement | null) => {
+    onboardingRef.current = el;
+    if (!el || joinPlaced.current || !firstRunJoin()) return;
+    joinPlaced.current = true;
+    const v = joinCardsView();
+    setS(v.s);
+    setTx(v.tx);
+    setTy(v.ty);
+  };
+  const firstRunJoin = () => !guest && teams.length === 0 && notes.length === 0 && joinableChannels.length > 0;
+
   const fitAll = (list: CanvasTeam[] = teams) => {
-    const items = [...list, ...notes];
+    if (list.length === 0 && firstRunJoin()) {
+      animateTo(joinCardsView());
+      return;
+    }
+    const items = [...list, ...notes, ...joinBoxes(list, guest ? [] : joinableChannels)];
     if (items.length === 0) {
       animateTo({ s: 0.85, tx: 80, ty: 80 });
       return;
@@ -303,7 +331,7 @@ export function CrewCanvas({
           const y = w.ty + t.canvas.y * w.s;
           return x < r0.width && y < r0.height && x + t.canvas.w * w.s > 0 && y + t.canvas.h * w.s > 0;
         });
-      if (v && [v.tx, v.ty, v.s].every(Number.isFinite) && clampScale(v.s) === v.s && showsATeam(v)) {
+      if (v && [v.tx, v.ty, v.s].every(Number.isFinite) && clampScale(v.s) === v.s && showsATeam(v) && !firstRunJoin()) {
         setS(v.s);
         setTx(v.tx);
         setTy(v.ty);
@@ -311,7 +339,7 @@ export function CrewCanvas({
       }
     } catch {}
     const ts = [...initialCanvas.teams, ...initialNotes];
-    if (ts.length === 0) return;
+    if (ts.length === 0) return; // first run with Join cards: placed once the welcome panel mounts (placeJoinCards)
     const r = vpRect();
     const { minX, minY, maxX, maxY } = bounds(ts);
     const fit = Math.min((r.width - 48) / (maxX - minX), (r.height - 120) / (maxY - minY));
@@ -847,15 +875,14 @@ export function CrewCanvas({
     >
       <NeedsYouTitle count={needsYouCount} />
       <HiddenBehindPanel ws={ws}>
-      {cards && <CanvasCards ws={ws} guest={guest} teams={orderedCardTeams} agentsById={agentsById} meId={me.id} onLog={(id) => setOpenDayAgentId(id)} onAdd={setAddTo} notes={notes.length ? <section aria-label="Workspace notes" className="flex flex-col gap-3"><h2 className="text-base font-bold">Notes</h2>{noteCards(false)}</section> : undefined} onboarding={isFirstRun ? onboarding : undefined} onCreated={isFirstRun && hasAgents ? setAddTo : undefined} />}
+      {cards && <CanvasCards ws={ws} guest={guest} teams={orderedCardTeams} joinable={guest ? [] : joinableChannels} agentsById={agentsById} meId={me.id} onLog={(id) => setOpenDayAgentId(id)} onAdd={setAddTo} notes={notes.length ? <section aria-label="Workspace notes" className="flex flex-col gap-3"><h2 className="text-base font-bold">Notes</h2>{noteCards(false)}</section> : undefined} onboarding={isFirstRun ? onboarding : undefined} onCreated={isFirstRun && hasAgents ? setAddTo : undefined} />}
 
       {/* Empty-workspace onboarding follows the next useful step */}
       {!cards && isFirstRun && !showNewTeam && (
-        <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center p-4 pt-20">
+        <div ref={placeJoinCards} className={`pointer-events-none absolute inset-0 z-10 flex justify-center p-4 pt-20 ${!guest && joinableChannels.length > 0 ? 'items-start' : 'items-center'}`}>
           {onboarding}
         </div>
       )}
-      {!guest && joinableChannels.length > 0 && <JoinableChannelsBar ws={ws} channels={joinableChannels} />}
 
       {notesError && <p role="alert" className="pointer-events-auto absolute top-20 left-4 z-20 rounded-xl bg-[var(--surface)] p-3 text-sm text-[var(--bad-fg)]">{notesError}</p>}
       {/* World transform layer */}
@@ -879,6 +906,7 @@ export function CrewCanvas({
         newTeamBox={newTeamBox}
         slackChannels={slackChannels}
         joinableChannels={joinableChannels}
+        joinFrames={cards || guest ? [] : joinBoxes(teams, joinableChannels)}
         toWorld={toWorld}
         onStartDragFrame={(state) => {
           setAnim(false);

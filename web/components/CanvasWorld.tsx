@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import { AccountMenu, CanvasMenu, WorkspaceMenu, type MenuWorkspace } from '@/components/AccountMenu';
 import { Avatar } from '@/components/Avatar';
 import { NewTeamDialog } from '@/components/CanvasModals';
+import { PendingButton } from '@/components/PendingButton';
+import { joinChannel } from '@/lib/actions';
 import { Tip } from '@/components/Tip';
 import { presenceLabel } from '@/lib/presence';
 import { openPalette } from '@/components/CommandPalette';
@@ -72,6 +74,7 @@ export function CanvasWorld({
   newTeamBox,
   slackChannels,
   joinableChannels,
+  joinFrames,
   toWorld,
   onStartDragFrame,
   onStartDragCreature,
@@ -104,6 +107,7 @@ export function CanvasWorld({
   newTeamBox: CanvasBox;
   slackChannels: SlackChannelOption[];
   joinableChannels: { id: string; name: string }[];
+  joinFrames: { id: string; name: string; canvas: CanvasBox }[];
   toWorld: (clientX: number, clientY: number) => { x: number; y: number };
   onStartDragFrame: (state: DragFrameState) => void;
   onStartDragCreature: (state: DragCreatureState) => void;
@@ -367,6 +371,49 @@ export function CanvasWorld({
                 />
               </>
             )}
+          </section>
+        );
+      })}
+
+      {/* Open channels I'm not in yet: a team-like frame each, with Join. */}
+      {joinFrames.map((c, i) => {
+        const tint = TINTS[(teams.length + i) % TINTS.length]!;
+        return (
+          <section
+            key={c.id}
+            aria-label={`#${c.name}, a channel you can join`}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="flex flex-col justify-between"
+            style={{
+              position: 'absolute',
+              left: c.canvas.x,
+              top: c.canvas.y,
+              width: c.canvas.w,
+              height: c.canvas.h,
+              boxSizing: 'border-box',
+              borderRadius: 40,
+              padding: overview ? 44 : 30,
+              background: `rgb(${hexRgb(tint).replaceAll(',', ' ')} / var(--tint-alpha))`,
+              border: `2px dashed ${tint}`,
+            }}
+          >
+            {/* Capped so the name and Join stay inside the 580x260 frame even at Fit all's 0.12 zoom. */}
+            <span className="truncate leading-tight font-bold tracking-tight" style={{ fontSize: overview ? Math.min(64, Math.max(52, 15 / s)) : 24 }}>
+              {c.name}
+            </span>
+            <form action={joinChannel.bind(null, c.id, ws)} className="flex items-center justify-between gap-4">
+              {(!overview || s >= 0.35) && (
+                <span className="text-[var(--fg-soft)]" style={{ fontSize: overview ? Math.max(30, 12 / s) : 15 }}>
+                  You're not in it yet
+                </span>
+              )}
+              <PendingButton
+                className="ml-auto shrink-0 rounded-2xl bg-[var(--accent)] font-semibold text-white hover:opacity-90"
+                style={overview ? { fontSize: Math.min(44, Math.max(30, 12 / s)), lineHeight: 1, padding: '0.4em 1.1em' } : { fontSize: 15, padding: '8px 18px' }}
+              >
+                Join
+              </PendingButton>
+            </form>
           </section>
         );
       })}
