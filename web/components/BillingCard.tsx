@@ -122,7 +122,7 @@ export function BillingCard({
       {billing.plan === 'free' && prices.pro && (
         <div className="rounded-xl border border-[var(--accent)] bg-[var(--accent-soft)] p-3.5">
           <p className="font-semibold">Pro: $20/month</p>
-          <p className="muted text-[13px]">3,000 credits a month (about 300 cloud-agent answers), 10 workspaces, 50 participants each, and top-ups when you need more.</p>
+          <p className="muted text-[13px]">1,500 credits a month (about 150 cloud-agent answers), 10 workspaces, 50 participants each, and top-ups when you need more.</p>
           <div className="mt-2.5 flex flex-wrap gap-2">
             <button type="button" disabled={!paddle} onClick={() => checkout(prices.pro!, 'pro')} className="btn-primary">
               Upgrade to Pro
@@ -143,7 +143,7 @@ export function BillingCard({
             <p className="font-semibold">Pro: $20/month</p>
             <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[11px] font-semibold text-white">Waitlist</span>
           </div>
-          <p className="muted text-[13px]">3,000 credits a month (about 300 cloud-agent answers), 10 workspaces, 50 participants each, and top-ups when you need more.</p>
+          <p className="muted text-[13px]">1,500 credits a month (about 150 cloud-agent answers), 10 workspaces, 50 participants each, and top-ups when you need more.</p>
           {askedPro ? (
             <p role="status" className="mt-2.5 rounded-lg bg-[var(--ok-bg)] px-3 py-2 text-sm font-medium text-[var(--ok-fg)]">
               You&apos;re on the Pro waitlist! We&apos;ll email you{me.email ? ` at ${me.email}` : ''} as soon as Pro checkout opens.

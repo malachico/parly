@@ -46,13 +46,13 @@ export interface BillingRecord {
 export const CREDIT_MICROS = 10_000;
 export const BILLING = 'billing';
 
-/** Each plan's monthly credits (in USD, 1 credit = 1¢: Pro's 30 = 3,000), workspaces it may own, and participants per owned workspace.
+/** Each plan's monthly credits (in USD, 1 credit = 1¢: Pro's 15 = 1,500), workspaces it may own, and participants per owned workspace.
  * Free's allowance is the hub's default (LLM_MONTHLY_ALLOWANCE_USD). The workspace owner's plan sets the participant cap. Free's maxWorkspaces counts workspaces you're in (owned or joined); paid plans count only those you own.
  * Going over never removes anyone: nobody new can be added until the owner upgrades. An admin can change one person's
  * limits (maxWorkspaces, maxParticipants). Super admins have none, nor does a self-hosted hub (registry/workspaces.ts). */
 const PLAN_LIMITS: Record<Plan, { allowanceUsd?: number; maxWorkspaces: number; maxParticipants: number }> = {
   free: { maxWorkspaces: 2, maxParticipants: 8 },
-  pro: { allowanceUsd: 30, maxWorkspaces: 10, maxParticipants: 50 },
+  pro: { allowanceUsd: 15, maxWorkspaces: 10, maxParticipants: 50 },
   team: { maxWorkspaces: 10, maxParticipants: 50 },
 };
 

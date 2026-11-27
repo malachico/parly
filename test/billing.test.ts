@@ -59,10 +59,10 @@ describe('plans', () => {
       // Subscribing makes them Pro, once even when Paddle retries.
       expect(await (await post(sub)).json()).toMatchObject({ outcome: 'done' });
       expect(await (await post(sub)).json()).toMatchObject({ outcome: 'seen' });
-      expect(await hub.llm.limits(person.id)).toMatchObject({ plan: 'pro', monthlyMicros: 30_000_000, maxWorkspaces: 10, maxParticipants: 50 });
+      expect(await hub.llm.limits(person.id)).toMatchObject({ plan: 'pro', monthlyMicros: 15_000_000, maxWorkspaces: 10, maxParticipants: 50 });
       await hub.createCloudAgent(person, { name: 'D' });
 
-      // A $10 top-up (one pack, 1,000 credits): spent only once the month's 3,000 credits are. Model calls cost twice ours.
+      // A $10 top-up (one pack, 1,000 credits): spent only once the month's 1,500 credits are. Model calls cost twice ours.
       await post({ event_id: 'evt_2', event_type: 'transaction.completed', data: { id: 'txn_1', customer_id: 'ctm_1', custom_data: { ownerId: person.id }, items: [{ price: { id: 'pri_t10' }, quantity: 1 }] } });
       expect((await hub.llm.limits(person.id)).extraMicros).toBe(10_000_000);
       // A company pool top-up (the workspace owner buys with billingAccountId) credits the workspace's record, not the buyer's.
@@ -71,18 +71,18 @@ describe('plans', () => {
       expect(await hub.billing.get(pool.id)).toMatchObject({ extraMicros: 10_000_000 });
       expect((await hub.billing.get(pool.id))?.paddleCustomerId).toBeUndefined();
       expect((await hub.llm.limits(person.id)).extraMicros).toBe(10_000_000);
-      await hub.llm.add(person.id, 12_000_000); // 24 of the month
+      await hub.llm.add(person.id, 6_000_000); // 12 of the month
       expect((await hub.llm.limits(person.id)).extraMicros).toBe(10_000_000);
-      await hub.llm.add(person.id, 4_000_000); // 6 more of the month, then 2 of the top-up
-      expect((await hub.llm.limits(person.id)).extraMicros).toBe(8_000_000);
+      await hub.llm.add(person.id, 2_000_000); // 3 more of the month, then 1 of the top-up
+      expect((await hub.llm.limits(person.id)).extraMicros).toBe(9_000_000);
       await hub.llm.charge(person.id, 300); // an app action or event costs credits too: 3 more of the top-up
-      expect((await hub.llm.limits(person.id)).extraMicros).toBe(5_000_000);
-      expect(await hub.llm.used(person.id)).toBeCloseTo(35 / 40);
-      expect(await hub.llm.balance(person.id)).toEqual({ spentMicros: 35_000_000, capMicros: 40_000_000 }); // 500 credits left
+      expect((await hub.llm.limits(person.id)).extraMicros).toBe(6_000_000);
+      expect(await hub.llm.used(person.id)).toBeCloseTo(19 / 25);
+      expect(await hub.llm.balance(person.id)).toEqual({ spentMicros: 19_000_000, capMicros: 25_000_000 }); // 600 credits left
 
       // Cancelled: back to Free, the top-up balance stays.
       await post({ event_id: 'evt_3', event_type: 'subscription.canceled', data: { id: 'sub_1', status: 'canceled', customer_id: 'ctm_1' } });
-      expect(await hub.llm.limits(person.id)).toMatchObject({ plan: 'free', extraMicros: 5_000_000 });
+      expect(await hub.llm.limits(person.id)).toMatchObject({ plan: 'free', extraMicros: 6_000_000 });
 
       // Malformed JSON with a valid signature returns 400 (not 500).
       const badJson = '{not-json';

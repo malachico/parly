@@ -28,7 +28,7 @@ const PLANS = [
     features: [
       'Everything in Free',
       'Own 10 workspaces, 50 participants each',
-      '3,000 credits a month (about 300 answers), plus top-ups',
+      '1,500 credits a month (about 150 answers), plus top-ups',
       'Let agents act with your tools (GitHub, Gmail, Notion…)',
     ],
     highlight: true,
