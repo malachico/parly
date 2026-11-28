@@ -135,9 +135,6 @@ export function CrewCanvas({
   };
 
   const vpRef = useRef<HTMLDivElement | null>(null);
-  const panLive = useRef<{ tx: number; ty: number } | null>(null);
-  // The team centered mid-pan (null: none; undefined: not panning), so the "All teams / …" crumb follows the drag.
-  const [panTeam, setPanTeam] = useState<CanvasTeam | null | undefined>();
   // Match the server during hydration; restore the phone/default preference before painting.
   const [cards, setCards] = useState(false);
   useLayoutEffect(() => {
@@ -357,7 +354,6 @@ export function CrewCanvas({
   // the zoom's state updater applied it twice where React re-runs updaters, and the view drifted off the teams.)
   const view = useRef({ s, tx, ty });
   view.current = { s, tx, ty };
-  const joinFrames = useMemo(() => (cards || guest ? [] : joinBoxes(teams, joinableChannels)), [cards, guest, teams, joinableChannels]);
   const zoomAt = (factor: number, px: number, py: number, from = view.current) => {
     const { s: s0, tx: tx0, ty: ty0 } = from;
     const s1 = clampScale(s0 * factor);
@@ -408,15 +404,15 @@ export function CrewCanvas({
         s0: s,
         cx: (pts[0]!.x + pts[1]!.x) / 2 - r.left,
         cy: (pts[0]!.y + pts[1]!.y) / 2 - r.top,
-        tx0: panLive.current?.tx ?? tx,
-        ty0: panLive.current?.ty ?? ty,
+        tx0: tx,
+        ty0: ty,
       };
-      commitPan();
+      setPan(null);
       return;
     }
     if (e.button !== 0) return;
     setAnim(false);
-    setPan({ sx: e.clientX, sy: e.clientY, tx0: panLive.current?.tx ?? tx, ty0: panLive.current?.ty ?? ty });
+    setPan({ sx: e.clientX, sy: e.clientY, tx0: tx, ty0: ty });
   };
 
   const onPointerMoveVp = (e: React.PointerEvent) => {
@@ -468,30 +464,9 @@ export function CrewCanvas({
       return;
     }
     if (pan) {
-      // Pan writes the transform straight to the DOM; React state catches up on pointerup.
-      const nx = pan.tx0 + (e.clientX - pan.sx);
-      const ny = pan.ty0 + (e.clientY - pan.sy);
-      panLive.current = { tx: nx, ty: ny };
-      const vp = vpRef.current;
-      if (!overview && !cards) {
-        const r = vpRect(); // read before the transform write below: no forced layout
-        setPanTeam(findTeamAt(teams, (r.width / 2 - nx) / s, (r.height / 2 - ny) / s) ?? null);
-      }
-      const world = vp?.querySelector<HTMLElement>('[data-world]');
-      if (world) world.style.transform = `translate(${nx}px, ${ny}px) scale(${s})`;
-      if (vp) vp.style.backgroundPosition = `${nx}px ${ny}px`;
+      setTx(pan.tx0 + (e.clientX - pan.sx));
+      setTy(pan.ty0 + (e.clientY - pan.sy));
     }
-  };
-
-  const commitPan = () => {
-    const live = panLive.current;
-    panLive.current = null;
-    setPanTeam(undefined);
-    if (live) {
-      setTx(live.tx);
-      setTy(live.ty);
-    }
-    setPan(null);
   };
 
   const onPointerUpVp = (e: React.PointerEvent) => {
@@ -544,7 +519,7 @@ export function CrewCanvas({
       return;
     }
 
-    if (pan) commitPan();
+    if (pan) setPan(null);
   };
 
   const applyPending = (moveInstead: boolean) => {
@@ -931,7 +906,7 @@ export function CrewCanvas({
         newTeamBox={newTeamBox}
         slackChannels={slackChannels}
         joinableChannels={joinableChannels}
-        joinFrames={joinFrames}
+        joinFrames={cards || guest ? [] : joinBoxes(teams, joinableChannels)}
         toWorld={toWorld}
         onStartDragFrame={(state) => {
           setAnim(false);
@@ -972,7 +947,7 @@ export function CrewCanvas({
         botAgentsCount={botAgents.length}
         workspaceOwner={workspaceOwner}
         attentionCount={needsYouCount}
-        focusedTeamName={(pan && panTeam !== undefined ? panTeam : focusedTeam)?.name}
+        focusedTeamName={focusedTeam?.name}
         selAgentName={selAgent?.name}
         showNewTeam={showNewTeam}
         cards={cards}

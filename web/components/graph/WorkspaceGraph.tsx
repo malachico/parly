@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { styleOf } from '@/components/graph/NeighbourMap';
 import { Icon } from '@/components/Icon';
 import type { GraphEdge, GraphEntry } from '@/lib/actions/graph';
@@ -166,15 +166,6 @@ export function WorkspaceGraph({ entries, edges, selected, onOpen }: { entries: 
     const e = entryById.get(id);
     if (e) onOpen(e);
   };
-  // Stable handlers so memoized nodes skip re-rendering on pan, zoom-free renders and other nodes' hover.
-  const pick = useRef((_id: string) => {});
-  pick.current = (id) => {
-    if (dragged.current) return;
-    setActive(id);
-    open(id);
-  };
-  const onPick = useCallback((id: string) => pick.current(id), []);
-  const onHover = useCallback((id: string, on: boolean) => setHover((h) => (on ? id : h === id ? null : h)), []);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key.startsWith('Arrow')) {
@@ -260,24 +251,32 @@ export function WorkspaceGraph({ entries, edges, selected, onOpen }: { entries: 
               );
             })}
             {nodes.map((n) => {
+              const st = styleOf(n.kind);
+              const r = radius(deg.get(n.id) ?? 0) * grow;
               const isActive = keyboard && active === n.id;
+              const ring = selected === n.id || isActive || hover === n.id;
+              const dim = lit && !lit.has(n.id);
               return (
-                <GraphNode
+                <g
                   key={n.id}
-                  id={n.id}
-                  x={n.x}
-                  y={n.y}
-                  kind={n.kind}
-                  title={n.title}
-                  deg={deg.get(n.id) ?? 0}
-                  grow={grow}
-                  selected={selected === n.id}
-                  ring={selected === n.id || isActive || hover === n.id}
-                  strong={isActive || selected === n.id}
-                  dim={!!lit && !lit.has(n.id)}
-                  onHover={onHover}
-                  onPick={onPick}
-                />
+                  id={`kg-node-${n.id}`}
+                  role="option"
+                  aria-selected={selected === n.id}
+                  aria-label={`${st.label}: ${n.title}, ${plural(deg.get(n.id) ?? 0, 'connection', 'connections')}`}
+                  className="cursor-pointer motion-safe:transition-opacity"
+                  opacity={dim ? 0.25 : 1}
+                  onPointerEnter={() => setHover(n.id)}
+                  onPointerLeave={() => setHover((h) => (h === n.id ? null : h))}
+                  onClick={() => {
+                    if (dragged.current) return;
+                    setActive(n.id);
+                    open(n.id);
+                  }}
+                >
+                  <title>{n.title}</title>
+                  {ring && <circle cx={n.x} cy={n.y} r={r + 5 * grow} fill="none" stroke="var(--accent)" strokeWidth={isActive || selected === n.id ? 2.5 : 1.5} vectorEffect="non-scaling-stroke" />}
+                  <circle cx={n.x} cy={n.y} r={r} fill={st.fill} stroke={st.stroke} strokeWidth="1.5" />
+                </g>
               );
             })}
             {/* Labels go in a second pass so no later circle paints over them; each node's aria-label already names it. */}
@@ -327,42 +326,3 @@ export function WorkspaceGraph({ entries, edges, selected, onOpen }: { entries: 
     </div>
   );
 }
-
-type GraphNodeProps = {
-  id: string;
-  x: number;
-  y: number;
-  kind: string;
-  title: string;
-  deg: number;
-  grow: number;
-  selected: boolean;
-  ring: boolean;
-  strong: boolean;
-  dim: boolean;
-  onHover: (id: string, on: boolean) => void;
-  onPick: (id: string) => void;
-};
-
-/** One dot. Primitive props only, so a pan (which keeps k) or another node's hover leaves it alone. */
-const GraphNode = memo(function GraphNode({ id, x, y, kind, title, deg, grow, selected, ring, strong, dim, onHover, onPick }: GraphNodeProps) {
-  const st = styleOf(kind);
-  const r = radius(deg) * grow;
-  return (
-    <g
-      id={`kg-node-${id}`}
-      role="option"
-      aria-selected={selected}
-      aria-label={`${st.label}: ${title}, ${plural(deg, 'connection', 'connections')}`}
-      className="cursor-pointer motion-safe:transition-opacity"
-      opacity={dim ? 0.25 : 1}
-      onPointerEnter={() => onHover(id, true)}
-      onPointerLeave={() => onHover(id, false)}
-      onClick={() => onPick(id)}
-    >
-      <title>{title}</title>
-      {ring && <circle cx={x} cy={y} r={r + 5 * grow} fill="none" stroke="var(--accent)" strokeWidth={strong ? 2.5 : 1.5} vectorEffect="non-scaling-stroke" />}
-      <circle cx={x} cy={y} r={r} fill={st.fill} stroke={st.stroke} strokeWidth="1.5" />
-    </g>
-  );
-});

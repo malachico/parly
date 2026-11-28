@@ -5,19 +5,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { EscClose } from '@/components/EscClose';
 import { Icon } from '@/components/Icon';
 import { NeighbourMap } from '@/components/graph/NeighbourMap';
-import { RowSkeleton } from '@/components/PanelSkeleton';
 import { type GraphNodeDetails, graphNode } from '@/lib/actions/graph';
 import { connectionGroups, entryUrl, KIND_NAME, sourceLinks, trailTo } from '@/lib/knowledge';
 
 // `for` is the requested id: the hub may answer with a merged entry's canonical id instead.
 type Load = { state: 'loading' } | { state: 'error' } | { state: 'gone' } | { state: 'ok'; for: string; details: GraphNodeDetails };
-
-// Entries already opened, by `id:depth`: reopening one shows it at once while it refreshes.
-const entryCache = new Map<string, GraphNodeDetails>();
-const cachedLoad = (id: string, depth: 1 | 2): Load => {
-  const details = entryCache.get(`${id}:${depth}`);
-  return details ? { state: 'ok', for: id, details } : { state: 'loading' };
-};
 
 /** Moves `?entry=` without a server round trip, as the list does; null closes the drawer. */
 const go = (ws: string, id: string | null) => window.history.pushState(null, '', entryUrl(ws, window.location.search, id));
@@ -28,7 +20,7 @@ export function KnowledgeDrawer({ ws, id }: { ws: string; id: string }) {
   const [picked, setPicked] = useState<{ id: string; depth: 1 | 2 }>({ id, depth: 1 });
   const depth = picked.id === id ? picked.depth : 1;
   const setDepth = (d: 1 | 2) => setPicked({ id, depth: d });
-  const [load, setLoad] = useState<Load>(() => cachedLoad(id, 1));
+  const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [retry, setRetry] = useState(0);
   const [trail, setTrail] = useState<string[]>([]);
   const titles = useRef(new Map<string, string>());
@@ -75,19 +67,17 @@ export function KnowledgeDrawer({ ws, id }: { ws: string; id: string }) {
   useEffect(() => {
     const n = ++latest.current;
     // Same entry (a depth change or retry) keeps what's shown until the answer lands.
-    setLoad((l) => (l.state === 'ok' && l.for === id ? l : cachedLoad(id, depth)));
+    setLoad((l) => (l.state === 'ok' && l.for === id ? l : { state: 'loading' }));
     graphNode(id, depth).then(
       (details) => {
         if (n !== latest.current) return;
         if (details) {
-          entryCache.set(`${id}:${depth}`, details);
           for (const e of [details.node, ...details.nodes]) titles.current.set(e.id, e.title);
           titles.current.set(id, details.node.title);
-        } else for (const d of [1, 2]) entryCache.delete(`${id}:${d}`);
+        }
         setLoad(details ? { state: 'ok', for: id, details } : { state: 'gone' });
       },
-      // A failed refresh keeps the cached entry on screen; only a cold miss shows the error.
-      () => n === latest.current && setLoad(entryCache.has(`${id}:${depth}`) ? cachedLoad(id, depth) : { state: 'error' }),
+      () => n === latest.current && setLoad({ state: 'error' }),
     );
   }, [id, depth, retry]);
 
@@ -148,7 +138,7 @@ export function KnowledgeDrawer({ ws, id }: { ws: string; id: string }) {
       </div>
 
       <div aria-busy={load.state === 'loading'} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-        {load.state === 'loading' && <RowSkeleton label="Loading this entry…" />}
+        {load.state === 'loading' && <p role="status" className="py-6 text-center text-sm text-[var(--muted)]">Loading this entry…</p>}
         {load.state === 'gone' && <p role="status" className="py-6 text-center text-sm text-[var(--muted)]">This entry doesn’t exist, or it was said somewhere you can’t read.</p>}
         {load.state === 'error' && (
           <div className="space-y-2 py-6 text-center text-sm">

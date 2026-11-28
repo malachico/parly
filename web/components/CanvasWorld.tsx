@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { memo, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { AccountMenu, CanvasMenu, WorkspaceMenu, type MenuWorkspace } from '@/components/AccountMenu';
 import { Avatar } from '@/components/Avatar';
 import { NewTeamDialog } from '@/components/CanvasModals';
@@ -54,7 +54,7 @@ export type DragFrameState = {
 };
 
 /** World transform layer: cross-team links, team frames, placed creatures, and the new-team frame. */
-export const CanvasWorld = memo(function CanvasWorld({
+export function CanvasWorld({
   notes,
   ws,
   tx,
@@ -549,7 +549,7 @@ export const CanvasWorld = memo(function CanvasWorld({
       )}
     </div>
   );
-});
+}
 
 /** Top floating bar (where you are, search, actions) and bottom view controls (fit, tidy, zoom). */
 export function CanvasChrome({

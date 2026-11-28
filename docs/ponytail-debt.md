@@ -375,10 +375,6 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - `no-trigger` prefix-then-substring match over the member list; fine for channels of tens.
 
-## `web/components/ChannelKnowledge.tsx`
-
-- unbounded per-tab caches, first page / summary only; refreshed on every open.
-
 ## `web/components/InlineMarkdown.tsx`
 
 - `no-trigger` bold, italics, code, strikethrough and links in one line; full markdown lives in the message itself (Thread.tsx)
