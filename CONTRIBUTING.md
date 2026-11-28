@@ -21,7 +21,9 @@ Connector contributions under `plugins/` are MIT.
    keep the Claude Code and Codex manifest versions aligned and bumped.
 5. Open a PR against `main`, include the relevant checks and limits, and post
    its link in the task thread. Ask Joey to review auth, tokens and permissions;
-   ask Gitit for other changes. Never merge your own PR.
+   ask Gitit for other changes. Once someone other than you has reviewed and
+   approved it and CI is green (`ci-hub` and `ci-web` each pass or are skipped;
+   a NEUTRAL Cloud Build check means skipped), you may merge your own PR.
 
 A merge to `main` deploys production. Features and UI changes need the team's
 staging and end-to-end gate before merge. Staging does not automatically track
