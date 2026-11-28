@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { MarkRead, THREAD_READ_EVENT } from '@/components/MarkRead';
 import { ScrollToBottom } from '@/components/ScrollToBottom';
 import { Timeline } from '@/components/Thread';
@@ -31,6 +31,12 @@ export function LiveTimeline({ conversation, readKey, done, scroll, empty, messa
   const shown = filter === 'done' ? messages : all;
   const [liveThreads, setLiveThreads] = useState(threads);
   const [liveActivity, setLiveActivity] = useState<ActivityItem[] | undefined>(activity);
+  // Stable across renders, so memoized Timeline rows don't re-render for a new function.
+  const { ws: doneWs, channelId: doneChannel, filter: doneFilter } = done ?? {};
+  const toggleDone = useCallback(
+    (postId: string, d: boolean) => setThreadDone.bind(null, doneWs!, doneChannel!, postId, d, doneFilter),
+    [doneWs, doneChannel, doneFilter],
+  );
   // Thread replies already counted: a reconnect can replay part of a batch.
   const counted = useRef(new Set<string>());
   useEffect(() => {
@@ -106,7 +112,7 @@ export function LiveTimeline({ conversation, readKey, done, scroll, empty, messa
           filter={filter}
           threads={liveThreads}
           activity={liveActivity}
-          onToggleDone={done ? (postId, d) => setThreadDone.bind(null, done.ws, done.channelId, postId, d, done.filter) : undefined}
+          onToggleDone={done ? toggleDone : undefined}
         />
       )}
     </>

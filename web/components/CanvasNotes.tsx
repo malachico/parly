@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Markdown } from '@/components/Thread';
+import { Markdown } from '@/components/Markdown';
 import { ImagePreview } from '@/components/ImagePreview';
 import { saveCanvasNote } from '@/lib/actions/canvas';
 import { uploadFile } from '@/lib/upload';

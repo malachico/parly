@@ -117,7 +117,10 @@ describe('hub-mcp starts without waiting for the hub', () => {
     const hub = await fakeHub(0, [tool('check_inbox'), tool('new_tool')]);
     const dir = configured(hub.url);
     fs.writeFileSync(cacheFile(dir), JSON.stringify({ hubUrl: hub.url, agentId: 'a1', instructions: 'old', tools: [tool('check_inbox')] }));
-    const changed = await bridge(dir, handshake, refreshed(dir));
+    // The cache is renamed into place just before the notice is written: stopping on the cache alone can kill the bridge in between.
+    const notified = (lines: Line[]) => lines.some((l) => l.msg.method === 'notifications/tools/list_changed');
+    const rewritten = refreshed(dir);
+    const changed = await bridge(dir, handshake, (lines) => rewritten(lines) && notified(lines));
     expect(changed.find((l) => l.msg.id === 2)!.msg.result!.tools!.map((t) => t.name)).toEqual(['check_inbox']);
     expect(changed.some((l) => l.msg.method === 'notifications/tools/list_changed')).toBe(true);
     expect(JSON.parse(fs.readFileSync(cacheFile(dir), 'utf8')).tools).toHaveLength(2);

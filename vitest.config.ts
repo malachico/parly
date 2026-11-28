@@ -65,6 +65,8 @@ const pureTests = [
 const shared = {
   testTimeout: 30_000,
   hookTimeout: 30_000,
+  // Billing and other Mongo writes land after the response; 1s (the default) is too short for them on a busy CI runner.
+  expect: { poll: { timeout: 10_000 } },
   // No GCE metadata server locally; stops google-auth probing it.
   env: { METADATA_SERVER_DETECTION: 'none' },
 };

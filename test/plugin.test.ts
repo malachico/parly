@@ -211,13 +211,17 @@ describe('coding-agent plugin scripts', () => {
     const lines = await new Promise<string[]>((resolve) => {
       const p = spawn('node', [join(BIN, 'hub-mcp.mjs'), '--client', 'toolconnect'], { env });
       let out = '';
-      p.stdout.on('data', (d) => (out += d));
-      p.on('close', () => resolve(out.trim().split('\n').filter(Boolean)));
       const send = (m: object) => p.stdin.write(JSON.stringify(m) + '\n');
+      // Ask again once connect has answered, and stop once that is answered: fixed sleeps lost the race on slow runners.
+      let asked = false;
+      p.stdout.on('data', (d) => {
+        out += d;
+        if (!asked && /"id":2\b/.test(out)) (asked = true), send({ jsonrpc: '2.0', id: 3, method: 'tools/list' });
+        if (/"id":3\b/.test(out)) p.stdin.end();
+      });
+      p.on('close', () => resolve(out.trim().split('\n').filter(Boolean)));
       send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
       send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'connect', arguments: { address: `${body.code}@${hubUrl.replace('http://', '')}` } } });
-      setTimeout(() => send({ jsonrpc: '2.0', id: 3, method: 'tools/list' }), 3000);
-      setTimeout(() => p.stdin.end(), 5000);
     });
     const msgs = lines.map((l) => JSON.parse(l));
     const byId = Object.fromEntries(msgs.filter((m) => m.id).map((m) => [m.id, m]));
@@ -248,8 +252,7 @@ describe('coding-agent plugin scripts', () => {
 
     // The turn ends (the Stop hook starts the listener): the status is cleared.
     const l = spawn('node', [join(BIN, 'hub-events.mjs'), '--client', 'claude-code', '--event', 'listen'], { env });
-    await new Promise((r) => setTimeout(r, 1500));
-    expect(await status()).toBeUndefined();
+    await expect.poll(status).toBeUndefined();
 
     // A message wakes it: answering it is the status, where the message is.
     const danaId = (await rest(danaToken, 'GET', '/me')).body.id as string;

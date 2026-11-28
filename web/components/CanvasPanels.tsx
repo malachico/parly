@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
-import { Markdown } from '@/components/Thread';
+import { Markdown } from '@/components/Markdown';
 import {
   markCanvasWaitingRead,
   fetchAgentDay,

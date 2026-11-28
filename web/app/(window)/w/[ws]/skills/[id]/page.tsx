@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Icon } from '@/components/Icon';
 import { PendingButton } from '@/components/PendingButton';
 import { ProcessStepsEditor } from '@/components/ProcessStepsEditor';
-import { Markdown } from '@/components/Thread';
+import { Markdown } from '@/components/Markdown';
 import { ErrorNote, PageHeader } from '@/components/ui';
 import { PanelPage } from '@/components/PanelPage';
 import { attachSkillFromLibrary, deleteSkillAction, setScopeSkillOn, updateSkillAction } from '@/lib/actions';

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { PendingButton } from './PendingButton';
 import { Icon } from '@/components/Icon';
 import { LocalTime } from '@/components/LocalTime';
-import { Markdown } from '@/components/Thread';
+import { Markdown } from '@/components/Markdown';
 import { ErrorNote } from '@/components/ui';
 import { approveRoomDocument, writeRoomDocument } from '@/lib/actions';
 import type { Workspace } from '@/lib/hub';
