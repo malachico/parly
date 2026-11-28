@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { CanvasBoundary } from '@/components/CanvasBoundary';
 import { CanvasHome } from '@/components/CanvasHome';
+import { CanvasSkeleton } from '@/components/CanvasSkeleton';
 import { FindDialog } from '@/components/FindDialog';
 import { HireAgentDialog } from '@/components/HireAgentDialog';
 import { NewChannelDialog } from '@/components/NewChannelDialog';
@@ -42,7 +43,7 @@ export default async function WorkspaceLayout({ children, params }: Props) {
           <div className="flex h-full min-w-0 flex-1">
             {/* error.tsx can't catch its own layout: without this a canvas failure would take the open panel with it. */}
             <CanvasBoundary>
-              <Suspense fallback={<div className="h-full flex-1 bg-[var(--bg)]" />}>
+              <Suspense fallback={<CanvasSkeleton />}>
                 <CanvasHome me={user} workspace={workspace} />
               </Suspense>
             </CanvasBoundary>

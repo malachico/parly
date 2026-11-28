@@ -1,4 +1,6 @@
-/** Entering or switching a workspace: the canvas background while its layout loads the signed-in user. */
+import { CanvasSkeleton } from '@/components/CanvasSkeleton';
+
+/** Entering or switching a workspace: the canvas's shape while its layout loads the signed-in user. */
 export default function Loading() {
-  return <div aria-busy="true" aria-label="Loading" className="h-full flex-1 bg-[var(--bg)]" />;
+  return <CanvasSkeleton />;
 }

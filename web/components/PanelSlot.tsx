@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { PanelSkeleton } from '@/components/PanelSkeleton';
+import { PanelSkeleton, type PanelSkeletonKind, panelSkeletonKind } from '@/components/PanelSkeleton';
 import { publishPanelClosing } from '@/lib/panelClosing';
 import { timelineParamsChanged, wsHref } from '@/lib/routes';
 
@@ -75,6 +75,7 @@ export function PanelSlot({ ws, children }: { ws: string; children: React.ReactN
   const routeKey = `${path}?${currentSearch}`;
   const [closingFrom, setClosingFrom] = useState<string | null>(null);
   const [replacingFrom, setReplacingFrom] = useState<string | null>(null);
+  const [replacingKind, setReplacingKind] = useState<PanelSkeletonKind>('conversation');
   const closing = closingFrom === routeKey;
   useLayoutEffect(() => publishPanelClosing(closing), [closing]);
   const replacing = replacingFrom === routeKey;
@@ -115,6 +116,7 @@ export function PanelSlot({ ws, children }: { ws: string; children: React.ReactN
         (closing || !fromInsidePanel || decodeURIComponent(to.pathname) !== decodeURIComponent(path))
       ) {
         setReplacingFrom(routeKey);
+        setReplacingKind(panelSkeletonKind(to));
         setClosingFrom(null);
         setPendingState({ kind: 'nav' });
       }
@@ -169,6 +171,7 @@ export function PanelSlot({ ws, children }: { ws: string; children: React.ReactN
         } else {
           if (!samePath && resolveClosingPanelClick(ws, path, location.search, to.href, location.origin) === 'replace') {
             setReplacingFrom(routeKey);
+            setReplacingKind(panelSkeletonKind(to));
             setClosingFrom(null);
           }
           setPendingState({ kind: 'nav' });
@@ -191,7 +194,7 @@ export function PanelSlot({ ws, children }: { ws: string; children: React.ReactN
         <>
           <div className="hidden">{children}</div>
           <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-[var(--bg)]">
-            <PanelSkeleton />
+            <PanelSkeleton kind={replacingKind} />
           </div>
         </>
       ) : (
