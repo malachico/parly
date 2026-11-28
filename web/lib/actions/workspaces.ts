@@ -77,6 +77,7 @@ export async function addWorkspaceOwner(ws: string, member: string) {
 export async function leaveWorkspace(ws: string) {
   await attempt(workspaceDetails(ws), () => hub(`/workspaces/${encodeURIComponent(ws)}/members/me`, { method: 'DELETE' }));
   (await cookies()).delete(WORKSPACE_COOKIE);
+  // Every workspace's layout lists the person's workspaces, so leaving one changes them all.
   revalidatePath('/', 'layout');
   redirect('/');
 }

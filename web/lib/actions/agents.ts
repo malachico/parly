@@ -105,6 +105,7 @@ const routineIdIn = (input: string) => /\/routines\/([A-Za-z0-9_-]+)/.exec(input
 export async function connectRoutine(form: FormData) {
   const back = connectBack('claudecloud');
   const { check } = await attempt(back, () => hub<{ check: WakeCheck }>('/routines', { method: 'POST', body: { routineId: field(form, 'routineId'), token: field(form, 'token') } }));
+  // A new agent: it appears on the canvas of a workspace not known here.
   revalidatePath('/', 'layout');
   redirect(check.ok ? `${back}&routine=${encodeURIComponent(routineIdIn(field(form, 'routineId')))}` : back);
 }
@@ -127,6 +128,7 @@ export async function connectGrok(form: FormData) {
     await hub(`/agents/${id}`, { method: 'DELETE' }).catch(() => {});
     redirect(`${back}&error=${encodeURIComponent(check.problem ?? 'Grok could not be reached')}`);
   }
+  // A new agent: it appears on the canvas of a workspace not known here.
   revalidatePath('/', 'layout');
   redirect(`${back}&agent=${id}`);
 }
@@ -141,6 +143,7 @@ export async function connectGrokBot(form: FormData) {
   const body = { type: 'webhook', url: field(form, 'url'), authorization: field(form, 'authorization'), perConversation: true };
   const { check } = await attempt(back, () => hub<{ check?: WakeCheck }>(`/agents/bots/${id}/wake`, { method: 'PUT', body }));
   if (check && !check.ok) redirect(`${back}&error=${encodeURIComponent(check.problem ?? 'The webhook could not be reached')}`);
+  // A new agent: it appears on the canvas of a workspace not known here.
   revalidatePath('/', 'layout');
   redirect(`${back}&agent=${id}`);
 }
@@ -194,6 +197,7 @@ export async function updateAgentTelegramBot(id: string, backPath: string, form:
       body: { botToken: field(form, 'botToken') },
     }),
   );
+  // The agent page and /account both show it; from /account the agent's workspace isn't known.
   revalidatePath('/', 'layout');
   redirect(back);
 }
@@ -202,6 +206,7 @@ export async function updateAgentTelegramBot(id: string, backPath: string, form:
 export async function removeAgentTelegramBot(id: string, backPath: string) {
   const back = safeNext(backPath) ?? '/';
   await attempt(back, () => hub(`/agents/${encodeURIComponent(id)}/telegram`, { method: 'DELETE' }));
+  // The agent page and /account both show it; from /account the agent's workspace isn't known.
   revalidatePath('/', 'layout');
   redirect(back);
 }
@@ -223,6 +228,7 @@ export async function revokeConnection(ws: string, id: string, client: string) {
   // Back into this workspace's dialog (not /connect, which remounts the whole window).
   const back = `${wsHref(ws)}/connect?client=${encodeURIComponent(client)}`;
   await attempt(back, () => hub(`/agents/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+  // Deleting takes the agent off the canvas of every workspace it's in.
   revalidatePath('/', 'layout');
   redirect(back);
 }
@@ -239,6 +245,7 @@ export async function requestClient(form: FormData) {
 export async function setArchived(back: string, agent: string, archived: boolean) {
   const to = safeNext(back) ?? '/';
   await attempt(to, () => hub(`/agents/${encodeURIComponent(agent)}/archive`, { method: archived ? 'POST' : 'DELETE' }));
+  // Archiving takes the agent off the canvas of every workspace it's in.
   revalidatePath('/', 'layout');
 }
 

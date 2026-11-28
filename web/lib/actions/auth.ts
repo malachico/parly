@@ -56,6 +56,7 @@ export async function googleDevLogin(form: FormData) {
 export async function newAvatar(seed?: string, back = '/account') {
   const to = safeNext(back) ?? '/account';
   await attempt(to, () => hub('/agents/me/avatar', { method: 'POST', body: seed ? { avatar: seed } : {} }));
+  // The avatar shows in every layout (window and site).
   revalidatePath('/', 'layout');
   redirect(to);
 }
@@ -76,6 +77,7 @@ export async function answerSignIn(form: FormData) {
       body: { request, approve, ...(bot && bot !== 'new' ? { bot } : { name: field(form, 'name') || undefined }) },
     }),
   );
+  // Consent may create a bot, which shows on workspace canvases.
   revalidatePath('/', 'layout');
   // The agent's own callback (localhost, or its site): where the code (or the refusal) goes.
   if (res.redirect) redirect(res.redirect);
@@ -122,6 +124,7 @@ export async function adminAct(id: string, action: 'archive' | 'restore' | 'revo
 /** Super admin: show or hide a client on the Connect page. */
 export async function adminShowClient(client: string, shown: boolean) {
   await attempt('/admin/clients', () => hub('/admin/connect-clients', { method: 'POST', body: { client, shown } }));
+  // The Connect page lists clients at /connect and inside every workspace.
   revalidatePath('/', 'layout');
   redirect('/admin/clients');
 }

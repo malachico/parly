@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { hub, HUB_URL, safeNext, type Agent, type Schedule, type ProcessStepView, type SkillDetailView, type SkillScope, type SkillType } from '../hub';
-import { agentHref, appsHref, skillsHref, triggersHref } from '../routes';
+import { agentHref, appsHref, skillsHref, triggersHref, wsHref } from '../routes';
 import { siteOrigin } from '../site';
 import { newSkillScope } from '../skillScope';
 import { agentPage, attempt, channelDetails, field, setFlash, workspaceDetails } from './helpers';
@@ -18,13 +18,15 @@ export async function createWebhook(ws: string, channelId: string, form: FormDat
   const back = channelDetails(ws, channelId);
   const { token } = await attempt(back, () => hub<{ token: string }>(`/channels/${encodeURIComponent(channelId)}/webhooks`, { method: 'POST', body: { name: field(form, 'name') } }));
   await setFlash('flash_webhook', JSON.stringify({ channelId, url: `${HUB_URL}/hooks/${channelId}/${token}` }));
-  revalidatePath('/', 'layout');
+  // A webhook shows on the crew canvas, in the workspace layout.
+  revalidatePath(wsHref(ws), 'layout');
   redirect(back);
 }
 
 export async function deleteWebhook(ws: string, channelId: string, id: string) {
   await attempt(channelDetails(ws, channelId), () => hub(`/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' }));
-  revalidatePath('/', 'layout');
+  // A webhook shows on the crew canvas, in the workspace layout.
+  revalidatePath(wsHref(ws), 'layout');
 }
 
 /** A schedule form's fields, as the hub takes them. */
@@ -36,6 +38,7 @@ function scheduleBody(form: FormData) {
 export async function updateSchedule(back: string, id: string, form: FormData) {
   const to = safeNext(back) ?? '/';
   await attempt(to, () => hub(`/schedules/${encodeURIComponent(id)}`, { method: 'PATCH', body: scheduleBody(form) }));
+  // `back` may be any page; the crew canvas lists schedules too, and the workspace isn't known here.
   revalidatePath('/', 'layout');
   redirect(to);
 }
@@ -43,6 +46,7 @@ export async function updateSchedule(back: string, id: string, form: FormData) {
 /** Pauses or resumes a scheduled message. */
 export async function setScheduleActive(back: string, id: string, active: boolean) {
   await attempt(safeNext(back) ?? '/', () => hub(`/schedules/${encodeURIComponent(id)}`, { method: 'PATCH', body: { active } }));
+  // `back` may be any page; the crew canvas lists schedules too, and the workspace isn't known here.
   revalidatePath('/', 'layout');
 }
 
@@ -53,6 +57,7 @@ export async function threadSchedules(channelId: string): Promise<Schedule[]> {
 
 export async function deleteSchedule(back: string, id: string) {
   await attempt(safeNext(back) ?? '/', () => hub(`/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+  // `back` may be any page; the crew canvas lists schedules too, and the workspace isn't known here.
   revalidatePath('/', 'layout');
 }
 
@@ -88,7 +93,8 @@ export async function linkChannelSlack(ws: string, channelId: string, form: Form
       },
     }),
   );
-  revalidatePath('/', 'layout');
+  // The crew canvas in the workspace layout shows the workspace's Slack/Telegram links.
+  revalidatePath(wsHref(ws), 'layout');
   redirect(back);
 }
 
@@ -98,7 +104,8 @@ export async function unlinkChannelSlack(ws: string, channelId: string) {
   await attempt(back, () =>
     hub(`/channels/${encodeURIComponent(channelId)}/slack`, { method: 'DELETE' }),
   );
-  revalidatePath('/', 'layout');
+  // The crew canvas in the workspace layout shows the workspace's Slack/Telegram links.
+  revalidatePath(wsHref(ws), 'layout');
   redirect(back);
 }
 
@@ -113,14 +120,15 @@ export async function approveSlackLink(form: FormData) {
   const { teamName } = await attempt(back, () =>
     hub<{ teamName: string }>('/slack/link', { method: 'POST', body: { code } }),
   );
-  revalidatePath('/', 'layout');
+  revalidatePath('/slack/link');
+  revalidatePath('/account');
   redirect(`/slack/link?done=${encodeURIComponent(teamName)}`);
 }
 
 /** Account settings: unlinks the signed-in person's Slack identity in `teamId`. */
 export async function unlinkMySlack(teamId: string) {
   await attempt('/account', () => hub(`/me/slack/${encodeURIComponent(teamId)}`, { method: 'DELETE' }));
-  revalidatePath('/', 'layout');
+  revalidatePath('/account');
   redirect('/account');
 }
 
@@ -149,7 +157,8 @@ export async function connectWorkspaceTelegram(ws: string, form: FormData) {
       },
     }),
   );
-  revalidatePath('/', 'layout');
+  // The crew canvas in the workspace layout shows the workspace's Slack/Telegram links.
+  revalidatePath(wsHref(ws), 'layout');
   redirect(back);
 }
 
@@ -164,23 +173,25 @@ export async function disconnectWorkspaceTelegram(ws: string, chatId?: string) {
       },
     }),
   );
-  revalidatePath('/', 'layout');
+  // The crew canvas in the workspace layout shows the workspace's Slack/Telegram links.
+  revalidatePath(wsHref(ws), 'layout');
   redirect(back);
 }
 
 /** Links a Parly channel to a Telegram topic; a hub error goes back to `back`. */
-async function linkTelegram(back: string, channelId: string, form: FormData) {
+async function linkTelegram(ws: string, back: string, channelId: string, form: FormData) {
   await attempt(back, () =>
     hub(`/channels/${encodeURIComponent(channelId)}/telegram`, {
       method: 'POST',
       body: telegramLinkBody(form),
     }),
   );
-  revalidatePath('/', 'layout');
+  // The crew canvas in the workspace layout shows the workspace's Slack/Telegram links.
+  revalidatePath(wsHref(ws), 'layout');
 }
 
 /** Unlinks a Parly channel from a Telegram chat/topic (or all Telegram links when omitted); a hub error goes back to `back`. */
-async function unlinkTelegram(back: string, channelId: string, chatId?: string, topicId?: number) {
+async function unlinkTelegram(ws: string, back: string, channelId: string, chatId?: string, topicId?: number) {
   await attempt(back, () =>
     hub(`/channels/${encodeURIComponent(channelId)}/telegram`, {
       method: 'DELETE',
@@ -190,31 +201,32 @@ async function unlinkTelegram(back: string, channelId: string, chatId?: string, 
       },
     }),
   );
-  revalidatePath('/', 'layout');
+  // The crew canvas in the workspace layout shows the workspace's Slack/Telegram links.
+  revalidatePath(wsHref(ws), 'layout');
 }
 
 /** Workspace settings: maps a Parly channel in the workspace to a Telegram forum topic. */
 export async function linkWorkspaceChannelTelegram(ws: string, form: FormData) {
   const back = workspaceDetails(ws);
-  await linkTelegram(back, field(form, 'channelId'), form);
+  await linkTelegram(ws, back, field(form, 'channelId'), form);
   redirect(back);
 }
 
 /** Workspace settings: unlinks a Parly channel from a Telegram topic inside workspace settings. */
 export async function unlinkWorkspaceChannelTelegram(ws: string, channelId: string, chatId?: string, topicId?: number) {
   const back = workspaceDetails(ws);
-  await unlinkTelegram(back, channelId, chatId, topicId);
+  await unlinkTelegram(ws, back, channelId, chatId, topicId);
   redirect(back);
 }
 
 /** Channel panel: links a Parly channel to a Telegram topic (using the workspace's connected supergroup or an explicit `chatId`). */
 export async function linkChannelTelegram(ws: string, channelId: string, form: FormData) {
-  await linkTelegram(channelDetails(ws, channelId), channelId, form);
+  await linkTelegram(ws, channelDetails(ws, channelId), channelId, form);
 }
 
 /** Channel panel: unlinks a Parly channel from a Telegram chat/topic (or all Telegram links when omitted). */
 export async function unlinkChannelTelegram(ws: string, channelId: string, chatId?: string, topicId?: number) {
-  await unlinkTelegram(channelDetails(ws, channelId), channelId, chatId, topicId);
+  await unlinkTelegram(ws, channelDetails(ws, channelId), channelId, chatId, topicId);
 }
 
 /** Account settings: generates a one-time `/start <code>` command to link the signed-in person's Telegram identity. */
@@ -236,7 +248,8 @@ export async function approveTelegramLink(form: FormData) {
   const linked = await attempt(back, () =>
     hub<{ telegramUserId: string; username?: string; name?: string }>('/telegram/link', { method: 'POST', body: { code } }),
   );
-  revalidatePath('/', 'layout');
+  revalidatePath('/telegram/link');
+  revalidatePath('/account');
   const label = linked.username ? `@${linked.username}` : linked.name ?? linked.telegramUserId;
   redirect(`/telegram/link?done=${encodeURIComponent(label)}`);
 }
@@ -244,7 +257,7 @@ export async function approveTelegramLink(form: FormData) {
 /** Account settings: unlinks the signed-in person's Telegram identity. */
 export async function unlinkMyTelegram(telegramUserId: string) {
   await attempt('/account', () => hub(`/me/telegram/${encodeURIComponent(telegramUserId)}`, { method: 'DELETE' }));
-  revalidatePath('/', 'layout');
+  revalidatePath('/account');
   redirect('/account');
 }
 
@@ -482,6 +495,7 @@ export async function createSkillAction(ws: string, form: FormData) {
     return res;
   });
 
+  // A new Library skill is the person's, shared by every workspace they're in.
   revalidatePath('/', 'layout');
   const returnTo = safeNext(field(form, 'returnTo'));
   redirect(returnTo ?? skillsHref(ws, created.id));
@@ -500,6 +514,7 @@ export async function updateSkillAction(ws: string, skillId: string, type: Skill
       },
     }),
   );
+  // A Library skill is the person's, shared by every workspace they're in.
   revalidatePath('/', 'layout');
   redirect(back);
 }
@@ -508,6 +523,7 @@ export async function updateSkillAction(ws: string, skillId: string, type: Skill
 export async function deleteSkillAction(ws: string, skillId: string) {
   const back = skillsHref(ws, skillId);
   await attempt(back, () => hub(`/me/skills/${encodeURIComponent(skillId)}`, { method: 'DELETE' }));
+  // A Library skill is the person's, shared by every workspace they're in.
   revalidatePath('/', 'layout');
   redirect(skillsHref(ws));
 }
@@ -521,7 +537,8 @@ export async function setScopeSkillOn(ws: string, scope: SkillScope, targetId: s
       method: enabled ? 'POST' : 'DELETE',
     }),
   );
-  revalidatePath('/', 'layout');
+  // Skills show on agent, channel and skills pages across the workspace.
+  revalidatePath(wsHref(ws), 'layout');
 }
 
 /** Attaches a skill/process from its Library detail page to a selected agent or channel. */
@@ -535,7 +552,8 @@ export async function attachSkillFromLibrary(ws: string, skillId: string, scope:
       method: 'POST',
     }),
   );
-  revalidatePath('/', 'layout');
+  // Skills show on agent, channel and skills pages across the workspace.
+  revalidatePath(wsHref(ws), 'layout');
   redirect(back);
 }
 
