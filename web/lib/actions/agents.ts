@@ -87,6 +87,13 @@ export async function makeConnectionCode(id: string, ws: string) {
   redirect(`${back}?code=1`);
 }
 
+/** Owner adds another agent on the same client as this one: its router connects it, so there is no code to copy. */
+export async function addSiblingAgent(id: string, ws: string) {
+  const { agent } = await attempt(agentHref(ws, id), () => hub<{ agent: { id: string } }>(`/agents/bots/${encodeURIComponent(id)}/siblings`, { method: 'POST', body: {} }));
+  revalidatePath(wsHref(ws), 'layout');
+  redirect(agentHref(ws, agent.id));
+}
+
 /** Has the hub call an A2A connection once more; the agent page then shows the problem, or none. */
 export async function checkConnection(id: string, ws: string) {
   const back = agentHref(ws, id);

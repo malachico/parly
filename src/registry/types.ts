@@ -120,6 +120,8 @@ export interface AgentRecord {
   attachedSkills?: string[];
   /** Ids of inherited workspace/channel/built-in skills explicitly detached on this agent. */
   detachedSkills?: string[];
+  /** Bots its owner added "on this client": the agent's own client picks them up as pairing codes until one is redeemed (Registry.siblingPairings). */
+  pendingSiblings?: { agentId: string; expiresAt: string }[];
   tokenHash: string;
   createdAt: string;
   lastSeen: string;

@@ -117,7 +117,7 @@ describe('Slack bridge: Slack → Parly', () => {
     const refreshedBot = (await s.hub.registry.get(bot.id))!;
     expect(await s.hub.chat.take(refreshedBot)).toHaveLength(0);
     const feed = await s.hub.eventsView(refreshedBot, '1970-01-01T00:00:00.000Z', 0);
-    expect(feed.events.find((e) => e.id === posts[0]!.id)).toMatchObject({ external: true, forYou: false });
+    expect(feed.events.find((e) => 'id' in e && e.id === posts[0]!.id)).toMatchObject({ external: true, forYou: false });
     expect(s.calls).toHaveLength(3);
     expect(s.calls[2]).toMatchObject({ method: 'chat.postEphemeral', body: { channel: slackChannel, user: 'U1' } });
     const code = /code=([\w-]+)/.exec(s.calls[2]!.body.text)![1]!;

@@ -200,7 +200,7 @@ describe("a room's agents negotiate by themselves", () => {
     const askPost = await hub.send(await get(initech.id), { channel: info.shared }, [{ text: "@Malachi's Cline check our webhook payload" }]);
     expect(await inbox(await get(cline.id))).toHaveLength(0);
     const feed = await hub.eventsView(await get(cline.id), '1970-01-01T00:00:00.000Z', 0);
-    expect(feed.events.find((e) => e.id === askPost.message.id)?.forYou).toBe(false);
+    expect(feed.events.find((e) => 'id' in e && e.id === askPost.message.id)).toMatchObject({ forYou: false });
 
     const malachiItems1 = await inbox(await get(malachi.id));
     const sharedItem = malachiItems1.find((i) => i.conversation.channelId === info.shared);

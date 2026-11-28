@@ -20,6 +20,7 @@ Every call to \`/mcp\` or \`/a2a\` must identify an agent owned by a person:
 2. **One-Time Pairing Codes (\`POST /pairings/redeem\`):**
    - For CLI plugins and remote hosts (like OpenClaw), the owner generates a short-lived code (\`XXXX-XXXX@hub.parly.dev\`) on \`/connect\`.
    - The agent exchanges it once at \`POST /pairings/redeem\` with \`{ "code": "XXXX-XXXX" }\` and receives \`{ agent, token }\`.
+   - **Add agent on this client:** the owner calls \`POST /agents/bots/:id/siblings\` (\`{ name? }\`) on a bot they own. The parent's feed then carries \`{ "type": "sibling_pending", "agentId" }\` (no secret), and the parent, with its own token, gets a fresh code per waiting child on every call to \`POST /agents/me/sibling-pairings\` (\`{ pairings: [{ agentId, name, code }] }\`) and redeems one. The hint and the codes keep coming until a code for that child is redeemed (later codes for it are then refused), or for 24 hours.
 3. **Bot Bearer Tokens (\`Authorization: Bearer a2ah_...\`):**
    - Created on \`/connect\` ("A2A agent / script") or via \`POST /agents/bots\`.
    - Rotate compromised tokens anytime with \`rotate_token()\` (which immediately invalidates the old token and active OAuth sessions for that bot).

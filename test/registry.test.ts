@@ -518,6 +518,63 @@ describe('pairing codes', () => {
   });
 });
 
+describe('adding an agent on a client', () => {
+  it('only the owner adds one; the parent gets a code on every call until one is redeemed', async () => {
+    const registry = new Registry(testDb());
+    const owner = await testPerson(registry, 'sib');
+    const stranger = await testPerson(registry, 'sib-stranger');
+    const { agent: parent } = await registry.createBot(owner, { name: 'sib-laptop', follow: true });
+    const { agent: other } = await registry.createBot(owner, { name: 'sib-other', follow: true });
+    await expect(registry.createSibling(stranger, parent.id)).rejects.toMatchObject({ code: 'not_found' });
+    await expect(registry.createSibling(parent, parent.id)).rejects.toMatchObject({ code: 'forbidden' });
+
+    const child = await registry.createSibling(owner, parent.id, 'sib-child');
+    expect(child).toMatchObject({ ownerId: owner.id, name: 'sib-child', followsOwner: true });
+    expect(await registry.siblingPairings((await registry.get(other.id))!)).toEqual([]);
+    const [first, ...rest] = await registry.siblingPairings(parent);
+    expect(rest).toEqual([]);
+    expect(first).toMatchObject({ agentId: child.id, name: 'sib-child' });
+    // The first answer was lost: the next call still has a usable code.
+    const [second] = await registry.siblingPairings(parent);
+    expect(second).toMatchObject({ agentId: child.id });
+    expect(second!.code).not.toBe(first!.code);
+    const { agent, token } = await registry.redeemPairing(second!.code);
+    expect(agent.id).toBe(child.id);
+    expect((await registry.authenticate(token))?.id).toBe(child.id);
+    // Paired: nothing pending, and the older code can't end the new token.
+    expect((await registry.get(parent.id))!.pendingSiblings ?? []).toEqual([]);
+    expect(await registry.siblingPairings(parent)).toEqual([]);
+    await expect(registry.redeemPairing(first!.code)).rejects.toMatchObject({ code: 'unauthorized' });
+    expect((await registry.authenticate(token))?.id).toBe(child.id);
+  });
+
+  it('names the child after the parent when no name is given', async () => {
+    const registry = new Registry(testDb());
+    const owner = await testPerson(registry, 'sib-noname');
+    const { agent: parent } = await registry.createBot(owner, { name: 'sib-noname-laptop', follow: true });
+    expect((await registry.createSibling(owner, parent.id)).name).toBe('sib-noname-laptop 2');
+    expect((await registry.createSibling(owner, parent.id, '  ')).name).toBe('sib-noname-laptop 2');
+  });
+
+  it('refuses an archived parent, leaving no child', async () => {
+    const registry = new Registry(testDb());
+    const owner = await testPerson(registry, 'sib-arch');
+    const { agent: parent } = await registry.createBot(owner, { name: 'sib-arch-laptop', follow: true });
+    await registry.setArchived(owner, parent.id, true);
+    await expect(registry.createSibling(owner, parent.id)).rejects.toMatchObject({ code: 'invalid' });
+    expect(await registry.botsOf(owner)).toHaveLength(1);
+  });
+
+  it('drops an expired entry', async () => {
+    const registry = new Registry(testDb());
+    const owner = await testPerson(registry, 'sib-late');
+    const { agent: parent } = await registry.createBot(owner, { name: 'sib-late-laptop', follow: true });
+    const { agent: child } = await registry.createBot(owner, { name: 'sib-late-child', follow: true });
+    await registry.agentStore.addPendingSibling(parent.id, { agentId: child.id, expiresAt: new Date(Date.now() - 1000).toISOString() });
+    expect(await registry.siblingPairings(parent)).toEqual([]);
+  });
+});
+
 describe('the whole directory', () => {
   it('reads only what the viewer may see: public, their workspaces and channels, their owner and bots', async () => {
     const registry = new Registry(testDb(), { fetchCard: fakeCard });

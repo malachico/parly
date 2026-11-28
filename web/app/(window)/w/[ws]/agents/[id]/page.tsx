@@ -12,7 +12,7 @@ import { agentHref, botActivityHref, dmHref, triggersHref } from '@/lib/routes';
 import { hub, HubError, me, myConversations, type Agent, type AgentTrigger, type MyTools, type Schedule, type ScopedSkillView, type SkillSummaryView, type TriggerTypeGroup } from '@/lib/hub';
 import { ToolsSection, TriggersSection } from '@/components/ToolsSection';
 import { SkillsSection } from '@/components/SkillsSection';
-import { checkConnection, makeConnectionCode, makeConnectionToken, removeAgentTelegramBot, removeWake, setArchived, updateAgentTelegramBot, updateConnection, updateProfile, updateWake, wakeNow } from '@/lib/actions';
+import { addSiblingAgent, checkConnection, makeConnectionCode, makeConnectionToken, removeAgentTelegramBot, removeWake, setArchived, updateAgentTelegramBot, updateConnection, updateProfile, updateWake, wakeNow } from '@/lib/actions';
 import { hermesConnectCommand, openclawConnectCommand, pairingPrompt } from '@/lib/connect';
 import { HUB_PUBLIC_URL } from '@/lib/hub';
 import { readFlash } from '@/lib/actions/helpers';
@@ -175,6 +175,11 @@ export default async function AgentPage({ params, searchParams }: Props) {
                   <Link href={botActivityHref(ws, agent.id)} className="btn-ghost">
                     Conversations
                   </Link>
+                )}
+                {myMailbox && !agent.cloud && (
+                  <form action={addSiblingAgent.bind(null, agent.id, ws)}>
+                    <PendingButton className="btn-ghost">Add agent on this client</PendingButton>
+                  </form>
                 )}
                 {agent.kind !== 'human' && agent.ownerId === user?.id && !agent.archived && (
                   <form action={setArchived.bind(null, agentHref(ws, agent.id), agent.id, true)}>

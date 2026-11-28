@@ -204,6 +204,8 @@ export const MAX_LIVE_BOTS = 200;
 /** Pairing codes: 8 characters without look-alikes (no 0/O, 1/I/L), typed as XXXX-XXXX, good for 10 minutes. */
 const PAIRING_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 const PAIRING_TTL_MS = 10 * 60_000;
+/** How long a bot added "on this client" waits for that client to pick it up (Registry.createSibling). */
+const SIBLING_TTL_MS = 24 * 3_600_000;
 const normalizePairing = (code: string) => code.toUpperCase().replace(/[^0-9A-Z]/g, '');
 const EMAIL_RE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
 
@@ -520,11 +522,58 @@ export class Registry {
     const bot = agentId ? await this.requireSelfOrOwned(owner, agentId) : undefined;
     if (bot && bot.id === owner.id) throw new HubError('invalid', 'A pairing code is for a bot of yours, not for you');
     if (!bot) await this.checkBotCap(owner);
+    return this.makePairing(owner.id, name, bot?.id);
+  }
+
+  /** Stores a new pairing code's hash and returns the code. Callers check who may make it. */
+  private async makePairing(ownerId: string, name?: string, agentId?: string, siblingOf?: string): Promise<{ code: string; expiresAt: string }> {
     const raw = Array.from(randomBytes(8), (b) => PAIRING_ALPHABET[b % PAIRING_ALPHABET.length]).join('');
     const code = `${raw.slice(0, 4)}-${raw.slice(4)}`;
     const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
-    await this.agentStore.createPairing(hashToken(normalizePairing(code)), { ownerId: owner.id, expiresAt, ...(name?.trim() ? { name: name.trim() } : {}), ...(bot ? { agentId: bot.id } : {}) });
+    await this.agentStore.createPairing(hashToken(normalizePairing(code)), { ownerId, expiresAt, ...(name?.trim() ? { name: name.trim() } : {}), ...(agentId ? { agentId } : {}), ...(siblingOf ? { siblingOf } : {}) });
     return { code, expiresAt: expiresAt.toISOString() };
+  }
+
+  /**
+   * "Add agent on this client": the owner makes a new bot next to `parentId` (one of their bots), and
+   * the parent's own client (its router) picks it up with siblingPairings and connects it there.
+   * Nothing secret is stored on the parent: only the child's id, until the child is paired or SIBLING_TTL_MS passes.
+   */
+  async createSibling(owner: AgentRecord, parentId: string, name?: string): Promise<AgentRecord> {
+    if (!isSignedInPerson(owner)) throw new HubError('forbidden', 'Sign in to add agents');
+    const parent = await this.requireSelfOrOwned(owner, parentId);
+    if (parent.id === owner.id) throw new HubError('invalid', 'Add an agent next to one of your bots, not next to you');
+    if (parent.archived) throw new HubError('invalid', `${parent.name} is archived. Restore it first.`);
+    if (parent.cloud || parent.hosted || parent.kind === 'endpoint') throw new HubError('invalid', `${parent.name} doesn't run on a client of yours, so there is nothing to add an agent to.`);
+    const { agent } = await this.createBot(owner, { name: name?.trim() || `${cleanName(parent.name).slice(0, MAX_NAME - 2)} 2`, follow: true });
+    try {
+      await this.agentStore.addPendingSibling(parent.id, { agentId: agent.id, expiresAt: new Date(Date.now() + SIBLING_TTL_MS).toISOString() });
+    } catch (err) {
+      await this.agentStore.deleteAgent(agent.id, false);
+      throw err;
+    }
+    return agent;
+  }
+
+  /**
+   * The parent bot's own call: a fresh pairing code for each sibling still waiting for it. Entries stay until the
+   * child redeems one (any earlier code for it then stops working) or SIBLING_TTL_MS passes, so a lost answer is retried.
+   */
+  async siblingPairings(parentRecord: AgentRecord): Promise<{ agentId: string; name: string; code: string }[]> {
+    const parent = await this.get(parentRecord.id);
+    if (!parent?.ownerId) return [];
+    const now = Date.now();
+    const out: { agentId: string; name: string; code: string }[] = [];
+    for (const p of parent.pendingSiblings ?? []) {
+      if (Date.parse(p.expiresAt) <= now) continue;
+      const child = await this.get(p.agentId);
+      if (!child || child.ownerId !== parent.ownerId || child.archived) {
+        await this.agentStore.removePendingSibling(parent.id, p.agentId);
+        continue;
+      }
+      out.push({ agentId: child.id, name: child.name, code: (await this.makePairing(parent.ownerId, undefined, child.id, parent.id)).code });
+    }
+    return out;
   }
 
   /**
@@ -541,6 +590,10 @@ export class Registry {
       const bot = await this.get(pairing.agentId);
       if (!bot || bot.ownerId !== owner.id) throw new HubError('unauthorized', 'The connection this code was for no longer exists.');
       if (bot.archived) throw new HubError('forbidden', 'This bot is archived. Its owner can restore it.');
+      // A code from siblingPairings: only the first one redeemed for that child counts, so a second can't end its token.
+      if (pairing.siblingOf && !(await this.agentStore.removePendingSibling(pairing.siblingOf, bot.id).catch(() => false))) {
+        throw new HubError('unauthorized', 'That code is wrong, used or expired. Make a new one on the Connect page.');
+      }
       return { agent: bot, token: await this.rotateToken(bot) };
     }
     return this.createBot(owner, { name: pairing.name, follow: true }, clientIp);

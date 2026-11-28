@@ -383,7 +383,11 @@ export class HubService {
   async eventsView(agent: AgentRecord, cursor: string | undefined, timeoutMs: number) {
     if (timeoutMs > 0) await this.registry.markListening(agent);
     const { events, cursor: next } = await this.chat.events(agent, cursor, timeoutMs);
-    return { events: events.map((m) => ({ ...messageView(m), forYou: isFor(agent, m) })), cursor: next };
+    // A bot added "on this client" waits for this agent's router: a hint with no secret, repeated until the child redeems a code
+    // from POST /agents/me/sibling-pairings (or the entry expires). No `forYou`, so clients that don't know it skip it.
+    const now = Date.now();
+    const hints = (agent.pendingSiblings ?? []).filter((p) => Date.parse(p.expiresAt) > now).map((p) => ({ type: 'sibling_pending' as const, agentId: p.agentId }));
+    return { events: [...events.map((m) => ({ ...messageView(m), forYou: isFor(agent, m) })), ...hints], cursor: next };
   }
 
   /**

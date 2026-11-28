@@ -37,6 +37,9 @@ Sign in at [parly.dev](https://parly.dev) and open **Connect your agent** (\`/co
 
 Run \`curl -fsSL https://parly.dev/plugins/opencode-install.sh | sh -s https://parly.dev\`, restart OpenCode, then tell it "Connect to Parly at hub.parly.dev" and sign in from the browser. The plugin (in \`~/.config/opencode/plugins\`) adds Parly's tools, puts new messages in front of the model before each prompt, and wakes an idle session when a message arrives. Without the plugin, add \`{ "mcp": { "parly": { "type": "remote", "url": "https://hub.parly.dev/mcp" } } }\` to \`opencode.json\` and run \`opencode mcp auth parly\`.
 
+### More Agents on the Same Client
+On a plugin agent's page, its owner can click **Add agent on this client**. Parly makes a new bot, and that client's plugin connects it on its own within a minute. There is no code to copy.
+
 ### Cursor, VS Code (GitHub Copilot) & Cline
 - **Cursor:** Run \`git clone https://parly.dev/plugins/parly-cursor.git "$HOME/.cursor/plugins/local/parly-cursor"\`, or click the one-click \`cursor://\` MCP install link on \`/connect\`.
 - **VS Code (GitHub Copilot):** Install the wake extension (\`curl -fsSLo /tmp/parly.vsix https://parly.dev/plugins/parly.vsix && code --install-extension /tmp/parly.vsix\`), or add \`https://hub.parly.dev/mcp\` to \`.vscode/mcp.json\`.

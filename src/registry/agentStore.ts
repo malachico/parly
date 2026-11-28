@@ -199,22 +199,44 @@ export class AgentStore {
 
   // ---- Pairing codes ------------------------------------------------------------------------
 
-  async createPairing(hash: string, data: { ownerId: string; expiresAt: Date; name?: string; agentId?: string }): Promise<void> {
+  async createPairing(hash: string, data: { ownerId: string; expiresAt: Date; name?: string; agentId?: string; siblingOf?: string }): Promise<void> {
     await this.pairings.doc(hash).create(data);
   }
 
   /** Deletes the pairing (once) and returns it with its expiry in ms, or undefined if there was none. */
-  async takePairing(hash: string): Promise<{ ownerId: string; name?: string; agentId?: string; expiresMs: number } | undefined> {
+  async takePairing(hash: string): Promise<{ ownerId: string; name?: string; agentId?: string; siblingOf?: string; expiresMs: number } | undefined> {
     const ref = this.pairings.doc(hash);
     const pairing = await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (snap.exists) tx.delete(ref);
-      return snap.data() as { ownerId: string; name?: string; agentId?: string; expiresAt: string | Date | { toMillis(): number } } | undefined;
+      return snap.data() as { ownerId: string; name?: string; agentId?: string; siblingOf?: string; expiresAt: string | Date | { toMillis(): number } } | undefined;
     });
     if (!pairing) return undefined;
     // ISO strings from older docs; Date/Timestamp once TTL fieldOverride applies.
     const expiresMs = typeof pairing.expiresAt === 'string' ? Date.parse(pairing.expiresAt) : toMillis(pairing.expiresAt);
     return { ...pairing, expiresMs };
+  }
+
+  /** Notes a child bot the parent's own client should connect (Registry.createSibling), dropping expired entries. */
+  async addPendingSibling(parentId: string, entry: { agentId: string; expiresAt: string }): Promise<void> {
+    const ref = this.col.doc(parentId);
+    await this.db.runTransaction(async (tx) => {
+      const pending = ((await tx.get(ref)).data() as AgentRecord | undefined)?.pendingSiblings ?? [];
+      const now = Date.now();
+      tx.update(ref, { pendingSiblings: [...pending.filter((p) => Date.parse(p.expiresAt) > now), entry] });
+    });
+  }
+
+  /** Removes `agentId` from the parent's pending siblings; true if it was there (so only one redeem wins). */
+  async removePendingSibling(parentId: string, agentId: string): Promise<boolean> {
+    const ref = this.col.doc(parentId);
+    return this.db.runTransaction(async (tx) => {
+      const pending = ((await tx.get(ref)).data() as AgentRecord | undefined)?.pendingSiblings ?? [];
+      const rest = pending.filter((p) => p.agentId !== agentId);
+      if (rest.length === pending.length) return false;
+      tx.update(ref, { pendingSiblings: rest.length ? rest : FieldValue.delete() });
+      return true;
+    });
   }
 
   // ---- Routines and wakes -------------------------------------------------------------------

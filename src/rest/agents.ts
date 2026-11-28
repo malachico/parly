@@ -175,6 +175,24 @@ export function agentsRoutes(router: Router, hub: HubService): void {
     }),
   );
 
+  /** "Add agent on this client" (`{name?}`): the owner makes a new bot that bot :id's own client will connect. */
+  router.post(
+    '/agents/bots/:id/siblings',
+    requireAgent,
+    json(async (req, res) => {
+      const agent = await hub.registry.createSibling(agentOf(req)!, String(req.params.id), str(((req.body ?? {}) as Record<string, unknown>).name));
+      res.status(201);
+      return { agent: agentView(agent, agentOf(req)) };
+    }),
+  );
+
+  /** A bot's own call (its router, after a `sibling_pending` event): a fresh pairing code for each bot added on its client and not yet paired. */
+  router.post(
+    '/agents/me/sibling-pairings',
+    requireAgent,
+    json(async (req) => ({ pairings: await hub.registry.siblingPairings(agentOf(req)!) })),
+  );
+
   /** Bots the caller owns, archived ones included. */
   router.get(
     '/agents/bots',

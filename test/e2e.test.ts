@@ -625,6 +625,44 @@ describe('Google sign-in and email invites over HTTP', () => {
     }
   });
 
+  it('adds an agent on a client: owner creates, the parent gets codes until one connects the child', async () => {
+    const owner = (await call(undefined, 'POST', '/auth/google', { idToken: 'sib@example.com|g-sib' })).body.token as string;
+    const stranger = (await call(undefined, 'POST', '/auth/google', { idToken: 'sib-x@example.com|g-sib-x' })).body.token as string;
+    const parent = (await call(owner, 'POST', '/agents/bots', { name: 'Sib laptop', follow: true })).body;
+    const other = (await call(owner, 'POST', '/agents/bots', { name: 'Sib other', follow: true })).body;
+    const path = `/agents/bots/${parent.agent.id}/siblings`;
+    expect((await call(stranger, 'POST', path, { name: 'nope' })).status).toBe(404);
+    expect((await call(parent.token, 'POST', path, { name: 'nope' })).status).toBe(403);
+
+    const made = await call(owner, 'POST', path, { name: 'Sib child' });
+    expect(made.status).toBe(201);
+    const childId = made.body.agent.id as string;
+    const feed = await call(parent.token, 'GET', '/events');
+    expect(feed.body.events).toContainEqual({ type: 'sibling_pending', agentId: childId });
+    expect(JSON.stringify(feed.body)).not.toMatch(/code/i);
+
+    expect((await call(other.token, 'POST', '/agents/me/sibling-pairings')).body).toEqual({ pairings: [] });
+    const picked = await call(parent.token, 'POST', '/agents/me/sibling-pairings');
+    expect(picked.body.pairings).toEqual([{ agentId: childId, name: 'Sib child', code: expect.any(String) }]);
+    // Asked again before redeeming (a lost answer): still a usable code, and the hint stays.
+    const again = await call(parent.token, 'POST', '/agents/me/sibling-pairings');
+    expect(again.body.pairings).toEqual([{ agentId: childId, name: 'Sib child', code: expect.any(String) }]);
+    expect((await call(parent.token, 'GET', '/events')).body.events).toContainEqual({ type: 'sibling_pending', agentId: childId });
+    const redeemed = await call(undefined, 'POST', '/pairings/redeem', { code: again.body.pairings[0].code });
+    expect((await call(redeemed.body.token, 'GET', '/me')).body.id).toBe(childId);
+    expect((await call(parent.token, 'GET', '/events')).body.events).not.toContainEqual({ type: 'sibling_pending', agentId: childId });
+    expect((await call(parent.token, 'POST', '/agents/me/sibling-pairings')).body).toEqual({ pairings: [] });
+    expect((await call(undefined, 'POST', '/pairings/redeem', { code: picked.body.pairings[0].code })).status).toBe(401);
+
+    // No name: the button posts {}.
+    const unnamed = await call(owner, 'POST', path, {});
+    expect(unnamed.status).toBe(201);
+    expect(unnamed.body.agent.name).toBe('Sib laptop 2');
+    // Archived parent: refused.
+    expect((await call(owner, 'POST', `/agents/${other.agent.id}/archive`)).status).toBe(200);
+    expect((await call(owner, 'POST', `/agents/bots/${other.agent.id}/siblings`, {})).status).toBe(400);
+  });
+
   it('logs out one web session without touching others; rejects bad input', async () => {
     const a = (await call(undefined, 'POST', '/auth/google', { idToken: 'lin@example.com|g-lin' })).body.token as string;
     const b = (await call(undefined, 'POST', '/auth/google', { idToken: 'lin@example.com|g-lin' })).body.token as string;
