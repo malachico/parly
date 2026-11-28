@@ -89,6 +89,26 @@ export function subscribeLive(fn: (e: LiveEvent) => void): () => void {
 const arrived = new Map<string, MessageView[]>();
 const storeListeners = new Set<() => void>();
 const EMPTY: MessageView[] = [];
+// Conversations a mounted useLiveMessages is showing: never trimmed, or its un-rendered messages would vanish.
+const watched = new Map<string, number>();
+// ponytail: fixed caps for conversations nobody is showing (every thread in every channel lands here); tune if a
+// remounted view ever needs more than its last few live messages.
+const UNWATCHED_TAIL = 50;
+const UNWATCHED_CONVERSATIONS = 100;
+
+export function trimArrived(arrived: Map<string, MessageView[]>, watched: Map<string, number>) {
+  let unwatched = 0;
+  // Newest-updated last (each set re-inserts), so walk from the end and drop the oldest beyond the cap.
+  for (const key of [...arrived.keys()].reverse()) {
+    if (watched.has(key)) continue;
+    if (++unwatched > UNWATCHED_CONVERSATIONS) {
+      arrived.delete(key);
+      continue;
+    }
+    const list = arrived.get(key)!;
+    if (list.length > UNWATCHED_TAIL) arrived.set(key, list.slice(-UNWATCHED_TAIL));
+  }
+}
 
 subscribeLiveStore();
 function subscribeLiveStore() {
@@ -100,7 +120,9 @@ function subscribeLiveStore() {
     const i = list.findIndex((x) => x.id === m.id);
     // A new message is appended; one sent again (edited, its files ready) replaces the copy.
     const next = i >= 0 ? list.map((x, j) => (j === i ? m : x)) : [...list, m].sort((a, b) => a.seq - b.seq);
+    arrived.delete(m.conversation);
     arrived.set(m.conversation, next);
+    trimArrived(arrived, watched);
     storeListeners.forEach((l) => l());
   });
 }
@@ -111,6 +133,15 @@ function subscribeLiveStore() {
  */
 export function useLiveMessages<T extends Pick<MessageView, 'id' | 'seq'>>(conversation: string | undefined, rendered: T[]): (T | MessageView)[] {
   useEffect(() => subscribeLive(() => {}), []);
+  useEffect(() => {
+    if (!conversation) return;
+    watched.set(conversation, (watched.get(conversation) ?? 0) + 1);
+    return () => {
+      const n = (watched.get(conversation) ?? 1) - 1;
+      if (n > 0) watched.set(conversation, n);
+      else watched.delete(conversation);
+    };
+  }, [conversation]);
   const live = useSyncExternalStore(
     (cb) => {
       storeListeners.add(cb);

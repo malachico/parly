@@ -7,7 +7,6 @@ import type { People } from '@/components/Avatar';
 import { ChannelHeader } from '@/components/ChannelHeader';
 import { Composer } from '@/components/Composer';
 import { EscClose } from '@/components/EscClose';
-import { LIVE_REFRESH_EVENT } from '@/components/LiveRefresh';
 import { MarkRead, THREAD_READ_EVENT } from '@/components/MarkRead';
 import { PanelSkeleton } from '@/components/PanelSkeleton';
 import { JumpToLatest, LoadOlder, ScrollToBottom } from '@/components/ScrollToBottom';
@@ -18,6 +17,7 @@ import { ThreadHeader } from '@/components/ThreadHeader';
 import { ErrorNote } from '@/components/ui';
 import { markThreadRead, setThreadDone, setThreadPublic } from '@/lib/actions';
 import type { ActivityItem, Agent, Channel } from '@/lib/hub';
+import { subscribeLive } from '@/lib/live';
 import { chatHref, timelineParamsChanged, wsHref } from '@/lib/routes';
 import {
   createThreadNavController,
@@ -198,7 +198,7 @@ export function ChannelShell({
     }
   }, [controller, initialThread, replyCount]);
 
-  // Listen to browser Back/Forward (`popstate`) and `LiveRefresh` (the live stream from the hub).
+  // Listen to browser Back/Forward (`popstate`).
   useEffect(() => {
     const onPopState = () => {
       const next = controller.onPopState(window.location.search);
@@ -206,16 +206,23 @@ export function ChannelShell({
         router.replace(window.location.pathname + window.location.search, { scroll: false });
       }
     };
-    const onLiveRefresh = () => {
-      void controller.refreshActiveThread();
-    };
     window.addEventListener('popstate', onPopState);
-    window.addEventListener(LIVE_REFRESH_EVENT, onLiveRefresh);
-    return () => {
-      window.removeEventListener('popstate', onPopState);
-      window.removeEventListener(LIVE_REFRESH_EVENT, onLiveRefresh);
-    };
+    return () => window.removeEventListener('popstate', onPopState);
   }, [controller, router, isPanelReady]);
+
+  // The live stream: a reply in the open thread is appended from the event (others are ignored), and the channel's
+  // activity (its threads' items say which) updates the open thread's.
+  useEffect(
+    () =>
+      subscribeLive((e) => {
+        if (e.type === 'message' && e.message.conversation === `thread:${channel.id}:${e.message.thread}`) controller.recordLiveReply(e.message);
+        else if (e.type === 'activity' && e.conversation === `channel:${channel.id}`) {
+          const dest = controller.getDestination();
+          if (dest.kind === 'thread') controller.setThreadActivity(dest.threadId, e.activity.filter((a) => a.thread === dest.threadId));
+        }
+      }),
+    [controller, channel.id],
+  );
 
   // Sync external Next.js router navigations (e.g. ⌘K search hits) that change `useSearchParams()` on the same channel.
   const prevSearchRef = useRef(searchParams.toString());
@@ -391,7 +398,7 @@ export function ChannelShell({
             }
           />
           <div id="outbox-thread" />
-          <ThreadNextSchedule key={postId} ws={ws} conversationKey={conversationKey} channelId={channel.id} postId={postId} lastSeq={lastSeq} meId={me.id} people={mergedPeople} />
+          <ThreadNextSchedule key={postId} ws={ws} conversationKey={conversationKey} channelId={channel.id} postId={postId} scheduledSeq={open.replies.findLast((m) => m.scheduled)?.seq ?? 0} meId={me.id} people={mergedPeople} />
           <JumpToLatest target="thread-pane-scroll" />
         </div>
         <div className="px-3 pt-1 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4 sm:pb-4">

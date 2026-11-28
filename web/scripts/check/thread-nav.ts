@@ -286,6 +286,55 @@ void (async () => {
     'b-fresh-from-event',
     'Targeted refetch on a live event must update active thread cache with fresh replies',
   );
+  // Live replies: another thread's reply is ignored; one in the open thread is appended and counted unread.
+  const liveB = navCtrl.getCachedThread('post-b');
+  if (!liveB) throw new Error('post-b must be cached');
+  navCtrl.seedThread('post-b', { ...liveB, people: { bot: { id: 'bot', name: 'Bot' } } as ThreadPayload['people'] });
+  const liveReply = { ...liveB.replies[0], id: 'post-b-live', seq: 99, fromId: 'bot', text: 'live in B' };
+  navCtrl.recordLiveReply({ ...liveReply, id: 'post-x-live', thread: 'post-x' });
+  assert.equal(navCtrl.getCachedThread('post-b')?.replies.length, liveB.replies.length, 'Another thread reply must not touch the open thread');
+  navCtrl.recordLiveReply({ ...liveReply, thread: 'post-b' });
+  assert.equal(navCtrl.getCachedThread('post-b')?.replies.at(-1)?.text, 'live in B', 'Live reply in the open thread must append locally');
+  assert.equal(navCtrl.getCachedThread('post-b')?.unread, liveB.unread + 1, "Someone else's live reply must count as unread");
+  navCtrl.recordLiveReply({ ...liveReply, thread: 'post-b' });
+  assert.equal(navCtrl.getCachedThread('post-b')?.replies.length, liveB.replies.length + 1, 'The same live event twice must not append twice');
+  assert.equal(navCtrl.getCachedThread('post-b')?.unread, liveB.unread + 1, 'The same live event twice must not count unread twice');
+  navCtrl.updateThreadMeta('post-b', { done: true });
+  navCtrl.seedThread('post-b', { ...navCtrl.getCachedThread('post-b')!, people: { bot: { id: 'bot', name: 'Bot' }, me: { id: 'me', name: 'Malachi' } } as ThreadPayload['people'] });
+  navCtrl.recordLiveReply({ ...liveReply, id: 'post-b-mine', seq: 100, fromId: 'me', thread: 'post-b' });
+  assert.equal(navCtrl.getCachedThread('post-b')?.unread, liveB.unread + 1, 'My own live reply must not count as unread');
+  assert.equal(navCtrl.getCachedThread('post-b')?.done, false, 'A live reply reopens a done thread (the hub reopens it)');
+  navCtrl.seedThread('post-b', { ...navCtrl.getCachedThread('post-b')!, done: true });
+  assert.equal(navCtrl.getCachedThread('post-b')?.done, false, 'A stale seed must not mark the reopened thread done again');
+  // Someone it can't draw: fetched whole instead.
+  const fetchesBeforeStranger = threadBFetchCount;
+  navCtrl.recordLiveReply({ ...liveReply, id: 'post-b-stranger', seq: 101, fromId: 'stranger', thread: 'post-b' });
+  assert.equal(threadBFetchCount, fetchesBeforeStranger + 1, 'A live reply from someone not in people must refetch the thread');
+  await wait(10);
+  // setThreadActivity: replaces a cached thread's activity; a thread not cached is left alone.
+  const working = [{ agentId: 'bot', state: 'working', text: 'on it', thread: 'post-b', at: '2026-10-27T00:02:00Z' }] as ThreadPayload['activity'];
+  navCtrl.setThreadActivity('post-b', working);
+  assert.deepEqual(navCtrl.getCachedThread('post-b')?.activity, working, 'setThreadActivity must set a cached thread’s activity');
+  navCtrl.setThreadActivity('post-nowhere', working);
+  assert.equal(navCtrl.getCachedThread('post-nowhere'), undefined, 'setThreadActivity must not cache a thread it never loaded');
+  // A live reply while the open thread is still loading (not cached) fetches it whole.
+  const pendingFetches: string[] = [];
+  const loadingCtrl = createThreadNavController({
+    ws: 'ws1',
+    conversationKey: 'channel:ch1',
+    meId: 'me',
+    initialSearch: 'thread=post-l',
+    fetchThread: ({ threadId }) => {
+      pendingFetches.push(threadId);
+      return new Promise<ThreadPayload>(() => {});
+    },
+  });
+  loadingCtrl.navigate('/w/ws1/c/channel%3Ach1?thread=post-l');
+  const fetchesBeforeLive = pendingFetches.length;
+  loadingCtrl.recordLiveReply({ ...liveReply, thread: 'post-l' });
+  assert.equal(pendingFetches.length, fetchesBeforeLive + 1, 'A live reply for an uncached open thread must fetch it');
+  assert.equal(loadingCtrl.getCachedThread('post-l'), undefined, 'A live reply must not cache a thread it never loaded');
+  loadingCtrl.dispose();
 
   // 5f. Optimistic `done`/`shared` overrides + `markThreadSeen` cache persistence across A -> B -> A switches:
   const unreadPayload = {

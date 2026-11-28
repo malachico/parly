@@ -9,14 +9,14 @@ import { cadence, nextInThread } from '@/lib/labels';
 import { chatHref, triggersHref } from '@/lib/routes';
 
 /** A quiet line under a thread: its next scheduled message (viewer's local time), linking to where it's managed. */
-export function ThreadNextSchedule({ ws, conversationKey, channelId, postId, lastSeq, meId, people }: { ws: string; conversationKey: string; channelId: string; postId: string; lastSeq: number; meId: string; people: People }) {
+export function ThreadNextSchedule({ ws, conversationKey, channelId, postId, scheduledSeq, meId, people }: { ws: string; conversationKey: string; channelId: string; postId: string; scheduledSeq: number; meId: string; people: People }) {
   const [found, setFound] = useState<{ next: Schedule; more: number }>();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `lastSeq` only re-runs the fetch when a reply lands
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `scheduledSeq` re-runs the fetch when a scheduled message lands (its schedule moves on), not on every reply
   useEffect(() => {
     let live = true;
     threadSchedules(channelId).then((all) => live && setFound(nextInThread(all, postId))).catch(() => live && setFound(undefined));
     return () => { live = false; };
-  }, [channelId, postId, lastSeq]);
+  }, [channelId, postId, scheduledSeq]);
   if (!found) return null;
   const { next: s, more } = found;
   const who = s.agentId ?? s.ownerId;

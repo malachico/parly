@@ -375,6 +375,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - `no-trigger` prefix-then-substring match over the member list; fine for channels of tens.
 
+## `web/components/ChannelKnowledge.tsx`
+
+- unbounded per-tab caches, first page / summary only; refreshed on every open.
+
 ## `web/components/InlineMarkdown.tsx`
 
 - `no-trigger` bold, italics, code, strikethrough and links in one line; full markdown lives in the message itself (Thread.tsx)
@@ -418,6 +422,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ## `web/lib/live.ts`
 
+- fixed caps for conversations nobody is showing (every thread in every channel lands here); tune if a remounted view ever needs more than its last few live messages.
 - re-merges on every render; fine for a page of messages
 
 ## `web/lib/roomStatus.check.ts`
@@ -434,4 +439,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**155 markers, 33 with no trigger.**
+**156 markers, 33 with no trigger.**

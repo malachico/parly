@@ -192,6 +192,8 @@ export type ThreadNavController = {
   syncExternalSearch: (currentLocationSearch: string) => SideDestination;
   recordSentReply: (threadId: string, message: MessageView) => void;
   refreshActiveThread: () => Promise<void>;
+  recordLiveReply: (message: MessageView) => void;
+  setThreadActivity: (threadId: string, activity: ActivityItem[]) => void;
   loadOlderReplies: (threadId: string, step?: number) => Promise<void>;
   retryThread: (threadId?: string) => Promise<void>;
   updateThreadMeta: (threadId: string, patch: Partial<Pick<ThreadPayload, 'done' | 'shared' | 'unread'>>) => void;
@@ -379,6 +381,37 @@ export function createThreadNavController(options: ThreadNavControllerOptions): 
     refreshActiveThread: async () => {
       if (destination.kind !== 'thread') return;
       await fetchIntoCache(destination.threadId, replyLimits.get(keyFor(destination.threadId)));
+    },
+
+    // A live reply: appended to the open thread like a sent one, instead of refetching it; other threads are ignored.
+    recordLiveReply: (message: MessageView) => {
+      if (destination.kind !== 'thread' || message.thread !== destination.threadId) return;
+      const k = keyFor(destination.threadId);
+      const existing = cache.get(k);
+      // Not loaded yet, or from someone it can't draw: fetch it whole.
+      if (!existing || !existing.people[message.fromId]) {
+        void fetchIntoCache(destination.threadId, replyLimits.get(k));
+        return;
+      }
+      const isNew = !existing.replies.some((r) => r.id === message.id);
+      const next = appendReplyToThreadPayload(existing, message, meId);
+      if (isNew) {
+        // A new reply reopens a done thread on the hub; pinned so a stale seed can't mark it done before a refetch.
+        metaOverrides.set(k, { ...metaOverrides.get(k), done: false });
+        next.done = false;
+        // Someone else's new reply is unread, so the pane marks it read.
+        if (message.fromId !== meId) next.unread = existing.unread + 1;
+      }
+      cache.set(k, next);
+      notify();
+    },
+
+    setThreadActivity: (threadId: string, activity: ActivityItem[]) => {
+      const k = keyFor(threadId);
+      const existing = cache.get(k);
+      if (!existing) return;
+      cache.set(k, { ...existing, activity });
+      notify();
     },
 
     loadOlderReplies: async (threadId: string, step = DEFAULT_THREAD_REPLIES) => {

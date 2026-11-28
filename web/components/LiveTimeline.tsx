@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import { LIVE_REFRESH_EVENT } from '@/components/LiveRefresh';
 import { MarkRead, THREAD_READ_EVENT } from '@/components/MarkRead';
 import { ScrollToBottom } from '@/components/ScrollToBottom';
 import { Timeline } from '@/components/Thread';
@@ -65,7 +64,7 @@ export function LiveTimeline({ conversation, readKey, done, scroll, empty, messa
           return;
         }
         const m = e.message;
-        // A reply in one of this channel's threads: its post's summary counts it, and an open thread pane reloads.
+        // A reply in one of this channel's threads: its post's summary counts it (ChannelShell appends it to an open thread pane).
         if (m.thread && m.conversation.startsWith(`thread:${conversation.slice('channel:'.length)}:`) && !counted.current.has(m.id)) {
           counted.current.add(m.id);
           setLiveThreads((t) => {
@@ -85,7 +84,6 @@ export function LiveTimeline({ conversation, readKey, done, scroll, empty, messa
               },
             };
           });
-          window.dispatchEvent(new Event(LIVE_REFRESH_EVENT));
         }
       }),
     [conversation, meId],
