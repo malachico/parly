@@ -115,13 +115,23 @@ export function createRouter(client, { exec = spawnAsync, retryWaitMs = 3_000, o
   const waiting = new Map(); // key -> message ids
   const running = new Map(); // key -> its run
   const mentions = new Map(); // message id -> who it @mentions
+  const holding = new Map(); // key -> the ids its run has
   let max = 1;
+  // A root post goes to channel:<ch> and its replies to thread:<ch>:<post>. While the channel's session still has the
+  // post, its thread waits, so one session answers it rather than two.
+  // ponytail: the thread then gets its own session once the channel run ends; one key for both needs a hub-side
+  // thread-scoped check_inbox that can hand over the root without moving the channel's read position.
+  const heldBack = (key) => {
+    const [, ch, post] = /^thread:([^:]+):(.+)$/.exec(key) ?? [];
+    return !!ch && [...(waiting.get(`channel:${ch}`) ?? []), ...(holding.get(`channel:${ch}`) ?? [])].includes(post);
+  };
   const pump = () => {
     for (const [key, ids] of waiting) {
       if (running.size >= max) return;
-      if (running.has(key)) continue;
+      if (running.has(key) || heldBack(key)) continue;
       waiting.delete(key);
-      running.set(key, run(key, ids).catch(() => {}).finally(() => (running.delete(key), pump())));
+      holding.set(key, ids);
+      running.set(key, run(key, ids).catch(() => {}).finally(() => (running.delete(key), holding.delete(key), pump())));
     }
   };
   const later = (key, ids) => new Promise((r) => setTimeout(r, retryWaitMs)).then(() => waiting.set(key, [...ids, ...(waiting.get(key) ?? [])]));

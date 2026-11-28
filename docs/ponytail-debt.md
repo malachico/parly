@@ -30,6 +30,7 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `plugins/parly/bin/workers.mjs`
 
 - about 80k tokens; Claude Code fires 33k under this window (its 20k output and 13k summary reserves), so recheck if those move
+- the thread then gets its own session once the channel run ends; one key for both needs a hub-side thread-scoped check_inbox that can hand over the root without moving the channel's read position.
 - busy (an older Codex run still holds the thread) retries every retryWaitMs with no ceiling; back off if that ever spins
 - resets on that failure only; add a size/age cap if sessions start thrashing unnoticed.
 
@@ -433,4 +434,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**154 markers, 33 with no trigger.**
+**155 markers, 33 with no trigger.**

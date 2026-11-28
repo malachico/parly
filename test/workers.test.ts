@@ -71,6 +71,31 @@ describe('one session per conversation (plugins/parly/bin/workers.mjs)', () => {
     expect(router.idle()).toBe(true);
   });
 
+  it("holds a root post's thread until the channel session that has the post is done", async () => {
+    const dir = tmp();
+    process.env.A2A_HUB_CONFIG_DIR = dir;
+    fs.writeFileSync(path.join(dir, 'claude-code.json'), JSON.stringify({ hubUrl: 'http://127.0.0.1:9', token: 't', agentId: 'a', workers: settings }));
+    const runs: { key: string; end: () => void }[] = [];
+    const exec = (_c: string, _a: string[], o: { env: NodeJS.ProcessEnv }) => new Promise((resolve) => {
+      const key = String(o.env.PARLY_WORKER);
+      markRead('claude-code', key);
+      runs.push({ key, end: () => resolve({ status: 0, stdout: '{"is_error":false}', stderr: '' }) });
+    });
+    const router = createRouter('claude-code', { exec });
+    const tick = () => new Promise((r) => setTimeout(r, 20));
+    router.add([{ id: 'p1', conversation: 'channel:c1' }], settings, '/work');
+    await tick();
+    router.add([{ id: 'r1', conversation: 'thread:c1:p1' }, { id: 'r9', conversation: 'thread:c1:p9' }], settings, '/work');
+    await tick();
+    expect(runs.map((r) => r.key)).toEqual(['channel:c1', 'thread:c1:p9']); // p1's thread waits; p9's doesn't
+    runs[0]!.end();
+    await tick();
+    expect(runs.map((r) => r.key)).toEqual(['channel:c1', 'thread:c1:p9', 'thread:c1:p1']);
+    runs[1]!.end();
+    runs[2]!.end();
+    await router.drained();
+  });
+
   it("tells each session what the agent's other sessions are on", async () => {
     process.env.A2A_HUB_CONFIG_DIR = tmp();
     const at = new Date().toISOString();
