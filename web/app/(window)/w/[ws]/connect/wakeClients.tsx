@@ -1,11 +1,11 @@
 import Link from 'next/link';
-import { LiveRefresh } from '@/components/LiveRefresh';
 import { Step } from '@/components/Step';
 import { connectGrok, connectGrokBot, connectRoutine } from '@/lib/actions';
 import { defaultAgentName, dotsPrompt, grokBotPrompt, mcpUrl, ROUTINES_URL, routinePrompt } from '@/lib/connect';
 import { HUB_PUBLIC_URL, type Agent } from '@/lib/hub';
 import { agentHref } from '@/lib/routes';
 import { Code, type RoutineSetup } from './shared';
+import { RoutineWait } from './RoutineWait';
 import { PendingButton } from '@/components/PendingButton';
 
 /** OpenAI Dots: add Parly as the dot's connector (it signs in), then tell it to subscribe to new messages. */
@@ -93,8 +93,8 @@ export function RoutineConnect({ setup }: { setup?: RoutineSetup }) {
   if (waiting) {
     return (
       <div className="card space-y-2 border-[var(--accent)]">
-        {/* ponytail: LiveRefresh's fallback timer as the poll; it re-renders in place, no page reload. */}
-        <LiveRefresh fallbackMs={4000} />
+        {/* Polls /routines only; the page re-renders once, when the setup changes. */}
+        <RoutineWait setup={setup} />
         <p className="font-medium">The hub started the Routine. Waiting for its session to sign in…</p>
         <p className="muted">
           It usually takes under a minute.{' '}

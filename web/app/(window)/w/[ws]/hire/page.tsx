@@ -14,10 +14,9 @@ type Props = {
 export default async function HireAgentPage({ params, searchParams }: Props) {
   const { ws } = await params;
   const { error } = await searchParams;
-  const user = await meOrLogin();
+  const [user, usage] = await Promise.all([meOrLogin(), hub<UsageAllowance>('/me/usage').catch(() => undefined)]);
   const workspace = user.workspaces.find((w) => w.id === ws);
   if (!workspace || !user.hire) notFound();
-  const usage = await hub<UsageAllowance>('/me/usage').catch(() => undefined);
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-[var(--bg)]">

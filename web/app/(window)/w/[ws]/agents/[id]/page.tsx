@@ -39,14 +39,16 @@ export default async function AgentPage({ params, searchParams }: Props) {
     const f = await readFlash<{ id: string; token: string }>('flash_agent_token');
     if (f?.id === id) newToken = f.token;
   }
-  const found = await hub<Agent>(`/agents/${encodeURIComponent(id)}`).catch((err) => {
-    if (err instanceof HubError && err.status === 404) return undefined;
-    throw err;
-  });
+  const [found, user] = await Promise.all([
+    hub<Agent>(`/agents/${encodeURIComponent(id)}`).catch((err) => {
+      if (err instanceof HubError && err.status === 404) return undefined;
+      throw err;
+    }),
+    me(),
+  ]);
   // Archived bots are hidden from everyone, but their owner still has the full profile, to restore it.
   const agent = found ?? (await hub<Agent[]>('/agents/bots').catch(() => [] as Agent[])).find((b) => b.id === id);
   if (!agent) return <GoneProfile ws={ws} id={id} />;
-  const user = await me();
   // The owner of an A2A connection can check it and change its URL or credential here.
   const mine = !!agent.url && agent.kind !== 'human' && !!user && agent.ownerId === user.id;
   // The owner of a mailbox bot can have a webhook wake it.
@@ -63,7 +65,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
   const canManageSkills = Boolean(user && agent.kind !== 'human' && !agent.webhookChannel && (agent.ownerId === user.id || agent.id === user.id || user.admin));
   const showSkills = agent.kind !== 'human' && !agent.webhookChannel && !!user;
   // Everything below is independent, so it's asked for at once.
-  const [usage, triggers, tools, schedules, effectiveSkills, librarySkills, cardResult] = await Promise.all([
+  const [usage, triggers, tools, schedules, effectiveSkills, librarySkills, cardResult, allTriggerTypes] = await Promise.all([
     // The owner of an agent Parly runs (cloud or hosted) sees what it used this month.
     (agent.cloud || agent.hosted) && agent.ownerId === user?.id
       ? hub<{ calls: number; input: number; output: number; micros: number }>(`/agents/${aid}/usage`).catch(() => undefined)
@@ -85,10 +87,11 @@ export default async function AgentPage({ params, searchParams }: Props) {
           },
         )
       : {},
+    // What the owner's connected apps can tell this agent about (the "When something happens" picker); used below only with triggers.
+    ownsBot ? hub<TriggerTypeGroup[]>('/me/trigger-types').catch(() => [] as TriggerTypeGroup[]) : ([] as TriggerTypeGroup[]),
   ]);
   const { card, cardError } = cardResult as { card?: unknown; cardError?: string };
-  // What the owner's connected apps can tell this agent about (the "When something happens" picker).
-  const triggerTypes = triggers && tools?.triggers ? await hub<TriggerTypeGroup[]>('/me/trigger-types').catch(() => [] as TriggerTypeGroup[]) : [];
+  const triggerTypes = triggers && tools?.triggers ? allTriggerTypes : [];
   // Its tools and its triggers: on the profile, or each on its own (?only=tools|triggers, from the canvas card).
   const toolsCard = tools?.available && <ToolsSection ws={ws} agent={agent} tools={tools} query={toolQuery} hired={!!hired} error={only === 'tools' || !(tools.triggers && triggers) ? error : undefined} only={only === 'tools' ? 'tools' : undefined} />;
   const triggersCard = tools?.triggers && triggers && (

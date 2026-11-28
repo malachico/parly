@@ -21,6 +21,9 @@ declare global {
 
 const PLAN_NAMES = { free: 'Free', pro: 'Pro', team: 'Team' } as const;
 
+/** Why a checkout button is still disabled: Paddle.js hasn't loaded yet. */
+const PADDLE_LOADING = 'Checkout is still loading';
+
 /** Paddle.js, once per page, set up for this hub's environment. */
 function usePaddle(paddle: BillingView['paddle']): PaddleJs | undefined {
   const [ready, setReady] = useState<PaddleJs>();
@@ -124,11 +127,11 @@ export function BillingCard({
           <p className="font-semibold">Pro: $20/month</p>
           <p className="muted text-[13px]">1,500 credits a month (about 150 cloud-agent answers), 10 workspaces, 50 participants each, and top-ups when you need more.</p>
           <div className="mt-2.5 flex flex-wrap gap-2">
-            <button type="button" disabled={!paddle} onClick={() => checkout(prices.pro!, 'pro')} className="btn-primary">
+            <button type="button" disabled={!paddle} title={paddle ? undefined : PADDLE_LOADING} onClick={() => checkout(prices.pro!, 'pro')} className="btn-primary">
               Upgrade to Pro
             </button>
             {prices.proYearly && (
-              <button type="button" disabled={!paddle} onClick={() => checkout(prices.proYearly!, 'pro')} className="btn">
+              <button type="button" disabled={!paddle} title={paddle ? undefined : PADDLE_LOADING} onClick={() => checkout(prices.proYearly!, 'pro')} className="btn">
                 $200/year
               </button>
             )}
@@ -174,7 +177,7 @@ export function BillingCard({
             {Object.entries(prices.topups)
               .sort(([a], [b]) => Number(a) - Number(b))
               .map(([usd, priceId]) => (
-                <button key={priceId} type="button" disabled={!paddle} onClick={() => checkout(priceId, 'topup')} className="btn">
+                <button key={priceId} type="button" disabled={!paddle} title={paddle ? undefined : PADDLE_LOADING} onClick={() => checkout(priceId, 'topup')} className="btn">
                   {credits(Number(usd))} credits · ${usd}
                 </button>
               ))}
@@ -243,7 +246,7 @@ export function StartTeam({ billing, me }: { billing: BillingView; me: { id: str
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} className="input w-48" />
           </label>
           {seatsField}
-          <button type="button" disabled={!paddle || !name.trim() || pending} onClick={start} className="btn-primary">
+          <button type="button" disabled={!paddle || !name.trim() || pending} title={!paddle ? PADDLE_LOADING : !name.trim() ? 'Enter a company name' : undefined} onClick={start} className="btn-primary">
             Buy Team · ${25 * seats}/month
           </button>
         </div>
@@ -300,7 +303,7 @@ export function CompanyPool({
         : teamPrice && (
             <div className="flex flex-wrap items-center gap-2">
               {seatsField}
-              <button type="button" disabled={!paddle} onClick={() => buy(company.id, teamPrice, seats, 'team')} className="btn-primary">
+              <button type="button" disabled={!paddle} title={paddle ? undefined : PADDLE_LOADING} onClick={() => buy(company.id, teamPrice, seats, 'team')} className="btn-primary">
                 Buy Team · ${25 * seats}/month
               </button>
               <span className="muted text-[13px]">{credits(15 * seats)} pooled credits a month; your team gets Pro limits.</span>
@@ -311,7 +314,7 @@ export function CompanyPool({
           {Object.entries(topups)
             .sort(([a], [b]) => Number(a) - Number(b))
             .map(([usd, priceId]) => (
-              <button key={priceId} type="button" disabled={!paddle} onClick={() => buy(company.id, priceId, 1, 'pool', company.extraUsd)} className="btn">
+              <button key={priceId} type="button" disabled={!paddle} title={paddle ? undefined : PADDLE_LOADING} onClick={() => buy(company.id, priceId, 1, 'pool', company.extraUsd)} className="btn">
                 Add {credits(Number(usd))} credits · ${usd}
               </button>
             ))}
@@ -379,7 +382,7 @@ function useRefreshUntil(landed: boolean): boolean {
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     if (landed) return;
-    const tick = setInterval(() => router.refresh(), 2000);
+    const tick = setInterval(() => document.hidden || router.refresh(), 2000);
     const giveUp = setTimeout(() => (clearInterval(tick), setSlow(true)), 60_000);
     return () => (clearInterval(tick), clearTimeout(giveUp));
   }, [landed, router]);

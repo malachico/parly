@@ -31,10 +31,14 @@ export default async function Consent({ searchParams }: Props) {
     );
   }
 
+  // Both asked at once; each is still awaited (and its error thrown) where it was before.
+  const reqP = request ? hub<OAuthRequestView>(`/oauth/requests/${encodeURIComponent(request)}`) : Promise.resolve(undefined);
+  const botsP = request ? hub<Agent[]>('/agents/bots') : undefined;
+  botsP?.catch(() => {});
   let req: OAuthRequestView | undefined;
   let gone: string | undefined;
   try {
-    req = request ? await hub<OAuthRequestView>(`/oauth/requests/${encodeURIComponent(request)}`) : undefined;
+    req = await reqP;
   } catch (err) {
     if (!(err instanceof HubError) || err.status !== 404) throw err;
     gone = err.message;
@@ -47,7 +51,7 @@ export default async function Consent({ searchParams }: Props) {
     );
   }
 
-  const allBots = await hub<Agent[]>('/agents/bots');
+  const allBots = await botsP!;
   const bots = allBots.filter((b) => b.followsOwner && !b.archived);
   const first = user.name.trim().split(/\s+/)[0] || 'My';
   const suggested = `${first}'s ${req.client.name}`.slice(0, 64);

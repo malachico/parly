@@ -11,8 +11,9 @@ type PublicWorkspace = { workspace: { id: string; name: string }; channels: { id
 type Props = { params: Promise<{ ws: string }>; searchParams: Promise<{ join?: string }> };
 
 /** Read without anyone's token: a public workspace's front door is for everyone, signed in or not. */
+// Shared across visitors for 20s, like /p/[id]: the page is dynamic anyway (me() reads cookies).
 const load = cache((ws: string) =>
-  hub<PublicWorkspace>(`/public/workspaces/${encodeURIComponent(ws)}`, { as: '' }).catch((err) => {
+  hub<PublicWorkspace>(`/public/workspaces/${encodeURIComponent(ws)}`, { as: '', revalidate: 20 }).catch((err) => {
     if (err instanceof HubError && err.status === 404) notFound();
     throw err;
   }),

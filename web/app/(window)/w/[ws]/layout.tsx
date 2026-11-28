@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { CanvasBoundary } from '@/components/CanvasBoundary';
 import { CanvasHome } from '@/components/CanvasHome';
 import { CanvasSkeleton } from '@/components/CanvasSkeleton';
@@ -25,10 +25,14 @@ export default async function WorkspaceLayout({ children, params }: Props) {
   const { ws } = await params;
   const user = await meOrLogin();
   const workspace = user.workspaces.find((w) => w.id === ws);
-  if (!workspace) notFound();
+  if (!workspace) {
+    // proxy.ts sends "/" and "/connect" here from the cookie alone: a stale one (removed from it) falls back to /home's pick.
+    if ((await cookies()).get(WORKSPACE_COOKIE)?.value === ws) redirect('/home');
+    notFound();
+  }
   return (
     <>
-      <RememberWorkspace workspaceId={workspace.id} remembered={(await cookies()).get(WORKSPACE_COOKIE)?.value} />
+      <RememberWorkspace workspaceId={workspace.id} />
       {workspace.room ? (
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-clip">
           {/* Its own boundary: the chat never waits for the bar's data. */}

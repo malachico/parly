@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { authToken } from './lib/auth-cookie';
+import { WORKSPACE_COOKIE } from './lib/routes';
 const HUB_URL = (process.env.HUB_URL ?? 'http://localhost:8080').replace(/\/+$/, '');
 
 /**
@@ -14,8 +15,19 @@ export async function proxy(request: NextRequest) {
   // Talent moved out of Parly: it is Shyhire now.
   if (host.toLowerCase().split(':')[0] === 'talent.parly.dev') return NextResponse.redirect('https://shyhire.com');
   if (authToken(request.cookies, host)) {
-    // "/" is the static landing page; someone signed in gets their workspace instead (app/(window)/home), same query.
-    if (request.nextUrl.pathname !== '/') return NextResponse.next();
+    const { pathname } = request.nextUrl;
+    if (pathname !== '/' && pathname !== '/connect') return NextResponse.next();
+    // "/" and "/connect" go straight to the remembered workspace, same query, without a /me round trip. A stale
+    // cookie (removed from it) is sent back to /home by the workspace layout.
+    const remembered = request.cookies.get(WORKSPACE_COOKIE)?.value;
+    if (remembered) {
+      const to = request.nextUrl.clone();
+      to.pathname = `/w/${encodeURIComponent(remembered)}${pathname === '/' ? '' : '/connect'}`;
+      return NextResponse.redirect(to);
+    }
+    // No cookie: "/connect" picks one itself; "/" is the static landing page, so someone signed in gets
+    // their workspace instead (app/(window)/home), same query.
+    if (pathname !== '/') return NextResponse.next();
     const home = request.nextUrl.clone();
     home.pathname = '/home';
     return NextResponse.rewrite(home);
@@ -46,6 +58,7 @@ function safeDecode(s: string): string | undefined {
 export const config = {
   matcher: [
     '/',
+    '/connect',
     '/w/:ws/c/:key',
     '/c/:key',
     { source: '/((?!_next/|_vercel/|favicon.ico|icon.png|apple-icon.png|robots.txt|sitemap.xml|manifest.webmanifest).*)', has: [{ type: 'host', value: 'talent.parly.dev' }] },

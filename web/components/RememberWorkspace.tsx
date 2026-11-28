@@ -13,10 +13,10 @@ export function formatWorkspaceCookie(workspaceId: string): string {
 /**
  * Notes the open workspace in a cookie (a layout can't set one during RSC render), so "/", "/connect",
  * and legacy links come back here. Written synchronously to `document.cookie` on every workspace mount/change
- * (without gating on the server-rendered `remembered` prop, which stays stale in Next.js Router Cache when
- * switching back to a previously visited workspace, and without firing an extra Server Action POST).
+ * (not gated on the server-rendered cookie, which stays stale in Next.js Router Cache when switching back to a
+ * previously visited workspace, and without firing an extra Server Action POST).
  */
-export function RememberWorkspace({ workspaceId }: { workspaceId: string; remembered?: string }) {
+export function RememberWorkspace({ workspaceId }: { workspaceId: string }) {
   useEffect(() => {
     document.cookie = formatWorkspaceCookie(workspaceId);
   }, [workspaceId]);

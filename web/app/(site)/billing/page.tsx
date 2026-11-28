@@ -31,8 +31,8 @@ function InviteCard({ referrals, ws }: { referrals: number; ws?: string }) {
 }
 
 export default async function Billing({ searchParams }: Props) {
-  const user = await hubOrLogin<Me>('/me', { next: '/billing' });
-  const [{ error, asked, paid, had, pool: paidPool }, usage, billing, company, invites] = await Promise.all([
+  const [user, { error, asked, paid, had, pool: paidPool }, usage, billing, company, invites] = await Promise.all([
+    hubOrLogin<Me>('/me', { next: '/billing' }),
     searchParams,
     hub<UsageAllowance>('/me/usage').catch(() => undefined),
     myBilling().catch(() => undefined),

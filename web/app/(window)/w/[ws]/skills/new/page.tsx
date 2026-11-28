@@ -29,10 +29,14 @@ Explain the trigger or situation when the agent should use this skill.
 
 export default async function NewSkillPage({ params, searchParams }: Props) {
   const { ws } = await params;
-  const [{ error, type: rawType, scope: rawScope, scopeId }, user, allSkills] = await Promise.all([
+  const [{ error, type: rawType, scope: rawScope, scopeId }, user, allSkills, scopeAgent] = await Promise.all([
     searchParams,
     meOrLogin(),
     hub<SkillSummaryView[]>('/me/skills?type=skill').catch(() => [] as SkillSummaryView[]),
+    // The agent a skill is for (?scope=agent), asked for alongside the rest.
+    searchParams.then(({ scope, scopeId }) =>
+      scope === 'agent' && scopeId?.trim() ? hub<Agent>(`/agents/${encodeURIComponent(scopeId.trim())}`).catch(() => undefined) : undefined,
+    ),
   ]);
 
   const type: SkillType = rawType === 'process' ? 'process' : 'skill';
@@ -46,8 +50,7 @@ export default async function NewSkillPage({ params, searchParams }: Props) {
   let targetLabel: string | undefined;
   let returnTo: string | undefined;
   if (validScope === 'agent' && targetId) {
-    const a = await hub<Agent>(`/agents/${encodeURIComponent(targetId)}`).catch(() => undefined);
-    targetLabel = a ? `agent ${a.name}` : 'this agent';
+    targetLabel = scopeAgent ? `agent ${scopeAgent.name}` : 'this agent';
     returnTo = `${agentHref(ws, targetId)}#skills`;
   } else if (validScope === 'channel' && targetId) {
     const ch = user.workspaces.flatMap((w) => w.channels ?? []).find((c) => c.id === targetId);

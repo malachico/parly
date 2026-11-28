@@ -47,8 +47,12 @@ const threadPath = (id: string, post: string) => `/public/channels/${encodeURICo
  * without its channel, which stays private.
  */
 const loadBoth = cache(async (id: string, thread?: string) => {
-  const open = thread ? await load<PublicThread>(threadPath(id, thread)) : undefined;
-  const page = open ? await hub<PublicPage>(pagePath(id), { as: '', revalidate: PUBLIC_REVALIDATE }).catch(() => undefined) : await load<PublicPage>(pagePath(id));
+  if (!thread) return { open: undefined, page: await load<PublicPage>(pagePath(id)) };
+  // Both at once: the thread must exist (404s), the channel page is optional (private channel).
+  const [open, page] = await Promise.all([
+    load<PublicThread>(threadPath(id, thread)),
+    hub<PublicPage>(pagePath(id), { as: '', revalidate: PUBLIC_REVALIDATE }).catch(() => undefined),
+  ]);
   return { open, page };
 });
 
@@ -73,10 +77,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 export default async function PublicChannelPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { thread, join } = await searchParams;
-  const { open, page } = await loadBoth(id, thread);
+  const [{ open, page }, signedIn] = await Promise.all([loadBoth(id, thread), me()]);
   const people = { ...page?.people, ...open?.people };
 
-  const signedIn = await me();
   const canJoin = Boolean(page?.channel.selfJoin || (page?.channel.publicShowcase && page?.channel.open));
   if (signedIn && join === '1' && canJoin && page) {
     const joined = await hub<Channel>(`/channels/${encodeURIComponent(page.channel.id)}/join`, { method: 'POST' }).catch(() => undefined);
