@@ -23,7 +23,7 @@ export function ThreadNextSchedule({ ws, conversationKey, channelId, postId, sch
   const every = cadence(s);
   const href = s.ownerId === meId ? `${triggersHref(ws)}#schedule-${s.id}` : chatHref(ws, conversationKey, { thread: postId, panel: 'channel', section: 'automations' });
   return (
-    <Link href={href} className="mx-3 mb-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)] sm:mx-4">
+    <Link href={href} title={s.text} className="mx-3 mb-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)] sm:mx-4">
       <Avatar who={people[who] ?? { id: who }} className="size-5" presence={false} />
       <span className="truncate">
         {`⏰ Next: ${new Date(s.nextAt!).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`}
