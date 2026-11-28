@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar, type AvatarOf } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
@@ -14,6 +14,11 @@ import { useLiveMessages } from '@/lib/live';
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 type RenderedMessageRef = Pick<MessageView, 'id' | 'seq' | 'fromId' | 'text' | 'replyTo'>;
+
+// Stable defaults, so the memos below don't see a new empty array every render.
+const NO_STARTERS: string[] = [];
+const NO_MEMBERS: { id: string; name: string }[] = [];
+const NO_MESSAGES: RenderedMessageRef[] = [];
 
 export type OptimisticItem = {
   replyTo?: Quote;
@@ -137,7 +142,7 @@ type Attachment = {
  * in localStorage, so polling, navigation and reloads don't lose it. A failed send keeps the
  * text and offers Retry; text typed while a send is in flight stays.
  */
-export function Composer({ draftKey, workspaceId, to, channelId, thread, placeholder, autoFocus, starters = [], members = [], me, outbox, renderedMessages: fromPage = [], liveConversation, onSent }: Props) {
+export function Composer({ draftKey, workspaceId, to, channelId, thread, placeholder, autoFocus, starters = NO_STARTERS, members = NO_MEMBERS, me, outbox, renderedMessages: fromPage = NO_MESSAGES, liveConversation, onSent }: Props) {
   const renderedMessages = useLiveMessages(liveConversation, fromPage);
   const storage = `draft:${draftKey}`;
   const [text, setText] = useState('');
@@ -204,12 +209,16 @@ export function Composer({ draftKey, workspaceId, to, channelId, thread, placeho
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [active, setActive] = useState(0);
   // ponytail: prefix-then-substring match over the member list; fine for channels of tens.
-  const matches = mention
-    ? members
-        .filter((m) => m.name.toLowerCase().includes(mention.query))
-        .sort((a, b) => Number(!a.name.toLowerCase().startsWith(mention.query)) - Number(!b.name.toLowerCase().startsWith(mention.query)))
-        .slice(0, 6)
-    : [];
+  const matches = useMemo(
+    () =>
+      mention
+        ? members
+            .filter((m) => m.name.toLowerCase().includes(mention.query))
+            .sort((a, b) => Number(!a.name.toLowerCase().startsWith(mention.query)) - Number(!b.name.toLowerCase().startsWith(mention.query)))
+            .slice(0, 6)
+        : [],
+    [mention, members],
+  );
   const picking = matches.length > 0;
 
   function track(el: HTMLTextAreaElement) {
@@ -234,6 +243,21 @@ export function Composer({ draftKey, workspaceId, to, channelId, thread, placeho
   // Load the saved draft once per storage key; only after that draft settles start saving, so the initial empty state never overwrites it.
   const loadedFor = useRef<string | null>(null);
   const loadedText = useRef('');
+  // Saving is debounced (~500ms); the pending save is flushed when the key changes, on unmount and when the page hides.
+  const pendingDraft = useRef<{ key: string; text: string } | null>(null);
+  const flushDraft = useRef(() => {
+    const p = pendingDraft.current;
+    pendingDraft.current = null;
+    if (!p) return;
+    try {
+      if (p.text) localStorage.setItem(p.key, p.text);
+      else localStorage.removeItem(p.key);
+    } catch {}
+  }).current;
+  useEffect(() => {
+    window.addEventListener('pagehide', flushDraft);
+    return () => window.removeEventListener('pagehide', flushDraft);
+  }, [flushDraft]);
   useEffect(() => {
     loadedFor.current = null;
     let initial = '';
@@ -242,18 +266,18 @@ export function Composer({ draftKey, workspaceId, to, channelId, thread, placeho
     } catch {}
     loadedText.current = initial;
     setText(initial);
-  }, [storage]);
+    return flushDraft;
+  }, [storage, flushDraft]);
   useEffect(() => {
     if (loadedFor.current !== storage) {
       if (text !== loadedText.current) return;
       loadedFor.current = storage;
       return;
     }
-    try {
-      if (text) localStorage.setItem(storage, text);
-      else localStorage.removeItem(storage);
-    } catch {}
-  }, [storage, text]);
+    pendingDraft.current = { key: storage, text };
+    const timer = setTimeout(flushDraft, 500);
+    return () => clearTimeout(timer);
+  }, [storage, text, flushDraft]);
 
   // Grow with the text from one line up to ten (less on a short screen, so the thread stays visible), then it scrolls.
   // biome-ignore lint/correctness/useExhaustiveDependencies: text is the re-run trigger, not read here — re-measure the textarea height whenever the text changes
@@ -266,7 +290,10 @@ export function Composer({ draftKey, workspaceId, to, channelId, thread, placeho
   }, [text]);
 
   // Deduplicate during render so there is never a frame where both the server message and the optimistic bubble show.
-  const visibleOptimistic = pruneOptimisticMessages(optimistic, renderedMessages, me?.id, draftKey);
+  const visibleOptimistic = useMemo(
+    () => pruneOptimisticMessages(optimistic, renderedMessages, me?.id, draftKey),
+    [optimistic, renderedMessages, me?.id, draftKey],
+  );
   useEffect(() => {
     if (visibleOptimistic.length !== optimistic.length) {
       const keepIds = new Set(visibleOptimistic.map((o) => o.clientId));
@@ -303,6 +330,8 @@ export function Composer({ draftKey, workspaceId, to, channelId, thread, placeho
     // Clear the input and ready attachments immediately so typing is never blocked on the server round-trip.
     if (!retry || text === body) {
       setText('');
+      // Drop a not-yet-written save of the sent text, so it can't land after the draft is cleared.
+      pendingDraft.current = null;
       try {
         localStorage.removeItem(storage);
       } catch {}

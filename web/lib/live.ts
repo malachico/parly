@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import type { ActivityItem, MessageView } from '@/lib/hub';
 import { forgetTicket, ticket } from '@/lib/hubDirect';
 
@@ -14,6 +14,13 @@ let lastId = '';
 let epoch = 0;
 // The epoch a ticket is being asked for in: one from before a sign-out doesn't hold up the next person's.
 let opening = -1;
+// Counts stream errors (dropped or refused), so LiveRefresh can tell whether it missed events while hidden.
+let drops = 0;
+
+/** Whether the tab's stream is open now, and how many times it has dropped: LiveRefresh resyncs only after a gap. */
+export function liveState(): { open: boolean; drops: number } {
+  return { open: source?.readyState === 1, drops };
+}
 
 /**
  * One EventSource per tab, opened on the first subscriber, straight to the hub with the tab's ticket (lib/hubDirect).
@@ -62,6 +69,7 @@ async function connect(fresh = false) {
   });
   // A dropped connection retries by itself; a refused one (an old ticket) closes, so open again with a new ticket.
   s.addEventListener('error', () => {
+    drops++;
     if (s.readyState !== EventSource.CLOSED) return;
     source = undefined;
     // Never opened: the hub is unreachable from here, so back off rather than retry every 2 s.
@@ -150,9 +158,10 @@ export function useLiveMessages<T extends Pick<MessageView, 'id' | 'seq'>>(conve
     () => (conversation ? (arrived.get(conversation) ?? EMPTY) : EMPTY),
     () => EMPTY,
   );
-  if (!live.length) return rendered;
-  const byId = new Map<string, T | MessageView>(rendered.map((m) => [m.id, m]));
-  for (const m of live) byId.set(m.id, m);
-  // ponytail: re-merges on every render; fine for a page of messages
-  return [...byId.values()].sort((a, b) => a.seq - b.seq);
+  return useMemo(() => {
+    if (!live.length) return rendered;
+    const byId = new Map<string, T | MessageView>(rendered.map((m) => [m.id, m]));
+    for (const m of live) byId.set(m.id, m);
+    return [...byId.values()].sort((a, b) => a.seq - b.seq);
+  }, [live, rendered]);
 }

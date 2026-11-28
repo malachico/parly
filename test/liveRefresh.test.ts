@@ -6,6 +6,7 @@ const hooks = vi.hoisted(() => ({
   event: undefined as ((event: { type: string }) => void) | undefined,
   unsubscribe: vi.fn(),
   busy: false,
+  live: { open: true, drops: 0 },
 }));
 vi.mock('../web/node_modules/react', async (original) => ({
   ...await original<typeof import('react')>(),
@@ -17,12 +18,14 @@ vi.mock('../web/node_modules/next/navigation.js', () => ({ useRouter: () => ({ r
 vi.mock('@/lib/actions', () => ({ markConversationRead: vi.fn() }));
 vi.mock('@/lib/live', () => ({
   subscribeLive: (event: typeof hooks.event) => { hooks.event = event; return hooks.unsubscribe; },
+  liveState: () => hooks.live,
 }));
 
 afterEach(() => {
   hooks.cleanup?.();
   hooks.cleanup = undefined;
   hooks.busy = false;
+  hooks.live = { open: true, drops: 0 };
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -35,7 +38,7 @@ function visiblePage() {
   vi.stubGlobal('window', { dispatchEvent: vi.fn() });
 }
 
-it('LiveRefresh: live events never re-render the page; a tab shown again does, once', async () => {
+it('LiveRefresh: live events never re-render the page; a tab shown again after 30s, or after the stream dropped, does, once', async () => {
   visiblePage();
   const { LiveRefresh } = await import('../web/components/LiveRefresh.js');
   LiveRefresh({});
@@ -43,12 +46,25 @@ it('LiveRefresh: live events never re-render the page; a tab shown again does, o
   vi.advanceTimersByTime(60_000);
   expect(hooks.refresh).not.toHaveBeenCalled();
   const onVisible = vi.mocked(document.addEventListener).mock.calls.find(([type]) => type === 'visibilitychange')![1] as () => void;
-  (document as { visibilityState: string }).visibilityState = 'hidden';
+  const page = document as { visibilityState: string };
+  page.visibilityState = 'hidden';
+  onVisible();
+  vi.advanceTimersByTime(5_000);
+  page.visibilityState = 'visible';
   onVisible();
   expect(hooks.refresh).not.toHaveBeenCalled();
-  (document as { visibilityState: string }).visibilityState = 'visible';
+  page.visibilityState = 'hidden';
+  onVisible();
+  vi.advanceTimersByTime(31_000);
+  page.visibilityState = 'visible';
   onVisible();
   expect(hooks.refresh).toHaveBeenCalledTimes(1);
+  page.visibilityState = 'hidden';
+  onVisible();
+  hooks.live = { open: true, drops: 1 };
+  page.visibilityState = 'visible';
+  onVisible();
+  expect(hooks.refresh).toHaveBeenCalledTimes(2);
   hooks.cleanup?.();
   expect(vi.getTimerCount()).toBe(0);
 });

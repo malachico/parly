@@ -108,13 +108,23 @@ export function ScrollToBottom({ count, latest, target, focusId }: { count: numb
       const first = [...el.querySelectorAll<HTMLElement>('[id^="msg-"]')].find((m) => m.getBoundingClientRect().bottom > top);
       anchor.current = first ? { id: first.id, offset: first.getBoundingClientRect().top - top } : undefined;
     };
-    el.addEventListener('scroll', track, { passive: true });
+    // Measure at most once a frame, not on every scroll event.
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        track();
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
     // Where opening left it (at a focused message, say), even if the reader hasn't scrolled yet; again once it settles.
     const settle = setTimeout(track, 2100);
     requestAnimationFrame(track);
     return () => {
       clearTimeout(settle);
-      el.removeEventListener('scroll', track);
+      cancelAnimationFrame(frame);
+      el.removeEventListener('scroll', onScroll);
     };
   }, [target]);
 

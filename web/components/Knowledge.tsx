@@ -1,15 +1,18 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { styleOf } from '@/components/graph/NeighbourMap';
 import { WorkspaceGraph } from '@/components/graph/WorkspaceGraph';
 import { Icon } from '@/components/Icon';
-import { KnowledgeDrawer } from '@/components/KnowledgeDrawer';
 import { type GraphEntries, type GraphEntry, listGraphEntries } from '@/lib/actions/graph';
 import { appendPage, groupByKind, isFillingIn, KIND_LABEL, KNOWLEDGE_KINDS, type KnowledgeKind, searchQuery } from '@/lib/knowledge';
 import { plural } from '@/lib/plural';
 import { knowledgeHref } from '@/lib/routes';
+
+// Opens only on ?entry=, so its code loads on first open instead of with the page.
+const KnowledgeDrawer = dynamic(() => import('@/components/KnowledgeDrawer').then((m) => m.KnowledgeDrawer), { ssr: false });
 
 const pill = (active: boolean) =>
   `inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${active ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-ink)]' : 'border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--subtle)] hover:text-[var(--fg)]'}`;

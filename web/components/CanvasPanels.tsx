@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { Icon } from '@/components/Icon';
-import { Markdown } from '@/components/Thread';
+import { Markdown } from '@/components/Markdown';
 import {
   markCanvasWaitingRead,
   fetchAgentDay,
@@ -22,6 +22,10 @@ import { shortTime, statusStale } from '@/lib/labels';
 import { presenceLabel } from '@/lib/presence';
 import { agentHref, channelHref, chatHref, dmHref } from '@/lib/routes';
 import { Tip } from '@/components/Tip';
+import { RowSkeleton } from '@/components/PanelSkeleton';
+
+// First page of each agent's log, so reopening a drawer shows it at once while it refreshes.
+const dayCache = new Map<string, AgentDayView>();
 
 // crew-canvas/palette.ts still imports it from here.
 export { presenceLabel };
@@ -151,25 +155,52 @@ export function AgentDayDrawer({
   channelNames: Map<string, string>;
   onClose: () => void;
 }) {
-  const [day, setDay] = useState<AgentDayView | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [day, setDay] = useState<AgentDayView | null>(() => dayCache.get(agent.id) ?? null);
+  const [loading, setLoading] = useState(() => !dayCache.has(agent.id));
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [older, setOlder] = useState<AgentStatus[]>([]);
   const [next, setNext] = useState<string | undefined>();
   const [loadingMore, setLoadingMore] = useState(false);
   const end = useRef<HTMLLIElement | null>(null);
+  // Bumped per agent/retry: stale load-more answers are dropped, and once paged the refresh doesn't rewind.
+  const gen = useRef(0);
+  const paged = useRef(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retry is the re-run trigger — "Try again" refetches
   useEffect(() => {
-    setLoading(true);
+    const cached = dayCache.get(agent.id);
+    let live = true;
+    gen.current++;
+    paged.current = false;
+    setLoadingMore(false);
+    setDay(cached ?? null);
+    setLoading(!cached);
+    setFailed(false);
     setOlder([]);
-    setNext(undefined);
-    void fetchAgentDay(agent.id).then((res) => {
-      if (res.ok) {
-        setDay(res.day);
-        setNext(res.day.next);
-      }
-      setLoading(false);
-    });
-  }, [agent.id]);
+    setNext(cached?.next);
+    const fail = () => live && !cached && setFailed(true);
+    fetchAgentDay(agent.id).then(
+      (res) => {
+        if (!live) return;
+        if (res.ok) {
+          dayCache.set(agent.id, res.day);
+          if (!paged.current) {
+            setDay(res.day);
+            setNext(res.day.next);
+          }
+        } else fail();
+        setLoading(false);
+      },
+      () => {
+        fail();
+        if (live) setLoading(false);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [agent.id, retry]);
 
   // Scrolling to the end loads the next 20, older.
   useEffect(() => {
@@ -178,8 +209,11 @@ export function AgentDayDrawer({
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       io.disconnect();
+      const g = gen.current;
+      paged.current = true;
       setLoadingMore(true);
       void fetchAgentDay(agent.id, next).then((res) => {
+        if (g !== gen.current) return;
         if (res.ok) {
           setOlder((o) => [...o, ...res.day.updates]);
           setNext(res.day.next);
@@ -220,7 +254,16 @@ export function AgentDayDrawer({
 
       <ol className="m-0 flex min-h-0 flex-1 list-none flex-col overflow-y-auto px-5 py-4">
         {loading ? (
-          <li className="py-6 text-center text-sm text-[var(--muted)]">Loading {agent.name}&apos;s updates…</li>
+          <li>
+            <RowSkeleton label={`Loading ${agent.name}'s updates…`} rows={4} />
+          </li>
+        ) : failed ? (
+          <li role="alert" className="flex flex-col items-center gap-3 py-6 text-center text-sm text-[var(--muted)]">
+            Couldn&apos;t load {agent.name}&apos;s updates.
+            <button type="button" className="btn-ghost" onClick={() => setRetry((r) => r + 1)}>
+              Try again
+            </button>
+          </li>
         ) : updates.length === 0 ? (
           <li className="py-6 text-center text-sm text-[var(--muted)]">No updates posted in the last week.</li>
         ) : (

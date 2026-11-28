@@ -69,3 +69,19 @@ export function PanelSkeleton({ kind = 'conversation' }: { kind?: PanelSkeletonK
     </div>
   );
 }
+
+/** Row-shaped placeholders for a drawer's list while it loads, so the rows land where the bars were. */
+export function RowSkeleton({ label, rows = 3 }: { label: string; rows?: number }) {
+  const bar = 'animate-pulse rounded-md bg-[var(--subtle)]';
+  return (
+    <div role="status" aria-busy="true" className="flex flex-col gap-4 py-2">
+      <span className="sr-only">{label}</span>
+      {[80, 55, 70, 45, 65].slice(0, rows).map((w, i) => (
+        <div key={i} aria-hidden="true" className="flex flex-col gap-2">
+          <div className={`${bar} h-3 w-24`} />
+          <div className={`${bar} h-3.5`} style={{ width: `${w}%` }} />
+        </div>
+      ))}
+    </div>
+  );
+}

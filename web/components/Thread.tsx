@@ -1,19 +1,20 @@
 import Link from 'next/link';
 import { QuotePreview, QuoteReplyTarget } from '@/components/MessageQuote';
-import { createElement, useMemo } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { memo } from 'react';
 import { Avatar, type AvatarOf, type People } from '@/components/Avatar';
 import { Clamp } from '@/components/Clamp';
-import { CopyButton } from '@/components/CopyButton';
 import { ImagePreview } from '@/components/ImagePreview';
+import { Markdown, type Mentioned } from '@/components/Markdown';
+import { DoneButton } from '@/components/DoneButton';
 import type { ActivityItem, MessageView } from '@/lib/hub';
 import { seenMarks } from '@/lib/receipts';
 import { DayLabel, LocalTime } from '@/components/LocalTime';
 import { continues, dayLabel, shortTime, formatSize } from '@/lib/labels';
 import { agentHref, dmHref, skillsHref } from '@/lib/routes';
-import { PendingButton } from '@/components/PendingButton';
 import { plural } from '@/lib/plural';
+
+/** A stable default, so memoized rows don't see a new `people` every render. */
+const NO_PEOPLE: People = {};
 
 const whoOf = (people: People, id: string): AvatarOf => people[id] ?? { id };
 
@@ -31,7 +32,7 @@ export function Timeline({
   meId,
   hrefBase,
   ws,
-  people = {},
+  people = NO_PEOPLE,
   seen = {},
   threads,
   activity,
@@ -84,78 +85,135 @@ export function Timeline({
         );
         const seenIds = (marks.get(m.id) ?? []).filter((id) => !activeIds.has(id));
         return (
-          <li key={m.id}>
-            <DayDivider at={m.at} prev={prev?.at} />
-            <MessageRow
-              quoteKey={quoteKey}
-              m={m}
-              meId={meId}
-              ws={ws}
-              people={people}
-              grouped={!(prev && channel && threads?.[prev.id]) && continues(prev, m)}
-              action={
-                channel && (
-                  <div className="flex items-center gap-2">
-                    {canToggleDone && (
-                      <form action={onToggleDone!(m.id, !isDone)} className="inline">
-                        <PendingButton
-                          type="submit"
-                          className="cursor-pointer text-xs font-medium text-[var(--muted)] hover:text-[var(--accent)]"
-                          title={isDone ? 'Reopen thread' : 'Mark thread as done'}
-                        >
-                          {isDone ? 'Reopen' : '✓ Done'}
-                        </PendingButton>
-                      </form>
-                    )}
-                    <Link href={href} scroll={false} prefetch={false} className="text-xs font-medium text-[var(--muted)] hover:text-[var(--accent)]">
-                      Reply in thread
-                    </Link>
-                  </div>
-                )
-              }
-            >
-              {(seenIds.length > 0 || threadAct.length > 0) && (
-                <div className="mt-1 flex flex-wrap items-center justify-end gap-1.5">
-                  <SeenBy ids={seenIds} people={people} ws={ws} />
-                  <ActivityBar items={threadAct} people={people} hrefBase={channel ? hrefBase : undefined} ws={ws} />
-                </div>
-              )}
-              {sum ? (
-                <Link href={href} scroll={false} prefetch={false} className="mt-1 flex w-fit flex-wrap items-center gap-2 rounded-md py-0.5 text-sm hover:underline">
-                  {isDone && <span className="chip text-[var(--ok-fg)]">✓ Done</span>}
-                  <span className="flex -space-x-1.5">
-                    {sum.people.map((id) => (
-                      <Avatar key={id} who={whoOf(people, id)} className="size-5" halo="var(--bg)" />
-                    ))}
-                  </span>
-                  <span className="font-semibold text-[var(--accent)]">
-                    {plural(sum.count, 'reply', 'replies')}
-                  </span>
-                  {(sum.unread ?? 0) > 0 && (
-                    <span className="rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[11px] leading-none font-bold text-white">{sum.unread} new</span>
-                  )}
-                  <span className="text-xs text-[var(--muted)]">Last reply {shortTime(sum.lastAt)}</span>
-                </Link>
-              ) : (
-                channel && (
-                  <Link
-                    href={href}
-                    scroll={false}
-                    prefetch={false}
-                    className="mt-1 flex w-fit flex-wrap items-center gap-2 rounded-md py-0.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--accent)] hover:underline"
-                  >
-                    {isDone && <span className="chip text-[var(--ok-fg)]">✓ Done</span>}
-                    <span>Reply</span>
-                  </Link>
-                )
-              )}
-            </MessageRow>
-          </li>
+          <TimelineItem
+            key={m.id}
+            m={m}
+            prevAt={prev?.at}
+            meId={meId}
+            ws={ws}
+            people={people}
+            grouped={!(prev && channel && threads?.[prev.id]) && continues(prev, m)}
+            href={href}
+            sum={sum}
+            isDone={isDone}
+            channel={channel}
+            hrefBase={hrefBase}
+            onToggleDone={canToggleDone ? onToggleDone : undefined}
+            seenIds={seenIds}
+            threadAct={threadAct}
+            quoteKey={quoteKey}
+          />
         );
       })}
     </ol>
   );
 }
+
+/** Shallow prop equality, with arrays compared item by item (the rows' id/activity lists are rebuilt each render). */
+function sameProps<P extends object>(a: P, b: P): boolean {
+  const ka = Object.keys(a) as (keyof P)[];
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => {
+    const x = a[k], y = b[k];
+    return x === y || (Array.isArray(x) && Array.isArray(y) && x.length === y.length && x.every((v, i) => v === y[i]));
+  });
+}
+
+/** One Timeline row; memoized so a new or updated message re-renders only its own row. */
+const TimelineItem = memo(function TimelineItem({
+  m,
+  prevAt,
+  meId,
+  ws,
+  people,
+  grouped,
+  href,
+  sum,
+  isDone,
+  channel,
+  hrefBase,
+  onToggleDone,
+  seenIds,
+  threadAct,
+  quoteKey,
+}: {
+  m: MessageView;
+  prevAt?: string;
+  meId: string;
+  ws?: string;
+  people: People;
+  grouped: boolean;
+  href: string;
+  sum?: ThreadSummary;
+  isDone: boolean;
+  channel?: boolean;
+  hrefBase: string;
+  /** Set only when the viewer may toggle this thread. */
+  onToggleDone?: (postId: string, done: boolean) => (formData: FormData) => void | Promise<void>;
+  seenIds: string[];
+  threadAct: ActivityItem[];
+  quoteKey?: string;
+}) {
+  return (
+    <li>
+      <DayDivider at={m.at} prev={prevAt} />
+      <MessageRow
+        quoteKey={quoteKey}
+        m={m}
+        meId={meId}
+        ws={ws}
+        people={people}
+        grouped={grouped}
+        action={
+          channel && (
+            <div className="flex items-center gap-2">
+              {onToggleDone && <DoneButton done={isDone} action={onToggleDone(m.id, !isDone)} />}
+            <Link href={href} scroll={false} prefetch={false} className="text-xs font-medium text-[var(--muted)] hover:text-[var(--accent)]">
+                Reply in thread
+              </Link>
+            </div>
+          )
+        }
+      >
+        {(seenIds.length > 0 || threadAct.length > 0) && (
+          <div className="mt-1 flex flex-wrap items-center justify-end gap-1.5">
+            <SeenBy ids={seenIds} people={people} ws={ws} />
+            <ActivityBar items={threadAct} people={people} hrefBase={channel ? hrefBase : undefined} ws={ws} />
+          </div>
+        )}
+        {sum ? (
+          <Link href={href} scroll={false} prefetch={false} className="mt-1 flex w-fit flex-wrap items-center gap-2 rounded-md py-0.5 text-sm hover:underline">
+            {isDone && <span className="chip text-[var(--ok-fg)]">✓ Done</span>}
+            <span className="flex -space-x-1.5">
+              {sum.people.map((id) => (
+                <Avatar key={id} who={whoOf(people, id)} className="size-5" halo="var(--bg)" />
+              ))}
+            </span>
+            <span className="font-semibold text-[var(--accent)]">
+              {plural(sum.count, 'reply', 'replies')}
+            </span>
+            {(sum.unread ?? 0) > 0 && (
+              <span className="rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[11px] leading-none font-bold text-white">{sum.unread} new</span>
+            )}
+            <span className="text-xs text-[var(--muted)]">Last reply {shortTime(sum.lastAt)}</span>
+          </Link>
+        ) : (
+          channel && (
+            <Link
+              href={href}
+              scroll={false}
+              prefetch={false}
+              className="mt-1 flex w-fit flex-wrap items-center gap-2 rounded-md py-0.5 text-xs font-medium text-[var(--muted)] hover:text-[var(--accent)] hover:underline"
+            >
+              {isDone && <span className="chip text-[var(--ok-fg)]">✓ Done</span>}
+              <span>Reply</span>
+            </Link>
+          )
+        )}
+      </MessageRow>
+    </li>
+  );
+}, sameProps);
 
 /** "Codex is reading…", or "Codex is working: running the tests…". */
 function formatActivity(a: ActivityItem, people: People): string {
@@ -233,7 +291,7 @@ export function ThreadView({
   replies,
   meId,
   ws,
-  people = {},
+  people = NO_PEOPLE,
   seen = {},
   activity,
   older,
@@ -274,22 +332,57 @@ export function ThreadView({
           const replyAct = isLast ? threadAct : [];
           const seenIds = (marks.get(r.id) ?? []).filter((id) => !activeIds.has(id));
           return (
-            <li key={r.id}>
-              <MessageRow quoteKey={quoteKey} m={r} meId={meId} ws={ws} people={people} grouped={continues(replies[i - 1], r)}>
-                {(seenIds.length > 0 || replyAct.length > 0) && (
-                  <div className="mt-1 flex flex-wrap items-center justify-end gap-1.5">
-                    <SeenBy ids={seenIds} people={people} ws={ws} />
-                    <ActivityBar items={replyAct} people={people} ws={ws} />
-                  </div>
-                )}
-              </MessageRow>
-            </li>
+            <ReplyItem
+              key={r.id}
+              m={r}
+              meId={meId}
+              ws={ws}
+              people={people}
+              grouped={continues(replies[i - 1], r)}
+              seenIds={seenIds}
+              replyAct={replyAct}
+              quoteKey={quoteKey}
+            />
           );
         })}
       </ol>
     </div>
   );
 }
+
+/** One reply in ThreadView, memoized like TimelineItem. */
+const ReplyItem = memo(function ReplyItem({
+  m,
+  meId,
+  ws,
+  people,
+  grouped,
+  seenIds,
+  replyAct,
+  quoteKey,
+}: {
+  m: MessageView;
+  meId: string;
+  ws?: string;
+  people: People;
+  grouped: boolean;
+  seenIds: string[];
+  replyAct: ActivityItem[];
+  quoteKey?: string;
+}) {
+  return (
+    <li>
+      <MessageRow quoteKey={quoteKey} m={m} meId={meId} ws={ws} people={people} grouped={grouped}>
+        {(seenIds.length > 0 || replyAct.length > 0) && (
+          <div className="mt-1 flex flex-wrap items-center justify-end gap-1.5">
+            <SeenBy ids={seenIds} people={people} ws={ws} />
+            <ActivityBar items={replyAct} people={people} ws={ws} />
+          </div>
+        )}
+      </MessageRow>
+    </li>
+  );
+}, sameProps);
 
 /** Between two messages from different days. Placed here on the server; its label is the reader's day (DayLabel). */
 function DayDivider({ at, prev }: { at: string; prev?: string }) {
@@ -524,112 +617,11 @@ function Files({ files }: { files: NonNullable<MessageView['files']> }) {
   );
 }
 
-type Mentioned = { label: string; me: boolean };
-
 /** What a message's mentions may be written as: each person's display name and id, longest first. */
 function mentionedIn(m: MessageView, people: People, meId: string): Mentioned[] {
   return (m.mentions ?? [])
     .flatMap((id) => [people[id]?.name, id].filter((x): x is string => Boolean(x)).map((label) => ({ label, me: id === meId })))
     .sort((a, b) => b.label.length - a.label.length);
-}
-
-type MdNode = { type: string; value?: string; children?: MdNode[]; data?: { hName?: string; hProperties?: Record<string, string> } };
-
-/**
- * A remark plugin that turns each "@Name" of a mentioned person into a chip, with the hub's boundaries
- * (src/hub/mentions.ts) so an email address stays text. Code and links are left as written.
- */
-function remarkMentions(mentioned: Mentioned[]) {
-  const escape = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = mentioned.length ? new RegExp(`(?<![\\p{L}\\p{N}_.])@(?:${mentioned.map((x) => escape(x.label)).join('|')})(?![\\p{L}\\p{N}_-])`, 'giu') : null;
-  const chip = (text: string): MdNode => {
-    const me = mentioned.some((x) => x.me && x.label.toLowerCase() === text.slice(1).toLowerCase());
-    return { type: 'mention', data: { hName: 'span', hProperties: { className: me ? 'mention mention-me' : 'mention' } }, children: [{ type: 'text', value: text }] };
-  };
-  const split = (value: string): MdNode[] => {
-    const out: MdNode[] = [];
-    let last = 0;
-    for (const hit of value.matchAll(re!)) {
-      const at = hit.index ?? 0;
-      if (at > last) out.push({ type: 'text', value: value.slice(last, at) });
-      out.push(chip(hit[0]));
-      last = at + hit[0].length;
-    }
-    if (last < value.length) out.push({ type: 'text', value: value.slice(last) });
-    return out;
-  };
-  const walk = (node: MdNode) => {
-    if (!re || !node.children || node.type === 'link') return;
-    node.children = node.children.flatMap((c) => {
-      if (c.type === 'text' && c.value) return split(c.value);
-      walk(c);
-      return [c];
-    });
-  };
-  return () => (tree: unknown) => walk(tree as MdNode);
-}
-
-/** No raw HTML: react-markdown escapes it, so agent text can't inject markup. */
-/** The words of a markdown node (its hast tree), for working out its direction: inline code (a path, a URL) isn't language. */
-type HastNode = { type?: string; tagName?: string; value?: string; children?: HastNode[] };
-const nodeText = (n?: HastNode): string => (n?.type === 'text' ? (n.value ?? '') : n?.tagName === 'code' ? '' : (n?.children ?? []).map(nodeText).join(''));
-
-/**
- * Hebrew and English mix in one chat: every block takes its direction from its own letters, so a Hebrew line that
- * opens with "Parly" or "@name" stays right-to-left and an English one in a Hebrew message left-to-right. A block with
- * no letters (a hash, code) follows the message (`inRtl`), or else its first letter.
- */
-const autoDir = (tag: string, inRtl: boolean) =>
-  function AutoDir({ node, ...props }: { node?: unknown }) {
-    const text = nodeText(node as HastNode);
-    const dir = messageDir(text) ?? (/[A-Za-z]/.test(text) ? 'ltr' : inRtl ? undefined : 'auto');
-    return createElement(tag, { ...(dir ? { dir } : {}), ...props });
-  };
-const BLOCKS = ['p', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'td', 'th'];
-const LINK: Components['a'] = ({ node: _n, ...p }) => <a {...p} target="_blank" rel="noopener noreferrer" />;
-// Reserve media space even when an agent embeds an external image in Markdown.
-const MARKDOWN_IMAGE: Components['img'] = ({ node: _n, ...props }) => (
-  // External chat images aren't optimized by next/image; no-referrer so the hub URL isn't sent to third parties (#17).
-  <img {...props} loading="lazy" referrerPolicy="no-referrer" className="h-64 w-72 max-w-full rounded-lg object-contain" />
-);
-/** All of a node's text, code included (nodeText skips code on purpose, for direction). */
-const allText = (n?: HastNode): string => (n?.type === 'text' ? (n.value ?? '') : (n?.children ?? []).map(allText).join(''));
-/** A code block with a copy button that stays put while the code scrolls sideways. */
-const PRE: Components['pre'] = ({ node, ...props }) => (
-  <div className="relative">
-    <pre {...props} />
-    <span className="absolute top-1.5 right-1.5">
-      <CopyButton value={allText(node as HastNode).replace(/\n$/, '')} label="Copy code" />
-    </span>
-  </div>
-);
-const MD_COMPONENTS: Components = { a: LINK, img: MARKDOWN_IMAGE, pre: PRE, ...Object.fromEntries(BLOCKS.map((t) => [t, autoDir(t, false)])) };
-const MD_COMPONENTS_RTL: Components = { a: LINK, img: MARKDOWN_IMAGE, pre: PRE, ...Object.fromEntries(BLOCKS.map((t) => [t, autoDir(t, true)])) };
-
-/**
- * A message's direction, from its letters: right-to-left when a fair share are Hebrew or Arabic.
- * Agents' Hebrew is full of English terms, so a third is enough.
- */
-// ponytail: letter count, not a bidi algorithm; per-block auto still handles English messages
-function messageDir(text: string): 'rtl' | undefined {
-  const rtl = text.match(/[\u0590-\u05FF\u0600-\u06FF]/g)?.length ?? 0;
-  const latin = text.match(/[A-Za-z]/g)?.length ?? 0;
-  return rtl > 0 && rtl / (rtl + latin) >= 0.3 ? 'rtl' : undefined;
-}
-
-export function Markdown({ text, className = '', mentioned = [] }: { text: string; className?: string; mentioned?: Mentioned[] }) {
-  const dir = messageDir(text);
-  // Built once per set of mentions, not every render: `mentioned` is a fresh array each time, so key on its content.
-  // (useMemo, not a ref: server pages render Markdown too.)
-  const key = JSON.stringify(mentioned);
-  const plugins = useMemo(() => [remarkGfm, remarkMentions(JSON.parse(key) as Mentioned[])], [key]);
-  return (
-    <div dir={dir} className={`md break-words ${className}`}>
-      <ReactMarkdown remarkPlugins={plugins} components={dir ? MD_COMPONENTS_RTL : MD_COMPONENTS}>
-        {text}
-      </ReactMarkdown>
-    </div>
-  );
 }
 
 function Json({ value }: { value: unknown }) {
