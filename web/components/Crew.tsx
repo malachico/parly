@@ -260,13 +260,35 @@ export function Crew() {
       frame = requestAnimationFrame(tick);
     };
 
+    // Only animate while on screen in a visible tab, and not at all for reduced motion (eyes stay centred).
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let inView = true;
+    const run = () => {
+      const want = inView && !document.hidden && !reduce.matches;
+      if (want && !frame) frame = requestAnimationFrame(tick);
+      else if (!want && frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    };
+    const io = new IntersectionObserver(([e]) => {
+      inView = !!e?.isIntersecting;
+      run();
+    });
+    io.observe(el);
+
     window.addEventListener('pointermove', onMove, { passive: true });
     document.documentElement.addEventListener('pointerleave', onLeave);
-    frame = requestAnimationFrame(tick);
+    document.addEventListener('visibilitychange', run);
+    reduce.addEventListener('change', run);
+    run();
     return () => {
       cancelAnimationFrame(frame);
+      io.disconnect();
       window.removeEventListener('pointermove', onMove);
       document.documentElement.removeEventListener('pointerleave', onLeave);
+      document.removeEventListener('visibilitychange', run);
+      reduce.removeEventListener('change', run);
     };
   }, []);
 

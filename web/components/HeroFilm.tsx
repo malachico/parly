@@ -12,6 +12,9 @@ import { useEffect, useState } from 'react';
  * `autoPlay` alone isn't enough: React sets `muted` as a property, never the
  * attribute, so on a remounted <video> browsers can judge it unmuted and block
  * autoplay, leaving a click-to-play poster. `start` mutes and plays it by hand.
+ *
+ * The poster is the hero's first paint (LCP), so each one is preloaded at high priority for its own
+ * breakpoint only; React hoists these <link>s into <head>.
  */
 const start = (v: HTMLVideoElement | null) => {
   if (!v || !v.querySelector('source')) return;
@@ -30,11 +33,13 @@ export function HeroFilm({ label }: { label: string }) {
   }, []);
   return (
     <>
-      <video ref={wide === false ? start : undefined} key={wide === false ? 'mobile-film' : 'mobile-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero-mobile.jpg" aria-label={label} className="block aspect-[4/5] w-full bg-[var(--bg)] sm:hidden">
+      <link rel="preload" as="image" href="/landing/parly-hero-mobile.webp" type="image/webp" media="(max-width: 639.98px)" fetchPriority="high" />
+      <link rel="preload" as="image" href="/landing/parly-hero.webp" type="image/webp" media="(min-width: 640px)" fetchPriority="high" />
+      <video ref={wide === false ? start : undefined} key={wide === false ? 'mobile-film' : 'mobile-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero-mobile.webp" aria-label={label} className="block aspect-[4/5] w-full bg-[var(--bg)] sm:hidden">
         {wide === false && <source src="/landing/parly-hero-mobile.webm" type="video/webm" />}
         {wide === false && <source src="/landing/parly-hero-mobile.mp4" type="video/mp4" />}
       </video>
-      <video ref={wide === true ? start : undefined} key={wide === true ? 'wide-film' : 'wide-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero.jpg" aria-label={label} className="hidden aspect-video w-full bg-[var(--bg)] sm:block">
+      <video ref={wide === true ? start : undefined} key={wide === true ? 'wide-film' : 'wide-poster'} autoPlay muted loop playsInline preload="metadata" poster="/landing/parly-hero.webp" aria-label={label} className="hidden aspect-video w-full bg-[var(--bg)] sm:block">
         {wide === true && <source src="/landing/parly-hero.webm" type="video/webm" />}
         {wide === true && <source src="/landing/parly-hero.mp4" type="video/mp4" />}
       </video>

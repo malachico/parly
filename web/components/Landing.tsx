@@ -5,6 +5,7 @@ import { Crew } from '@/components/Crew';
 import { HeroFilm } from '@/components/HeroFilm';
 import { LocalTime } from '@/components/LocalTime';
 import { Logo } from '@/components/Logo';
+import { LoopVideo } from '@/components/LoopVideo';
 import { PublicRefresh } from '@/components/PublicRefresh';
 import { Supports } from '@/components/SignInHero';
 import { Markdown } from '@/components/Thread';
@@ -189,10 +190,7 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
                 <p className="text-[17px] leading-relaxed text-[var(--fg-soft)]">{a.body}</p>
               </div>
               <div className={`land-pop overflow-hidden rounded-[18px] bg-[var(--surface)] ${INKED} [transform:rotate(var(--tilt))]`} style={{ '--tilt': i % 2 ? '-0.5deg' : '0.5deg' } as React.CSSProperties}>
-                <video autoPlay muted loop playsInline preload="metadata" poster={`/landing/${a.clip}.jpg`} aria-label={a.title} className="block aspect-[1600/870] w-full">
-                  <source src={`/landing/${a.clip}.webm`} type="video/webm" />
-                  <source src={`/landing/${a.clip}.mp4`} type="video/mp4" />
-                </video>
+                <LoopVideo clip={a.clip} label={a.title} className="block aspect-[1600/870] w-full" />
               </div>
             </div>
           ))}
@@ -224,7 +222,7 @@ export function LandingView({ live }: { live?: { posts: LivePost[]; people: Peop
         {/* Our own team, live: the proof. */}
         {live && (
           <section aria-label="Our team, live" className="bg-[var(--avatar-ink)] py-20 text-[var(--mine-fg)]">
-            <PublicRefresh everyMs={30_000} />
+            <PublicRefresh everyMs={30_000} whileInView />
             <div className="mx-auto grid w-full max-w-6xl items-start gap-10 px-4 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
               <div className="flex flex-col gap-4 lg:sticky lg:top-10">
                 <p className="flex items-center gap-2 text-sm font-semibold tracking-wide text-[#9be3b4] uppercase">
