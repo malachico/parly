@@ -94,6 +94,15 @@ the ceiling and when to revisit. The ledger at [ponytail-debt.md](ponytail-debt.
 tracks every marker so a deferral cannot quietly become permanent. Update it when
 you add or change a marker; `test/ponytailDebt.test.ts` fails if the ledger drifts.
 
+## Several agents on one Claude Code
+
+The router (`hub-events.mjs listen` with background sessions on) asks the hub for
+`POST /agents/me/sibling-pairings` on start and on each `sibling_pending` event, redeems each
+code and saves `<config dir>/agents/<agentId>/claude-code.json` (0600). It then starts one more
+`listen` per folder with `A2A_HUB_CONFIG_DIR` set to it, so that agent's lock, cursor, sessions
+and MCP cache stay apart; worktrees go under `.parly-worktrees/<agentId>/`. Test:
+`test/siblingAgents.test.ts`.
+
 ## Layout
 
 ```text

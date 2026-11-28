@@ -69,8 +69,9 @@ const dir = (client) => join(configDir(), `${client}.workers`);
 const id = (key) => createHash('sha256').update(key).digest('hex').slice(0, 16);
 const file = (client, key, ext) => join(dir(client), `${id(key)}.${ext}`);
 // One folder per conversation for its worktrees, under the session's own cwd (writable in every permission mode),
-// one subdir per repo inside it. Deterministic from the key, so the hub can clean up what a turn left (cleanupWorktrees).
-export const worktreeDir = (meta) => join(meta.cwd || process.cwd(), '.parly-worktrees', id(meta.key));
+// one subdir per repo inside it, under the agent's id (agents on one client share a cwd). Deterministic from the key, so
+// the hub can clean up what a turn left (cleanupWorktrees).
+export const worktreeDir = (meta) => join(meta.cwd || process.cwd(), '.parly-worktrees', ...(meta.agentId ? [meta.agentId] : []), id(meta.key));
 
 /** After a run, remove this conversation's worktrees that are clean and on a branch. Leaves dirty ones and detached HEADs
  *  (removing a detached HEAD would orphan its commits). Plain `git worktree remove` — no --force — so git refuses anything
@@ -148,7 +149,7 @@ export function createRouter(client, { exec = spawnAsync, retryWaitMs = 3_000, o
     onDone(ids);
   };
   return {
-    add(events, settings, cwd) {
+    add(events, settings, cwd, agentId) {
       mkdirSync(dir(client), { recursive: true, mode: 0o700 });
       max = settings.max;
       for (const e of events) {
@@ -156,7 +157,7 @@ export function createRouter(client, { exec = spawnAsync, retryWaitMs = 3_000, o
         if (!key) continue;
         // What it's about, for the agent's other sessions (otherSessions).
         writeFileSync(file(client, key, 'last'), JSON.stringify({ key, from: e.from, text: String(e.text ?? '').replace(/\s+/g, ' ').slice(0, 140), at: e.at }) + '\n', { mode: 0o600 });
-        if (!existsSync(file(client, key, 'json'))) writeFileSync(file(client, key, 'json'), JSON.stringify({ key, cwd }) + '\n', { mode: 0o600 });
+        if (!existsSync(file(client, key, 'json'))) writeFileSync(file(client, key, 'json'), JSON.stringify({ key, cwd, ...(agentId ? { agentId } : {}) }) + '\n', { mode: 0o600 });
         waiting.set(key, [...(waiting.get(key) ?? []), e.id]);
         if (e.mentions) mentions.set(e.id, e.mentions);
       }

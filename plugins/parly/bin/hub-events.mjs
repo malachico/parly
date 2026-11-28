@@ -34,10 +34,11 @@
 // VS Code has no way to wake an idle chat, so its Stop hook checks the feed as the agent is about to
 // stop and, when something is new, blocks the stop with it: the agent goes on and answers.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { configDir, configProblem, connectHow, freshConfig, hubFetch, parseArgs, readConfig, readState, writeState } from './common.mjs';
+import { configDir, configProblem, connectHow, freshConfig, hubFetch, parseArgs, readConfig, readState, redeemPairing, writePrivate, writeState } from './common.mjs';
 import { createRouter, cursorProblem, workersFor } from './workers.mjs';
 
 const MAX_ITEMS = 10;
@@ -48,6 +49,8 @@ const AUTO_STATUS = new Set(['claude-code', 'codex']);
 let prompted = false;
 /** Cursor's session-start input: where the chat is, for the router. */
 let hookInput = {};
+/** Agent id -> the sibling listener this router started for it, until that one has written its lock. */
+const launched = new Map();
 
 const { flags } = parseArgs(process.argv.slice(2));
 
@@ -228,12 +231,14 @@ async function listen(client, thread, watchPid, onNews) {
   // Done messages join `shown`, so a replay after a restart skips them.
   const router = createRouter(client, { onDone: (ids) => { const s = readState(client); writeState(client, { ...s, shown: [...(s.shown ?? []), ...ids].slice(-200) }); } });
   const quit = async () => (await router.drained(), process.exit(0));
+  if (routing) await addSiblings(client);
   let next; // workers: where the feed is read from; the saved cursor lags it until the queue is empty
   for (;;) {
     if (superseded()) await quit();
     try {
       const config = await freshConfig(client); // the loop outlives an hour-long access token
       const workers = workersFor(client, config);
+      if (workers) startSiblings(client, owner); // each turn of the loop: a sibling listener that died comes back
       const from = workers ? (next ??= readState(client).cursor) : readState(client).cursor;
       const q = new URLSearchParams(from ? { cursor: from, wait: '25' } : { wait: '0' }); // no cursor yet: take one, from now
       const { events, cursor } = await hubFetch(config, `/events?${q}`, { timeoutMs: 40_000 });
@@ -244,8 +249,9 @@ async function listen(client, thread, watchPid, onNews) {
       if (workers && from) {
         // Each conversation's session answers.
         const shown = new Set(state.shown ?? []);
+        if ((events ?? []).some((m) => m?.type === 'sibling_pending' || m?.event?.type === 'sibling_pending')) await addSiblings(client);
         const mail = (events ?? []).filter((m) => m?.forYou && m.fromId !== config.agentId && !shown.has(m.id));
-        if (mail.length) router.add(mail, workers, process.cwd());
+        if (mail.length) router.add(mail, workers, process.cwd(), config.agentId);
         next = cursor ?? next;
         // ponytail: a router that dies replays all it hadn't finished, and `shown` (the last 200) skips what it had;
         // a router never idle replays more, so keep done ids per conversation if that ever outgrows 200
@@ -268,6 +274,56 @@ async function listen(client, thread, watchPid, onNews) {
       if (err?.signedOut) process.exit(0);
       await new Promise((r) => setTimeout(r, 10_000));
     }
+  }
+}
+
+/**
+ * Agents added on this client (Settings > Add agent): the hub holds a pairing code for each until this router redeems it,
+ * and keeps sending sibling_pending (and a code on each call) until then, so a failed one is tried again at the next hint.
+ * Each gets its own config dir, <config dir>/agents/<id>, so its lock, cursor, sessions and MCP cache are its own, and a
+ * listener of its own (startSiblings). Failures go to <config dir>/<client>.siblings.log, never a code or a token.
+ */
+async function addSiblings(client) {
+  if (client !== 'claude-code' || basename(dirname(configDir())) === 'agents') return; // a sibling hosts none
+  const config = readConfig(client);
+  const log = (text) => { try { appendFileSync(join(configDir(), `${client}.siblings.log`), `${new Date().toISOString()} ${text}\n`, { mode: 0o600 }); } catch {} };
+  let pairings;
+  try {
+    ({ pairings } = await hubFetch(config, '/agents/me/sibling-pairings', { method: 'POST', timeoutMs: 15_000 }));
+  } catch (err) {
+    return log(`sibling-pairings: ${err?.message}`);
+  }
+  for (const { agentId, code } of pairings ?? []) {
+    if (!/^[\w-]+$/.test(agentId ?? '')) continue; // it names a folder
+    const dir = join(configDir(), 'agents', agentId);
+    if (existsSync(join(dir, `${client}.json`))) continue; // already paired
+    try {
+      mkdirSync(dir, { recursive: true, mode: 0o700 }); // before redeeming, so a redeemed code is hardly ever lost
+      const got = await redeemPairing({ hubUrl: config.hubUrl, code });
+      if (got.agentId !== agentId) throw new Error(`the code paired ${got.agentId || 'no agent'}`);
+      writePrivate(join(dir, `${client}.json`), { ...got, ...(config.workers ? { workers: config.workers } : {}) });
+    } catch (err) {
+      log(`${agentId}: ${err?.message}`);
+    }
+  }
+}
+
+/** A listener for each agent added on this client whose own one isn't running (it died, or is new). */
+function startSiblings(client, owner) {
+  if (client !== 'claude-code' || basename(dirname(configDir())) === 'agents') return;
+  const agents = join(configDir(), 'agents');
+  if (!existsSync(agents)) return;
+  for (const id of readdirSync(agents)) {
+    const dir = join(agents, id);
+    if (!existsSync(join(dir, `${client}.json`))) continue;
+    let held;
+    try { held = JSON.parse(readFileSync(join(dir, `${client}.listen.json`), 'utf8')); } catch {}
+    if ((held && alive(held.listener)) || alive(launched.get(id))) continue;
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '--client', client, '--event', 'listen', '--watch', String(owner)], {
+      detached: true, stdio: 'ignore', env: { ...process.env, A2A_HUB_CONFIG_DIR: dir },
+    });
+    child.unref(); // returns undefined in some Node versions, so don't chain .pid
+    launched.set(id, child.pid);
   }
 }
 

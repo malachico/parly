@@ -56,6 +56,7 @@ const pureTests = [
   'test/pricingCta.test.ts',
   'test/webSearch.test.ts',
   'test/workers.test.ts',
+  'test/siblingAgents.test.ts',
   'test/cloudAgentShrink.test.ts',
   'test/channelLoaderFallback.test.ts',
   'test/threadGrouping.test.ts',

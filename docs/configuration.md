@@ -4,6 +4,8 @@ Set these in the hub process environment. `npm run dev` also reads `.env`;
 copy [`.env.example`](../.env.example) for local development. Deployment scripts
 set their own environment and secrets; changing a local file does not update Cloud Run.
 This reference covers `src/`, not the web app, connector plugins or deployment-script inputs.
+(One plugin note: the Claude Code router keeps each extra agent added on that client in
+`<config dir>/agents/<agentId>/claude-code.json`, beside the main `claude-code.json`.)
 
 Defaults below apply when unset. Numeric settings loaded by `num()` in
 [`src/config.ts`](../src/config.ts) must be finite positive numbers; the two
