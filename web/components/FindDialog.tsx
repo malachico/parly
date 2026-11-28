@@ -50,6 +50,10 @@ export function FindDialog({ workspaceId, channels: mine, meId, graph }: { works
   const [hits, setHits] = useState<MessageHit[]>([]);
   const [entries, setEntries] = useState<GraphEntry[]>([]);
   const latest = useRef(0);
+  const latestGraph = useRef(0);
+  const [searching, setSearching] = useState(false);
+  const [graphSearching, setGraphSearching] = useState(false);
+  const wantsGraph = show === 'messages' || show === 'everyone';
 
   // Each time it opens, start from the query in the URL (the rail passes what you typed there).
   // biome-ignore lint/correctness/useExhaustiveDependencies: seed from the URL only on the open→ edge; re-running on every params change would clobber what the user is typing
@@ -62,24 +66,49 @@ export function FindDialog({ workspaceId, channels: mine, meId, graph }: { works
     if (open) void channelMemberCounts(workspaceId).then(setCounts);
   }, [open, workspaceId]);
 
+  // People and messages, after a short pause; switching tabs only filters. The old results stay up until the newest answer lands.
   useEffect(() => {
     const id = ++latest.current;
-    setEntries([]);
-    if (!open) return;
+    if (!open) {
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
     const t = setTimeout(async () => {
-      const pending = Promise.all([searchDirectory(query), searchMessages(query)]);
-      // Each graph search spends embedding budget; only search from two characters on the message tabs.
-      if ((show === 'messages' || show === 'everyone') && query.trim().length >= 2) void listGraphEntries(workspaceId, { q: query.trim() }).then((d) => id === latest.current && setEntries(d.entries)).catch(() => id === latest.current && setEntries([]));
-      const [res, found] = await pending;
-      if (id !== latest.current) return;
-      setHits(found);
-      if (res.ok) {
-        setAgents(res.agents);
-        setError(null);
-      } else setError(res.error);
+      try {
+        // Messages only from two characters (shorter never shows them); the directory lists everyone on an empty box.
+        const [res, found] = await Promise.all([searchDirectory(query), query.trim().length >= 2 ? searchMessages(query) : null]);
+        if (id !== latest.current) return;
+        if (found) setHits(found);
+        if (res.ok) {
+          setAgents(res.agents);
+          setError(null);
+        } else setError(res.error);
+      } finally {
+        if (id === latest.current) setSearching(false);
+      }
     }, 200);
     return () => clearTimeout(t);
-  }, [open, query, show, workspaceId]);
+  }, [open, query]);
+
+  // Knowledge: each graph search spends embedding budget, so only from two characters on the tabs that show it.
+  useEffect(() => {
+    const id = ++latestGraph.current;
+    const q = query.trim();
+    if (!open) setEntries([]);
+    if (!open || !wantsGraph || q.length < 2) {
+      setGraphSearching(false);
+      return;
+    }
+    setGraphSearching(true);
+    const t = setTimeout(() => {
+      void listGraphEntries(workspaceId, { q })
+        .then((d) => id === latestGraph.current && setEntries(d.entries))
+        .catch(() => id === latestGraph.current && setEntries([]))
+        .finally(() => id === latestGraph.current && setGraphSearching(false));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [open, query, wantsGraph, workspaceId]);
 
   const close = () => router.replace(href('find', undefined), { scroll: false });
   const q = query.trim().toLowerCase();
@@ -102,12 +131,13 @@ export function FindDialog({ workspaceId, channels: mine, meId, graph }: { works
           autoComplete="off"
           className="input"
         />
-        <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label="Show" className="flex flex-wrap items-center gap-1.5">
           {SHOWS.map((s) => (
             <button key={s.key} type="button" className="pill" aria-pressed={show === s.key} onClick={() => setShow(s.key)}>
               {s.label}
             </button>
           ))}
+          {(searching || graphSearching) && <span role="status" aria-label="Searching" className="ml-auto size-3 shrink-0 animate-spin rounded-full border-2 border-[var(--muted)] border-t-transparent" />}
         </div>
       </div>
 
@@ -156,7 +186,7 @@ export function FindDialog({ workspaceId, channels: mine, meId, graph }: { works
           <section className="pt-3">
             <h3 className="label pb-1.5">Messages</h3>
             {hits.length === 0 ? (
-              <p className="py-4 text-sm text-[var(--muted)]">No messages match.</p>
+              !searching && <p className="py-4 text-sm text-[var(--muted)]">No messages match.</p>
             ) : (
               <ul className="flex flex-col gap-px">
                 {hits.map((h) => (
