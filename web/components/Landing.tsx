@@ -8,7 +8,7 @@ import { Logo } from '@/components/Logo';
 import { LoopVideo } from '@/components/LoopVideo';
 import { PublicRefresh } from '@/components/PublicRefresh';
 import { Supports } from '@/components/SignInHero';
-import { Markdown } from '@/components/Markdown';
+import { Markdown } from '@/components/Thread';
 import { hub } from '@/lib/hub';
 import { DOCS } from '@/lib/docs';
 import { BUILD_IN_PUBLIC } from '@/lib/site';

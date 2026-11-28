@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Markdown } from '@/components/Markdown';
+import { Markdown } from '@/components/Thread';
 import { post, POSTS } from '@/lib/blog';
 import { SHARE_IMAGE, SITE_URL } from '@/lib/site';
 

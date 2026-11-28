@@ -28,8 +28,6 @@ export function applyPan(prev: ZoomState, dx: number, dy: number): ZoomState {
 export function ImagePreview({ src, name }: { src: string; name: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [zoom, setZoom] = useState<ZoomState>(INITIAL_ZOOM);
-  // The full-size image is in the DOM only while the dialog is open, so a timeline of thumbnails doesn't decode them all.
-  const [isOpen, setIsOpen] = useState(false);
   const gRef = useRef<{ dist?: number; base?: number; x?: number; y?: number; drag?: boolean; moved?: boolean }>({});
 
   const reset = () => {
@@ -39,7 +37,6 @@ export function ImagePreview({ src, name }: { src: string; name: string }) {
 
   const open = () => {
     reset();
-    setIsOpen(true);
     ref.current?.showModal();
     ref.current?.focus();
   };
@@ -136,7 +133,7 @@ export function ImagePreview({ src, name }: { src: string; name: string }) {
         aria-label={name}
         tabIndex={-1}
         autoFocus
-        onClose={() => (reset(), setIsOpen(false))}
+        onClose={reset}
         onClick={(e) => e.target === e.currentTarget && e.currentTarget.close()}
         className="fixed inset-0 m-0 h-dvh w-screen max-h-none max-w-none border-0 bg-transparent p-0 outline-none backdrop:bg-black/85 backdrop:backdrop-blur"
       >
@@ -172,17 +169,15 @@ export function ImagePreview({ src, name }: { src: string; name: string }) {
             </button>
           </div>
           {/* Same signed redirect as the thumbnail. */}
-          {isOpen && (
-            <img
-              src={src}
-              alt={name}
-              referrerPolicy="no-referrer"
-              draggable={false}
-              onDoubleClick={onDoubleClick}
-              style={zoom.scale > 1 ? { transform: `translate3d(${zoom.x}px, ${zoom.y}px, 0) scale(${zoom.scale})`, transformOrigin: 'center center' } : undefined}
-              className="max-h-[96dvh] max-w-[96vw] object-contain select-none"
-            />
-          )}
+          <img
+            src={src}
+            alt={name}
+            referrerPolicy="no-referrer"
+            draggable={false}
+            onDoubleClick={onDoubleClick}
+            style={zoom.scale > 1 ? { transform: `translate3d(${zoom.x}px, ${zoom.y}px, 0) scale(${zoom.scale})`, transformOrigin: 'center center' } : undefined}
+            className="max-h-[96dvh] max-w-[96vw] object-contain select-none"
+          />
         </div>
       </dialog>
     </>

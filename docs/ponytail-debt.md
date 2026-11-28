@@ -379,10 +379,6 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 - unbounded per-tab caches, first page / summary only; refreshed on every open.
 
-## `web/components/Markdown.tsx`
-
-- `no-trigger` letter count, not a bidi algorithm; per-block auto still handles English messages
-
 ## `web/components/InlineMarkdown.tsx`
 
 - `no-trigger` bold, italics, code, strikethrough and links in one line; full markdown lives in the message itself (Thread.tsx)
@@ -398,6 +394,10 @@ checks that every marker in the tree appears here (and nothing stale remains).
 ## `web/components/ScrollToBottom.tsx`
 
 - 2s of re-placing after open; longer only if slow images still land late
+
+## `web/components/Thread.tsx`
+
+- `no-trigger` letter count, not a bidi algorithm; per-block auto still handles English messages
 
 ## `web/components/ToolsSection.tsx`
 
@@ -438,4 +438,4 @@ checks that every marker in the tree appears here (and nothing stale remains).
 
 ---
 
-**157 markers, 33 with no trigger.**
+**156 markers, 33 with no trigger.**

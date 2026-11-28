@@ -5,7 +5,6 @@ import { Timeline } from '../../components/Thread';
 import { DocsHub } from '../../components/DocsHub';
 import { ToolsSection } from '../../components/ToolsSection';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { doc, DOC_CATEGORIES, DOCS, docsByCategory, searchDocs } from '../../lib/docs';
 import { message, people } from './fixtures';
 
@@ -100,11 +99,10 @@ assert.doesNotMatch(toolsInstalledHtml, />Disconnect</);
 // ImagePreview: thumbnail keeps rounded-lg, while opened dialog viewer fills the screen without rounded-lg corner clipping and overlays controls top-right.
 const imagePreviewHtml = renderToStaticMarkup(createElement(ImagePreview, { src: '/api/files/f1', name: 'IMG_5018.png' }));
 const imgTags = imagePreviewHtml.match(/<img[^>]+>/g) ?? [];
-assert.equal(imgTags.length, 1, 'ImagePreview renders only the thumbnail until the dialog opens (full-size image is lazy)');
+assert.equal(imgTags.length, 2, 'ImagePreview must render thumbnail and dialog images');
 assert.match(imgTags[0]!, /h-64 w-72 max-w-full rounded-lg border border-\[var\(--border\)\] object-contain/, 'Thumbnail reserves a stable box before load and on failure');
-const viewerImg = readFileSync(new URL('../../components/ImagePreview.tsx', import.meta.url), 'utf8').match(/className="(max-h-\[96dvh\][^"]*)"/)?.[1] ?? '';
-assert.doesNotMatch(viewerImg, /rounded-lg/, 'Full-screen viewer image must not clip corners with rounded-lg');
-assert.match(viewerImg, /max-h-\[96dvh\] max-w-\[96vw\]/, 'Full-screen viewer image scales to 96dvh x 96vw');
+assert.doesNotMatch(imgTags[1]!, /rounded-lg/, 'Full-screen viewer image must not clip corners with rounded-lg');
+assert.match(imgTags[1]!, /max-h-\[96dvh\] max-w-\[96vw\]/, 'Full-screen viewer image scales to 96dvh x 96vw');
 assert.match(imagePreviewHtml, /absolute top-3 right-3 z-10 flex gap-2 pt-\[env\(safe-area-inset-top\)\] pr-\[env\(safe-area-inset-right\)\]/, 'Full-screen viewer controls are anchored in a top-right overlay with safe-area padding');
 assert.match(imagePreviewHtml, /<dialog[^>]*tabindex="-1"[^>]*autofocus=""[^>]*class="[^"]*outline-none/, 'Dialog suppresses initial control focus ring on open');
 const mediaHtml = renderToStaticMarkup(createElement(Timeline, {
